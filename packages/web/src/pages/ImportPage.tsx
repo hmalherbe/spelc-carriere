@@ -10,6 +10,10 @@ function formatSyncDate(iso: string): string {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" });
 }
 
+function pdfFilesOnly(files: File[]): File[] {
+  return files.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+}
+
 export function ImportPage() {
   const { user } = useAuth();
   const canImport = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
@@ -121,6 +125,13 @@ export function ImportPage() {
           ) : (
             <span className="hint">Aucune campagne — créez-en une pour commencer.</span>
           )}
+          <label>
+            Type de campagne
+            <select value={adelType} onChange={(e) => setAdelType(e.target.value as AdelSyncType)} disabled={adelBusy}>
+              <option value="CCMA">CCMA (second degré)</option>
+              <option value="CCMI">CCMI (premier degré)</option>
+            </select>
+          </label>
           <button type="button" className="secondary" onClick={() => setShowNewCampagne((v) => !v)}>
             {showNewCampagne ? "Annuler" : "Nouvelle campagne"}
           </button>
@@ -174,17 +185,35 @@ export function ImportPage() {
         <h2>Import rectorat (PDF)</h2>
         <p className="hint">
           Fichier "AVANCEMENT D'ECHELON" fourni par le rectorat (un fichier par grade). Le grade et l'échelon sont détectés
-          automatiquement à partir du contenu du PDF — tu peux sélectionner les 5 fichiers d'une campagne en une fois, ils
-          sont importés les uns après les autres.
+          automatiquement à partir du contenu du PDF — tu peux sélectionner les 5 fichiers d'une campagne en une fois, ou
+          choisir directement le dossier qui les contient (les fichiers non-PDF du dossier sont ignorés). Ils sont importés
+          les uns après les autres.
         </p>
         <form className="inline-form" onSubmit={submitRectorat}>
-          <input
-            type="file"
-            accept="application/pdf"
-            multiple
-            disabled={!campagneId}
-            onChange={(e) => setRectoratFiles(Array.from(e.target.files ?? []))}
-          />
+          <label>
+            Fichiers
+            <input
+              type="file"
+              accept="application/pdf"
+              multiple
+              disabled={!campagneId}
+              onChange={(e) => setRectoratFiles(pdfFilesOnly(Array.from(e.target.files ?? [])))}
+            />
+          </label>
+          <label>
+            ou un dossier
+            <input
+              type="file"
+              disabled={!campagneId}
+              ref={(el) => {
+                if (el) {
+                  el.setAttribute("webkitdirectory", "");
+                  el.setAttribute("directory", "");
+                }
+              }}
+              onChange={(e) => setRectoratFiles(pdfFilesOnly(Array.from(e.target.files ?? [])))}
+            />
+          </label>
           <button type="submit" disabled={!campagneId || rectoratFiles.length === 0 || rectoratBusy}>
             {rectoratBusy
               ? `Import en cours (${rectoratResults.length}/${rectoratFiles.length})...`
@@ -235,13 +264,6 @@ export function ImportPage() {
           vont dans la file de révision.
         </p>
         <div className="inline-form">
-          <label>
-            Type de campagne
-            <select value={adelType} onChange={(e) => setAdelType(e.target.value as AdelSyncType)} disabled={adelBusy}>
-              <option value="CCMA">CCMA (second degré)</option>
-              <option value="CCMI">CCMI (premier degré)</option>
-            </select>
-          </label>
           <button type="button" onClick={syncAdel} disabled={adelBusy}>
             {adelBusy ? "Synchronisation en cours (peut prendre plusieurs minutes)..." : "Mettre à jour depuis ADEL"}
           </button>
