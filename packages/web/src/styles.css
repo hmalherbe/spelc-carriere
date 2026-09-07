@@ -206,6 +206,15 @@ main {
   border-bottom: none;
 }
 
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table th.sortable:hover {
+  color: var(--accent-dark);
+}
+
 .gain-positive {
   color: var(--success);
   font-weight: 600;

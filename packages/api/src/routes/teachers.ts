@@ -58,13 +58,15 @@ teachersRouter.get("/", async (req, res) => {
     // PPCR eligibility windows: échelon 6 -> 7 only in the échelon's 2nd year, échelon 8 -> 9 only
     // between 18 and 30 months in — outside that window a teacher isn't even a BA candidate this
     // campaign, whatever their barème/ancienneté, so no estimate should be shown at all.
+    // null = not applicable (not échelon 6/8, or missing ancienneté data), same convention as
+    // horsClasseEligible/classeExceptionnelleEligible below.
     const baEligible =
-      (echelonDepart === 6 || echelonDepart === 8) &&
-      snap.ancienneteEchelon != null &&
-      isEligibleBonificationAnciennete(echelonDepart, snap.ancienneteEchelon);
+      (echelonDepart === 6 || echelonDepart === 8) && snap.ancienneteEchelon != null
+        ? isEligibleBonificationAnciennete(echelonDepart, snap.ancienneteEchelon)
+        : null;
 
     const baEstimate =
-      baEligible && seuil && snap.avisEvaluation != null && snap.ancienneteGrade != null && snap.ancienneteEchelon != null
+      baEligible === true && seuil && snap.avisEvaluation != null && snap.ancienneteGrade != null && snap.ancienneteEchelon != null
         ? estimateAgainstSeuil(
             {
               grade: snap.grade,
@@ -120,6 +122,7 @@ teachersRouter.get("/", async (req, res) => {
         ? { minBareme: seuil.minBareme, locked: seuil.locked, nombrePromusBa: seuil.nombrePromusBa }
         : null,
       baEstimate,
+      baEligible,
       horsClasseEligible,
       classeExceptionnelleEligible,
     };
