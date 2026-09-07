@@ -1,0 +1,13 @@
+{
+  "name": "@spelc/scraper",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@spelc/domain": "*",
+    "exceljs": "^4.4.0",
     "pdf-parse": "^2.4.5"
   },
   "devDependencies": {

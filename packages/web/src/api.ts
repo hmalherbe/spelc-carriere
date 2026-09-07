@@ -131,6 +131,26 @@ export interface AdherentImportResult {
   matching: { autoConfirmed: number; pendingReview: number };
 }
 
+export type AdelSyncType = "CCMA" | "CCMI";
+
+export interface AdelSyncLogEntry {
+  id: string;
+  type: AdelSyncType;
+  status: "SUCCESS" | "FAILED";
+  syncedAt: string;
+  created: number;
+  updated: number;
+  error: string | null;
+}
+
+export interface AdelSyncResult {
+  syncedAt: string;
+  created: number;
+  updated: number;
+  unmappedFields: string[];
+  matching: { autoConfirmed: number; pendingReview: number };
+}
+
 export interface MailingRecipient {
   teacherId: string;
   adherentId: string;
@@ -202,6 +222,8 @@ export const api = {
     form.append("file", file);
     return upload<AdherentImportResult>("/imports/adherents", form);
   },
+  adelLastSync: (type: AdelSyncType) => request<AdelSyncLogEntry | null>(`/adel/last?type=${type}`),
+  adelSync: (type: AdelSyncType) => request<AdelSyncResult>("/adel/sync", { method: "POST", body: JSON.stringify({ type }) }),
   mailingEligible: (campagneId: string) => request<MailingRecipient[]>(`/mailing/eligible?campagneId=${campagneId}`),
   mailingPreview: (campagneId: string, teacherId: string) =>
     request<MailingPreview>(`/mailing/preview?campagneId=${campagneId}&teacherId=${teacherId}`),

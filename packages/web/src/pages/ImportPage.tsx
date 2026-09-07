@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
-import { api, type AdherentImportResult, type Campagne, type RectoratImportResult } from "../api.js";
+import { api, type AdelSyncLogEntry, type AdelSyncResult, type AdelSyncType, type Campagne, type RectoratImportResult } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatSyncDate(iso: string): string {
+  return new Date(iso).toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" });
 }
 
 export function ImportPage() {
@@ -20,10 +24,19 @@ export function ImportPage() {
   const [rectoratBusy, setRectoratBusy] = useState(false);
   const [rectoratResults, setRectoratResults] = useState<{ fileName: string; result?: RectoratImportResult; error?: string }[]>([]);
 
-  const [adherentsFile, setAdherentsFile] = useState<File | null>(null);
-  const [adherentsBusy, setAdherentsBusy] = useState(false);
-  const [adherentsResult, setAdherentsResult] = useState<AdherentImportResult | null>(null);
-  const [adherentsError, setAdherentsError] = useState<string | null>(null);
+  const [adelType, setAdelType] = useState<AdelSyncType>("CCMA");
+  const [adelLast, setAdelLast] = useState<AdelSyncLogEntry | null>(null);
+  const [adelBusy, setAdelBusy] = useState(false);
+  const [adelResult, setAdelResult] = useState<AdelSyncResult | null>(null);
+  const [adelError, setAdelError] = useState<string | null>(null);
+
+  function refreshAdelLast(type: AdelSyncType) {
+    api.adelLastSync(type).then(setAdelLast).catch(() => setAdelLast(null));
+  }
+
+  useEffect(() => {
+    refreshAdelLast(adelType);
+  }, [adelType]);
 
   function refreshCampagnes(selectId?: string) {
     api.campagnes().then((c) => {
@@ -73,19 +86,18 @@ export function ImportPage() {
     setRectoratBusy(false);
   }
 
-  async function submitAdherents(e: React.FormEvent) {
-    e.preventDefault();
-    if (!adherentsFile) return;
-    setAdherentsBusy(true);
-    setAdherentsError(null);
-    setAdherentsResult(null);
+  async function syncAdel() {
+    setAdelBusy(true);
+    setAdelError(null);
+    setAdelResult(null);
     try {
-      const result = await api.importAdherents(adherentsFile);
-      setAdherentsResult(result);
+      const result = await api.adelSync(adelType);
+      setAdelResult(result);
+      refreshAdelLast(adelType);
     } catch (e) {
-      setAdherentsError(String(e));
+      setAdelError(String(e));
     } finally {
-      setAdherentsBusy(false);
+      setAdelBusy(false);
     }
   }
 
@@ -215,29 +227,48 @@ export function ImportPage() {
       </section>
 
       <section className="card">
-        <h2>Import adhérents (CSV)</h2>
+        <h2>Import adhérents — mise à jour ADEL</h2>
         <p className="hint">
-          Export ADEL des adhérents Spelc. Chaque adhérent est automatiquement rapproché des enseignants déjà importés
-          (correspondance exacte ou approximative de nom/prénom) — les cas ambigus vont dans la file de révision.
+          Récupère automatiquement l'export des adhérents Spelc directement depuis ADEL (connexion, filtre "azur", export
+          Excel) — plus besoin d'exporter puis d'uploader un fichier à la main. Chaque adhérent est automatiquement
+          rapproché des enseignants déjà importés (correspondance exacte ou approximative de nom/prénom) — les cas ambigus
+          vont dans la file de révision.
         </p>
-        <form className="inline-form" onSubmit={submitAdherents}>
-          <input type="file" accept=".csv,text/csv" onChange={(e) => setAdherentsFile(e.target.files?.[0] ?? null)} />
-          <button type="submit" disabled={!adherentsFile || adherentsBusy}>
-            {adherentsBusy ? "Import en cours..." : "Importer"}
+        <div className="inline-form">
+          <label>
+            Type de campagne
+            <select value={adelType} onChange={(e) => setAdelType(e.target.value as AdelSyncType)} disabled={adelBusy}>
+              <option value="CCMA">CCMA (second degré)</option>
+              <option value="CCMI">CCMI (premier degré)</option>
+            </select>
+          </label>
+          <button type="button" onClick={syncAdel} disabled={adelBusy}>
+            {adelBusy ? "Synchronisation en cours (peut prendre plusieurs minutes)..." : "Mettre à jour depuis ADEL"}
           </button>
-        </form>
-        {adherentsError && <p className="error-text">{adherentsError}</p>}
-        {adherentsResult && (
+        </div>
+        <p className="hint">
+          {adelLast ? (
+            adelLast.status === "SUCCESS" ? (
+              <>Dernière mise à jour : {formatSyncDate(adelLast.syncedAt)}</>
+            ) : (
+              <span className="error-text">Dernière tentative en échec le {formatSyncDate(adelLast.syncedAt)}</span>
+            )
+          ) : (
+            "Jamais synchronisé pour ce type de campagne."
+          )}
+        </p>
+        {adelError && <p className="error-text">{adelError}</p>}
+        {adelResult && (
           <div className="import-result">
             <p>
-              <strong>{adherentsResult.created}</strong> créés, <strong>{adherentsResult.updated}</strong> mis à jour.
+              <strong>{adelResult.created}</strong> créés, <strong>{adelResult.updated}</strong> mis à jour.
             </p>
             <p>
-              Rapprochement : <strong>{adherentsResult.matching.autoConfirmed}</strong> automatique(s),{" "}
-              <strong>{adherentsResult.matching.pendingReview}</strong> à vérifier dans la file de révision.
+              Rapprochement : <strong>{adelResult.matching.autoConfirmed}</strong> automatique(s),{" "}
+              <strong>{adelResult.matching.pendingReview}</strong> à vérifier dans la file de révision.
             </p>
-            {adherentsResult.unmappedFields.length > 0 && (
-              <p className="hint">Colonnes non reconnues dans le fichier : {adherentsResult.unmappedFields.join(", ")}</p>
+            {adelResult.unmappedFields.length > 0 && (
+              <p className="hint">Colonnes non reconnues dans l'export : {adelResult.unmappedFields.join(", ")}</p>
             )}
           </div>
         )}

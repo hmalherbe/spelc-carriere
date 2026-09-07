@@ -17,6 +17,7 @@
   "dependencies": {
     "@spelc/domain": "*",
     "@spelc/import": "*",
+    "@spelc/scraper": "*",
     "@prisma/client": "^5.20.0",
     "express": "^4.21.0",
     "cors": "^2.8.5",

@@ -289,3 +289,33 @@ model MailingLog {
   @@unique([campagneId, teacherId])
   @@index([campagneId])
 }
+
+// ---------------------------------------------------------------------------
+// ADEL sync — one row per attempt to pull the adhérents export automatically from ADEL (the
+// union's own membership database) via the Playwright scraper in packages/scraper, instead of a
+// human exporting + uploading the file by hand. Kept even on failure so the UI can show "dernière
+// mise à jour" (or the last error) without a separate polling mechanism.
+// ---------------------------------------------------------------------------
+
+enum AdelSyncType {
+  CCMA
+  CCMI
+}
+
+enum AdelSyncStatus {
+  SUCCESS
+  FAILED
+}
+
+model AdelSyncLog {
+  id            String         @id @default(cuid())
+  type          AdelSyncType
+  status        AdelSyncStatus
+  syncedAt      DateTime       @default(now())
+  created       Int            @default(0)
+  updated       Int            @default(0)
+  error         String?
+  triggeredById String // free-text: User.id at sync time, kept even if the user is later deleted
+
+  @@index([type, syncedAt])
+}
