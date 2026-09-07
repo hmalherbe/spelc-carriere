@@ -45,16 +45,14 @@ export interface AdelExportResult {
   suggestedFileName: string;
 }
 
-async function screenshotOnFailure(page: Page, debugDir: string | undefined, step: string, err: unknown): Promise<never> {
-  if (debugDir) {
-    try {
-      const path = join(debugDir, `adel-failure-${step}-${Date.now()}.png`);
-      await page.screenshot({ path, fullPage: true });
-    } catch {
-      // best-effort only — don't let a screenshot failure hide the real error
-    }
+async function captureFailureScreenshot(page: Page, debugDir: string | undefined, step: string): Promise<void> {
+  if (!debugDir) return;
+  try {
+    const path = join(debugDir, `adel-failure-${step}-${Date.now()}.png`);
+    await page.screenshot({ path, fullPage: true });
+  } catch {
+    // best-effort only — don't let a screenshot failure hide the real error
   }
-  throw new Error(`Étape ADEL "${step}" a échoué : ${err instanceof Error ? err.message : String(err)}`);
 }
 
 /** Finds the <option> whose visible text matches `labelPattern` inside `select` and selects it —
@@ -87,9 +85,25 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
     step = "connexion";
     await page.goto(config.loginUrl);
     await page.locator('input[type="text"], input[type="email"]').first().fill(config.username);
-    await page.locator('input[type="password"]').first().fill(config.password);
-    await page.locator('button[type="submit"], input[type="submit"]').first().click();
+    const passwordField = page.locator('input[type="password"]').first();
+    await passwordField.fill(config.password);
+    // Pressing Enter submits the nearest <form> regardless of how the login control is marked up
+    // (plain <button>, <a>, or a JS-driven element with no standard type attribute) — a real login
+    // button here turned out not to match `button[type="submit"], input[type="submit"]` at all, and
+    // waiting the full step timeout on a selector that may not exist is exactly what to avoid.
+    await passwordField.press("Enter");
     await page.waitForLoadState("networkidle");
+
+    // If the password field is still visible, Enter didn't submit the form — fall back to an
+    // explicit button click, bounded to a short timeout rather than the full step timeout.
+    if (await passwordField.isVisible().catch(() => false)) {
+      await page
+        .locator("button, input[type='submit'], input[type='button'], a")
+        .filter({ hasText: /connexion|connecter|valider|^ok$/i })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.waitForLoadState("networkidle");
+    }
 
     // --- 2. Navigate to the query tool ---
     // Try a direct hash navigation first (fast path for a hash-routed SPA); if the expected field
@@ -146,7 +160,7 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
     return { buffer, suggestedFileName: `${today}_${type}_avancement.xlsx` };
   } catch (err) {
     const page = browser.contexts()[0]?.pages()[0];
-    if (page) return screenshotOnFailure(page, config.debugDir, step, err);
+    if (page) await captureFailureScreenshot(page, config.debugDir, step);
     throw new Error(`Étape ADEL "${step}" a échoué : ${err instanceof Error ? err.message : String(err)}`);
   } finally {
     await browser.close();
