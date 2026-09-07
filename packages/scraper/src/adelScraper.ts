@@ -84,7 +84,17 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
     // --- 1. Login ---
     step = "connexion";
     await page.goto(config.loginUrl);
-    await page.locator('input[type="text"], input[type="email"]').first().fill(config.username);
+    // Not `input[type="text"], input[type="email"]`: a CSS attribute selector only matches an
+    // explicit HTML attribute, and plenty of old-style login forms (this one included, per the
+    // first real run) mark up their username field as plain `<input>` with no `type` attribute at
+    // all — the browser treats that as text, but the attribute selector never sees it. Matching
+    // "any visible input that isn't obviously something else" is more resilient to that.
+    const usernameField = page
+      .locator(
+        'input:visible:not([type="password"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"])',
+      )
+      .first();
+    await usernameField.fill(config.username);
     const passwordField = page.locator('input[type="password"]').first();
     await passwordField.fill(config.password);
     // Pressing Enter submits the nearest <form> regardless of how the login control is marked up
