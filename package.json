@@ -1,0 +1,12 @@
+{
+  "name": "spelc-carriere",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspace=packages/domain",
+    "build": "npm run build --workspaces --if-present"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@spelc/api",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "prisma:validate": "prisma validate",
+    "prisma:format": "prisma format",
+    "prisma:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@spelc/domain": "*",
+    "@prisma/client": "^5.20.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.20.0",
+    "typescript": "^5.6.0"
+  }
+}

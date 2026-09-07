@@ -1,0 +1,251 @@
+// Data model for the Spelc career-management system.
+// Scope (per product decision): académie de Nice (06/83) only for V1, multi-user with roles,
+// stable-ID adherent↔teacher matching with a manual review queue, and an auto-estimated but
+// lockable/overridable "BA" (bonification d'ancienneté) selection threshold.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth / users
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN // full access: manage users, lock BA thresholds, edit reference data (grille, barèmes)
+  GESTIONNAIRE // day-to-day use: imports, matching review, mailing
+  LECTURE // read-only
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String
+  role            Role             @default(GESTIONNAIRE)
+  passwordHash    String
+  createdAt       DateTime         @default(now())
+  reviewedMatches MatchCandidate[] @relation("ReviewedBy")
+  lockedSeuils    BaSeuil[]        @relation("LockedBy")
+}
+
+// ---------------------------------------------------------------------------
+// Reference data (grille indiciaire, barèmes, reclassements) — seeded from the
+// central .xlsm's "Données" sheet, editable by an ADMIN when the grille is revalorised.
+// ---------------------------------------------------------------------------
+
+model Grille {
+  code  String       @id // "AGR", "PROFS", "HC_AGR", "EXC_PROFS", ... (matches GrilleCode in @spelc/domain)
+  label String
+  rows  EchelonRow[]
+}
+
+model EchelonRow {
+  id               String @id @default(cuid())
+  grille           Grille @relation(fields: [grilleCode], references: [code])
+  grilleCode       String
+  echelon          String // stored as text: numeric échelons and lettered ones ("A1".."A3","B2","B3") share this column
+  echelonSuivant   String
+  indice           Int
+  dureeAnnees      Float? // null means "MAX" (ceiling échelon, no further promotion)
+  dureeAlternative Float? // "avant vivier 2" (HC) or "au choix" (MA1/MA2) duration, when it differs from dureeAnnees
+
+  @@unique([grilleCode, echelon])
+}
+
+model ValeurDuPoint {
+  id          String   @id @default(cuid())
+  valeur      Float
+  applicableA DateTime // date this value takes effect, so historical calculations stay reproducible
+}
+
+model GradeMapping {
+  grade                     String  @id // rectorat grade label, e.g. "CERTIFIE HC"
+  grilleCode                String
+  degre                     Int // 1 = premier degré, 2 = second degré
+  accesHorsClasse           Boolean @default(false)
+  accesClasseExceptionnelle Boolean @default(false)
+}
+
+// ---------------------------------------------------------------------------
+// Teachers, as they appear in each rectorat campaign export (source of truth for
+// échelon/promotion state — this table is append-only per campaign, never mutated in place,
+// so a re-import never silently loses history).
+// ---------------------------------------------------------------------------
+
+model Campagne {
+  id            String   @id @default(cuid())
+  anneeScolaire String // e.g. "2024-2025"
+  periodeDebut  DateTime
+  periodeFin    DateTime
+  dateCcma      DateTime // reference date used for "date de régularisation financière" calculations
+  createdAt     DateTime @default(now())
+
+  imports          RectoratImport[]
+  teacherSnapshots TeacherSnapshot[]
+  baSeuils         BaSeuil[]
+}
+
+model RectoratImport {
+  id         String            @id @default(cuid())
+  campagne   Campagne          @relation(fields: [campagneId], references: [id])
+  campagneId String
+  grade      String // "4531 : ECR PROFESSEUR CERTIFIE CL. NORMALE" style rectorat grade code+label
+  fileName   String
+  importedAt DateTime          @default(now())
+  importedBy String? // free-text/email, kept even if the User row is later deleted
+  rowCount   Int
+  snapshots  TeacherSnapshot[]
+}
+
+// One row = one teacher's state as it appeared in one rectorat PDF/campaign export.
+// Mirrors the fields we identified in the rectorat "AVANCEMENT D'ECHELON" export format.
+model TeacherSnapshot {
+  id         String         @id @default(cuid())
+  campagne   Campagne       @relation(fields: [campagneId], references: [id])
+  campagneId String
+  import     RectoratImport @relation(fields: [importId], references: [id])
+  importId   String
+
+  // Stable identity is NOT derived from name matching here — this snapshot always belongs to a
+  // Teacher row (created/reused via the matching engine below) so history survives name changes,
+  // typos, or re-imports.
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+  teacherId String
+
+  nomUsage                       String
+  prenom                         String
+  dateNaissance                  DateTime?
+  rneEtablissement               String?
+  nomEtablissement               String?
+  typeEtablissement              String? // CLG/LGT/LP/LPO/LT/LYT CC/ECS/SEP...
+  codePostal                     String?
+  ville                          String?
+  disciplineCode                 String?
+  disciplineLibelle              String?
+  echelonActuel                  String
+  dateAccesEchelon               DateTime
+  avisEvaluation                 Int? // 0-4, only populated for grades/échelons with a rendez-vous de carrière
+  typePromotion                  String? // AN / CL / BA / RE, as printed in the rectorat export
+  dureeRestante                  String? // "XXaYYmZZj" raw text, kept verbatim for audit/debugging
+  dateProchainePromotionRectorat DateTime? // as stated BY the rectorat itself, kept separate from our own computed estimate
+
+  @@index([campagneId, teacherId])
+}
+
+// The stable entity a human is actually tracking across campaigns and re-imports.
+model Teacher {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  snapshots      TeacherSnapshot[]
+  matchCandidate MatchCandidate?
+  computedStates ComputedPromotionState[]
+}
+
+// ---------------------------------------------------------------------------
+// Adhérents (from the union's own membership export, "ADEL")
+// ---------------------------------------------------------------------------
+
+model Adherent {
+  id             String    @id @default(cuid())
+  civilite       String?
+  nom            String
+  prenom         String
+  nomNaissance   String?
+  grade          String?
+  echelleSpelc   String?
+  ancienEchelon  String?
+  statut         String?
+  typeContrat    String?
+  ancienIndice   Int?
+  dateEffet      DateTime?
+  mailPersonnel  String?
+  mailAcademique String?
+  departement    String?
+  importedAt     DateTime  @default(now())
+
+  matchCandidate MatchCandidate?
+}
+
+// ---------------------------------------------------------------------------
+// Matching: per product decision, the first resolution of an adherent↔teacher link is
+// reviewed by a human and then PERMANENT (a stable Teacher/Adherent pairing) — later imports
+// only need to resolve genuinely NEW or ambiguous cases, never re-litigate confirmed links.
+// ---------------------------------------------------------------------------
+
+enum MatchStatus {
+  AUTO_CONFIRMED // exact/unambiguous fuzzy match, no review needed
+  PENDING_REVIEW // ambiguous or below-confidence match, sitting in the review queue
+  CONFIRMED // a human reviewed and confirmed the link
+  REJECTED // a human reviewed and declared this NOT a match (adherent has no linked teacher yet)
+}
+
+model MatchCandidate {
+  id           String      @id @default(cuid())
+  teacher      Teacher?    @relation(fields: [teacherId], references: [id])
+  teacherId    String?     @unique
+  adherent     Adherent    @relation(fields: [adherentId], references: [id])
+  adherentId   String      @unique
+  status       MatchStatus @default(PENDING_REVIEW)
+  confidence   Float // 0-1, from the fuzzy-matching step (normalized nom/prénom distance)
+  reviewedBy   User?       @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime    @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Computed promotion state — the OUTPUT of the @spelc/domain calculation engine for one
+// Teacher in one Campagne. Recomputed whenever a new snapshot or a BA seuil changes; never
+// hand-edited, so it can always be safely thrown away and regenerated.
+// ---------------------------------------------------------------------------
+
+model ComputedPromotionState {
+  id         String   @id @default(cuid())
+  teacher    Teacher  @relation(fields: [teacherId], references: [id])
+  teacherId  String
+  campagneId String
+  computedAt DateTime @default(now())
+
+  grilleCode             String
+  echelonDepart          String
+  echelonSuivant         String
+  indiceActuel           Int
+  futurIndice            Int
+  gainSalaireBrut        Int
+  gainSalaireNet         Int
+  dateProchainePromotion DateTime?
+  baEstimate             String? // "promu_estime" | "non_promu_estime" | "indetermine", null if not échelon 6/8
+
+  @@unique([teacherId, campagneId])
+}
+
+// ---------------------------------------------------------------------------
+// "BA" (bonification d'ancienneté) selection threshold — auto-inferred each campaign from
+// confirmed results at échelon 6/8, but an ADMIN can lock/override it (per product decision)
+// once the rectorat's official cutoff is known, so the estimate stops drifting.
+// ---------------------------------------------------------------------------
+
+model BaSeuil {
+  id                   String   @id @default(cuid())
+  campagne             Campagne @relation(fields: [campagneId], references: [id])
+  campagneId           String
+  grade                String
+  echelonDepart        Int // 6 or 8
+  nombrePromusBa       Int
+  minBareme            Int
+  minAncienneteGrade   Float
+  minAncienneteEchelon Float
+  minAge               Int
+  locked               Boolean  @default(false)
+  lockedBy             User?    @relation("LockedBy", fields: [lockedById], references: [id])
+  lockedById           String?
+  updatedAt            DateTime @updatedAt
+
+  @@unique([campagneId, grade, echelonDepart])
+}
