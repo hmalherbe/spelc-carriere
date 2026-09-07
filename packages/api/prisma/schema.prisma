@@ -119,6 +119,10 @@ model TeacherSnapshot {
 
   nomUsage                       String
   prenom                         String
+  // Normalized rectorat grade label (matches GradeMapping.grade in @spelc/domain, e.g. "CERTIFIE",
+  // "AGREGE HC") — distinct from RectoratImport.grade, which is the raw file-level label
+  // ("4531 : ECR PROFESSEUR CERTIFIE CL. NORMALE"). Drives the grille lookup and BA threshold matching.
+  grade                          String
   dateNaissance                  DateTime?
   rneEtablissement               String?
   nomEtablissement               String?
@@ -130,6 +134,11 @@ model TeacherSnapshot {
   echelonActuel                  String
   dateAccesEchelon               DateTime
   avisEvaluation                 Int? // 0-4, only populated for grades/échelons with a rendez-vous de carrière
+  // "Z1AGRA" / "Z1ANEC" in the raw rectorat export's barème block — ancienneté (in years) in the
+  // current grade and in the current échelon, respectively. Feed directly into the BA threshold
+  // cascade (see BaSeuil / computeBASeuils in @spelc/domain).
+  ancienneteGrade                Float?
+  ancienneteEchelon              Float?
   typePromotion                  String? // AN / CL / BA / RE, as printed in the rectorat export
   dureeRestante                  String? // "XXaYYmZZj" raw text, kept verbatim for audit/debugging
   dateProchainePromotionRectorat DateTime? // as stated BY the rectorat itself, kept separate from our own computed estimate
