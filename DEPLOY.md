@@ -9,7 +9,7 @@ frontend servi par Nginx.
 Connecte-toi en SSH à ton serveur :
 
 ```bash
-ssh root@163.172.9.251
+ssh root@51.15.134.129
 ```
 
 ### Installer Docker
@@ -68,7 +68,7 @@ ADEL). Suis les logs :
 docker compose logs -f
 ```
 
-Une fois stabilisé, l'appli est accessible sur `http://163.172.9.251`.
+Une fois stabilisé, l'appli est accessible sur `http://51.15.134.129`.
 
 ### Vérifier
 
@@ -95,7 +95,7 @@ en entrée, en plus du port 22 (SSH) déjà nécessaire pour s'y connecter.
 
 ## 4. Prochaines étapes (pas encore faites)
 
-- **HTTPS** : nécessite un nom de domaine pointant vers `163.172.9.251` (le certificat Let's
+- **HTTPS** : nécessite un nom de domaine pointant vers `51.15.134.129` (le certificat Let's
   Encrypt ne peut pas se délivrer pour une IP nue). Une fois un domaine en place, on ajoute
   `certbot` + un nouveau `server` block Nginx pour le port 443.
 - **Sauvegardes** : la base vit dans le volume Docker `spelc-carriere_db_data` — à sauvegarder
