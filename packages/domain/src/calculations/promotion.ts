@@ -1,7 +1,8 @@
 import { findEchelonRow, gainSalaireBrut, gainSalaireNet, traitementBrutMensuel } from "./grille.js";
 import { ancienneteToBankingDays, addCalendarYMD, bankingDaysToYMD } from "./anciennete.js";
 import type { AncienneteYMD, PromotionResult } from "../types.js";
-import type { EchelonCode, GrilleCode } from "../data/grilles.js";
+import { GRILLES, type EchelonCode, type EchelonRow, type GrilleCode } from "../data/grilles.js";
+import { VALEUR_DU_POINT } from "../data/refs.js";
 
 export interface ComputeEchelonPromotionInput {
   grille: GrilleCode;
@@ -9,6 +10,11 @@ export interface ComputeEchelonPromotionInput {
   dateDernierChangementEchelon: string; // ISO date
   ancienneteADeduire?: AncienneteYMD | null;
   ancienneteAReporter?: AncienneteYMD | null;
+  /** Overrides the built-in grille tables — pass the current values from the database when an
+   * admin may have edited the indices (see packages/api/src/liveGrilles.ts). */
+  grilles?: Record<GrilleCode, EchelonRow[]>;
+  /** Overrides the built-in "valeur du point d'indice" — pass the current value from the database. */
+  valeurDuPoint?: number;
 }
 
 /**
@@ -24,9 +30,17 @@ export interface ComputeEchelonPromotionInput {
  * ceiling ("MAX" durée) — there is no next promotion to compute.
  */
 export function computeEchelonPromotion(input: ComputeEchelonPromotionInput): PromotionResult {
-  const { grille, echelonDepart, dateDernierChangementEchelon, ancienneteADeduire, ancienneteAReporter } = input;
+  const {
+    grille,
+    echelonDepart,
+    dateDernierChangementEchelon,
+    ancienneteADeduire,
+    ancienneteAReporter,
+    grilles = GRILLES,
+    valeurDuPoint = VALEUR_DU_POINT,
+  } = input;
 
-  const currentRow = findEchelonRow(grille, echelonDepart);
+  const currentRow = findEchelonRow(grille, echelonDepart, grilles);
   const indiceActuel = currentRow.indice;
 
   if (currentRow.duree === "MAX") {
@@ -36,15 +50,15 @@ export function computeEchelonPromotion(input: ComputeEchelonPromotionInput): Pr
       echelonSuivant: currentRow.echelonSuivant,
       indiceActuel,
       futurIndice: indiceActuel,
-      ancienTraitementBrutMensuel: traitementBrutMensuel(indiceActuel),
-      futurTraitementBrutMensuel: traitementBrutMensuel(indiceActuel),
+      ancienTraitementBrutMensuel: traitementBrutMensuel(indiceActuel, valeurDuPoint),
+      futurTraitementBrutMensuel: traitementBrutMensuel(indiceActuel, valeurDuPoint),
       gainSalaireBrut: 0,
       gainSalaireNet: 0,
       dateProchainePromotion: null,
     };
   }
 
-  const nextRow = findEchelonRow(grille, currentRow.echelonSuivant);
+  const nextRow = findEchelonRow(grille, currentRow.echelonSuivant, grilles);
   const futurIndice = nextRow.indice;
 
   const joursADeduire = ancienneteToBankingDays(ancienneteADeduire);
@@ -61,10 +75,10 @@ export function computeEchelonPromotion(input: ComputeEchelonPromotionInput): Pr
     echelonSuivant: currentRow.echelonSuivant,
     indiceActuel,
     futurIndice,
-    ancienTraitementBrutMensuel: traitementBrutMensuel(indiceActuel),
-    futurTraitementBrutMensuel: traitementBrutMensuel(futurIndice),
-    gainSalaireBrut: gainSalaireBrut(indiceActuel, futurIndice),
-    gainSalaireNet: gainSalaireNet(indiceActuel, futurIndice),
+    ancienTraitementBrutMensuel: traitementBrutMensuel(indiceActuel, valeurDuPoint),
+    futurTraitementBrutMensuel: traitementBrutMensuel(futurIndice, valeurDuPoint),
+    gainSalaireBrut: gainSalaireBrut(indiceActuel, futurIndice, valeurDuPoint),
+    gainSalaireNet: gainSalaireNet(indiceActuel, futurIndice, valeurDuPoint),
     dateProchainePromotion,
   };
 }

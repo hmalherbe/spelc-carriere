@@ -8,6 +8,7 @@ import { BaSeuilsPage } from "./pages/BaSeuilsPage.js";
 import { ImportPage } from "./pages/ImportPage.js";
 import { MailingPage } from "./pages/MailingPage.js";
 import { RulesPage } from "./pages/RulesPage.js";
+import { GrillesPage } from "./pages/GrillesPage.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -34,6 +35,7 @@ export function App() {
         <Route path="import" element={<ImportPage />} />
         <Route path="mailing" element={<MailingPage />} />
         <Route path="regles" element={<RulesPage />} />
+        <Route path="grilles" element={<GrillesPage />} />
       </Route>
     </Routes>
   );

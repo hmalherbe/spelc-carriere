@@ -8,6 +8,7 @@ import { baSeuilsRouter } from "./routes/baSeuils.js";
 import { importsRouter } from "./routes/imports.js";
 import { mailingRouter } from "./routes/mailing.js";
 import { adelRouter } from "./routes/adel.js";
+import { grillesRouter } from "./routes/grilles.js";
 
 export function createApp() {
   const app = express();
@@ -24,6 +25,7 @@ export function createApp() {
   app.use("/imports", importsRouter);
   app.use("/mailing", mailingRouter);
   app.use("/adel", adelRouter);
+  app.use("/grilles", grillesRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: `Route inconnue: ${req.method} ${req.path}` });

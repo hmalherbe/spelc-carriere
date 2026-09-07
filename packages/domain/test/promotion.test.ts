@@ -50,6 +50,22 @@ describe("computeEchelonPromotion (ports the Calculs adhérents / ETATS_CCM_CALC
     expect(withoutReport.dateProchainePromotion).toBe("2026-03-01");
   });
 
+  it("uses overridden grilles/valeurDuPoint when passed (e.g. an admin's edited indices)", () => {
+    const result = computeEchelonPromotion({
+      grille: "AGR",
+      echelonDepart: 5,
+      dateDernierChangementEchelon: "2023-09-01",
+      grilles: { AGR: [
+        { echelon: 5, echelonSuivant: 6, indice: 600, duree: 2.5 },
+        { echelon: 6, echelonSuivant: 7, indice: 700, duree: 3 },
+      ] } as never,
+      valeurDuPoint: 60,
+    });
+    expect(result.indiceActuel).toBe(600);
+    expect(result.futurIndice).toBe(700);
+    expect(result.gainSalaireNet).toBe(Math.round(((700 - 600) * 60 * 0.77) / 12));
+  });
+
   it("reports no next promotion when the current échelon is the grille's ceiling ('MAX')", () => {
     const result = computeEchelonPromotion({
       grille: "AGR",

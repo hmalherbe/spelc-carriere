@@ -197,6 +197,42 @@ export interface MailingLogEntry {
   sentAt: string;
 }
 
+export interface EchelonRowApi {
+  id: string;
+  grilleCode: string;
+  echelon: string;
+  echelonSuivant: string;
+  indice: number;
+  dureeAnnees: number | null;
+  dureeAlternative: number | null;
+}
+
+export interface GrilleApi {
+  code: string;
+  label: string;
+  rows: EchelonRowApi[];
+}
+
+export interface GradeMappingApi {
+  grade: string;
+  grilleCode: string;
+  degre: number;
+  accesHorsClasse: boolean;
+  accesClasseExceptionnelle: boolean;
+}
+
+export interface ValeurDuPointApi {
+  id: string;
+  valeur: number;
+  applicableA: string;
+}
+
+export interface GrillesData {
+  grilles: GrilleApi[];
+  gradeMappings: GradeMappingApi[];
+  valeurDuPoint: ValeurDuPointApi | null;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<{ token: string; user: CurrentUser }>("/auth/login", {
@@ -234,4 +270,12 @@ export const api = {
   mailingLog: (campagneId: string) => request<MailingLogEntry[]>(`/mailing/log?campagneId=${campagneId}`),
   mailingSend: (campagneId: string, teacherIds?: string[]) =>
     request<MailingSendResult>("/mailing/send", { method: "POST", body: JSON.stringify({ campagneId, teacherIds }) }),
+  grilles: () => request<GrillesData>("/grilles"),
+  updateEchelonIndice: (grilleCode: string, echelon: string, indice: number) =>
+    request<EchelonRowApi>(`/grilles/${encodeURIComponent(grilleCode)}/rows/${encodeURIComponent(echelon)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ indice }),
+    }),
+  createValeurDuPoint: (valeur: number, applicableA: string) =>
+    request<ValeurDuPointApi>("/grilles/valeur-du-point", { method: "POST", body: JSON.stringify({ valeur, applicableA }) }),
 };

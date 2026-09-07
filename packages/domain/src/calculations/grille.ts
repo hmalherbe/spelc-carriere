@@ -15,9 +15,17 @@ function normalizeEchelonKey(echelon: EchelonCode): string {
  * Equivalent of the spreadsheet's `VLOOKUP(echelon, INDIRECT(grille), col, FALSE)`.
  * Throws if the échelon doesn't exist in that grille — a missing échelon is a data/mapping bug,
  * not something to silently paper over, since it would silently produce a wrong salary.
+ *
+ * `grilles` defaults to the built-in reference tables but can be overridden with a "live" copy
+ * (e.g. loaded from the database) so an admin's edits to the indice grid take effect — see
+ * packages/api/src/liveGrilles.ts, the only real caller of that override.
  */
-export function findEchelonRow(grille: GrilleCode, echelon: EchelonCode): EchelonRow {
-  const row = GRILLES[grille].find((r) => normalizeEchelonKey(r.echelon) === normalizeEchelonKey(echelon));
+export function findEchelonRow(
+  grille: GrilleCode,
+  echelon: EchelonCode,
+  grilles: Record<GrilleCode, EchelonRow[]> = GRILLES,
+): EchelonRow {
+  const row = grilles[grille].find((r) => normalizeEchelonKey(r.echelon) === normalizeEchelonKey(echelon));
   if (!row) {
     throw new Error(`Échelon ${echelon} introuvable dans la grille ${grille}`);
   }
@@ -27,9 +35,13 @@ export function findEchelonRow(grille: GrilleCode, echelon: EchelonCode): Echelo
 /**
  * Gross monthly salary ("traitement brut mensuel") for a given indice.
  * Mirrors: TEXT(ROUND(indice * Valeur_du_point / 12, 0), "0000")
+ *
+ * `valeurDuPoint` defaults to the built-in reference value but can be overridden with the current
+ * value from the database (it's revalued periodically by the government) — see
+ * packages/api/src/liveGrilles.ts.
  */
-export function traitementBrutMensuel(indice: number): number {
-  return Math.round((indice * VALEUR_DU_POINT) / 12);
+export function traitementBrutMensuel(indice: number, valeurDuPoint: number = VALEUR_DU_POINT): number {
+  return Math.round((indice * valeurDuPoint) / 12);
 }
 
 /**
@@ -38,8 +50,8 @@ export function traitementBrutMensuel(indice: number): number {
  * rounding first then subtracting can differ by 1€ from subtracting then rounding).
  * Mirrors: Futur_Traitement_brut - Ancien_Traitement_brut_mensuel
  */
-export function gainSalaireBrut(indiceActuel: number, futurIndice: number): number {
-  return traitementBrutMensuel(futurIndice) - traitementBrutMensuel(indiceActuel);
+export function gainSalaireBrut(indiceActuel: number, futurIndice: number, valeurDuPoint: number = VALEUR_DU_POINT): number {
+  return traitementBrutMensuel(futurIndice, valeurDuPoint) - traitementBrutMensuel(indiceActuel, valeurDuPoint);
 }
 
 /**
@@ -49,6 +61,6 @@ export function gainSalaireBrut(indiceActuel: number, futurIndice: number): numb
  * a payslip-accurate net computation).
  * Mirrors: ROUND((Futur_Indice - Indice_actuel) * Valeur_du_point * 0.77 / 12, 0)
  */
-export function gainSalaireNet(indiceActuel: number, futurIndice: number): number {
-  return Math.round(((futurIndice - indiceActuel) * VALEUR_DU_POINT * 0.77) / 12);
+export function gainSalaireNet(indiceActuel: number, futurIndice: number, valeurDuPoint: number = VALEUR_DU_POINT): number {
+  return Math.round(((futurIndice - indiceActuel) * valeurDuPoint * 0.77) / 12);
 }

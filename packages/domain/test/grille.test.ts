@@ -24,4 +24,15 @@ describe("grille indiciaire lookups (extracted from the workbook's Données shee
   it("throws on an échelon that doesn't exist in the grille, instead of silently returning garbage", () => {
     expect(() => findEchelonRow("AGR", 99)).toThrow();
   });
+
+  it("uses an overridden grilles table when one is passed (e.g. edited indices from the database)", () => {
+    const overridden = { AGR: [{ echelon: 5, echelonSuivant: 6, indice: 999, duree: 2.5 }] };
+    const row = findEchelonRow("AGR", 5, overridden as never);
+    expect(row.indice).toBe(999);
+  });
+
+  it("uses an overridden valeur du point when one is passed", () => {
+    expect(traitementBrutMensuel(584, 60)).toBe(Math.round((584 * 60) / 12));
+    expect(gainSalaireNet(584, 623, 60)).toBe(Math.round(((623 - 584) * 60 * 0.77) / 12));
+  });
 });

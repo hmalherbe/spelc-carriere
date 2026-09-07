@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords } from "../adherentImport.js";
+import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { computeEchelonPromotion, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
 import { extractPdfText, parseRectoratFile, parseAdherentCsv, normalizeName } from "@spelc/import";
 
@@ -67,6 +68,10 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
     teacherIdByName.set(`${normalizeName(s.nomUsage)}|${normalizeName(s.prenom)}`, s.teacherId);
   }
 
+  // Loaded once per import, not per row: an admin's edited indices / revalorised valeur du point
+  // (see routes/grilles.ts) must be reflected in newly computed promotions.
+  const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
+
   const warnings: { nomUsage: string; prenom: string; warnings: string[] }[] = [];
   let imported = 0;
 
@@ -111,6 +116,8 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
         grille: gradeMapping.grille as GrilleCode,
         echelonDepart: record.echelonActuel,
         dateDernierChangementEchelon: record.dateAccesEchelon,
+        grilles: liveGrilles,
+        valeurDuPoint: liveValeurDuPoint,
       });
       await prisma.computedPromotionState.upsert({
         where: { teacherId_campagneId: { teacherId, campagneId } },
