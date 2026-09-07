@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth/middleware.js";
-import { estimateAgainstSeuil } from "@spelc/domain";
+import {
+  estimateAgainstSeuil,
+  isEligibleBonificationAnciennete,
+  isEligibleHorsClasse,
+  isEligibleClasseExceptionnelle,
+  GRADE_MAPPINGS,
+} from "@spelc/domain";
 
 export const teachersRouter = Router();
 
@@ -37,8 +43,28 @@ teachersRouter.get("/", async (req, res) => {
         ? seuils.find((s) => s.grade === snap.grade && s.echelonDepart === echelonDepart)
         : undefined;
 
+    const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === snap.grade);
+
+    // null = not applicable (wrong grade or missing ancienneté data), not "not eligible".
+    const horsClasseEligible =
+      gradeMapping?.accesHorsClasse && snap.ancienneteEchelon != null
+        ? isEligibleHorsClasse(snap.echelonActuel, snap.ancienneteEchelon)
+        : null;
+
+    const classeExceptionnelleEligible = gradeMapping?.accesClasseExceptionnelle
+      ? isEligibleClasseExceptionnelle(snap.echelonActuel, gradeMapping.grille === "HC_AGR" ? "agrege" : "autre")
+      : null;
+
+    // PPCR eligibility windows: échelon 6 -> 7 only in the échelon's 2nd year, échelon 8 -> 9 only
+    // between 18 and 30 months in — outside that window a teacher isn't even a BA candidate this
+    // campaign, whatever their barème/ancienneté, so no estimate should be shown at all.
+    const baEligible =
+      (echelonDepart === 6 || echelonDepart === 8) &&
+      snap.ancienneteEchelon != null &&
+      isEligibleBonificationAnciennete(echelonDepart, snap.ancienneteEchelon);
+
     const baEstimate =
-      seuil && snap.avisEvaluation != null && snap.ancienneteGrade != null && snap.ancienneteEchelon != null
+      baEligible && seuil && snap.avisEvaluation != null && snap.ancienneteGrade != null && snap.ancienneteEchelon != null
         ? estimateAgainstSeuil(
             {
               grade: snap.grade,
@@ -94,6 +120,8 @@ teachersRouter.get("/", async (req, res) => {
         ? { minBareme: seuil.minBareme, locked: seuil.locked, nombrePromusBa: seuil.nombrePromusBa }
         : null,
       baEstimate,
+      horsClasseEligible,
+      classeExceptionnelleEligible,
     };
   });
 

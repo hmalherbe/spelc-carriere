@@ -93,6 +93,9 @@ export interface TeacherListItem {
     | { status: "NON_ADHERENT" };
   seuilBa: { minBareme: number; locked: boolean; nombrePromusBa: number } | null;
   baEstimate: BaEstimate;
+  /** null = not applicable (mauvais grade, ou données d'ancienneté manquantes) — pas "non éligible". */
+  horsClasseEligible: boolean | null;
+  classeExceptionnelleEligible: boolean | null;
 }
 
 export interface MatchCandidate {

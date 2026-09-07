@@ -56,6 +56,12 @@ export function pointsAccesHorsClasse(
  * Total "barème" (points) for access to the classe exceptionnelle: bonification from the recteur's
  * avis (same scale for all corps) plus points d'ancienneté, on a corps-specific ancienneté scale
  * (agrégés use a different bracket table than certifiés/PLP/PEPS/professeurs des écoles HC).
+ *
+ * ⚠️ This reflects the PRE-2024 rule (the two-"vivier" points-based selection). Since the 2024
+ * reform, access to the classe exceptionnelle is purely statutory (see
+ * `isEligibleClasseExceptionnelle` in eligibility.ts) — this function is kept only because the
+ * reclassement tables it feeds into (échelon landed on when promoted) weren't reported as changed
+ * by the reform; do NOT use it to decide who is eligible.
  */
 export function pointsAccesClasseExceptionnelle(
   avis: "Excellent" | "Très satisfaisant" | "Satisfaisant" | "A consolider",

@@ -82,6 +82,7 @@ export function DashboardPage() {
               <th>Gain net</th>
               <th>Adhérent</th>
               <th>Estimation BA</th>
+              <th>Éligibilité HC / Exc.</th>
             </tr>
           </thead>
           <tbody>
@@ -105,6 +106,24 @@ export function DashboardPage() {
                     <span className={`badge badge-${t.baEstimate}`}>{BA_ESTIMATE_LABEL[t.baEstimate]}</span>
                   ) : (
                     "—"
+                  )}
+                </td>
+                <td>
+                  {t.horsClasseEligible === null && t.classeExceptionnelleEligible === null ? (
+                    "—"
+                  ) : (
+                    <div className="row-actions">
+                      {t.horsClasseEligible !== null && (
+                        <span className={`badge ${t.horsClasseEligible ? "badge-promu_estime" : "badge-indetermine"}`}>
+                          HC {t.horsClasseEligible ? "éligible" : "non éligible"}
+                        </span>
+                      )}
+                      {t.classeExceptionnelleEligible !== null && (
+                        <span className={`badge ${t.classeExceptionnelleEligible ? "badge-promu_estime" : "badge-indetermine"}`}>
+                          Exc. {t.classeExceptionnelleEligible ? "éligible" : "non éligible"}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </td>
               </tr>

@@ -94,24 +94,59 @@ Gain_salaire_net  = ROUND((futurIndice − indiceActuel) × Valeur_du_point × 0
       </section>
 
       <section className="card">
-        <h2>6. Accès Hors Classe / Classe Exceptionnelle</h2>
+        <h2>6. Éligibilité Hors-Classe / Classe Exceptionnelle (règles PPCR)</h2>
         <p>
-          Contrairement au seuil « BA » (voir §7), l'accès Hors Classe et Classe Exceptionnelle suit un barème de points{" "}
-          <strong>publié et reproductible</strong> :
+          Contrairement au seuil « BA » (voir §7, qui reste une inférence statistique), l'éligibilité à la hors-classe et à
+          la classe exceptionnelle suit des règles <strong>publiées et déterministes</strong> — implémentées dans{" "}
+          <code>packages/domain/src/calculations/eligibility.ts</code>, calculées automatiquement pour chaque enseignant
+          et affichées dans la colonne « Éligibilité HC / Exc. » du tableau de bord.
         </p>
-        <pre className="rule-formula">points = bonification(avis du recteur, degré/corps) + points_ancienneté(échelon × 10 + ancienneté_dans_échelon)</pre>
-        <p className="hint">
-          Tables de points et de reclassement (échelon + ancienneté avant → échelon après, avec ou sans conservation de
-          l'ancienneté) extraites dans <code>refs.ts</code>.
+        <p>
+          <strong>Hors-classe</strong> : échelon 9 de la classe normale avec au moins <strong>2 ans d'ancienneté</strong>{" "}
+          dans cet échelon (arrêtée au 31 août de l'année du tableau d'avancement) — ou automatiquement éligible à partir
+          de l'échelon 10 ou 11.
+        </p>
+        <p>
+          <strong>Classe exceptionnelle</strong> (règle en vigueur depuis la réforme 2024 — le système à deux « viviers »
+          a disparu) : purement statutaire, <strong>aucune ancienneté supplémentaire requise</strong>. Il suffit d'avoir
+          atteint l'échelon 5 de la hors-classe (échelon 4 pour les agrégés — numéroté « A1 » dans leur grille) au 31 août
+          de l'année de promotion.
+        </p>
+        <p className="rule-highlight">
+          <strong>Historique :</strong> le classeur source encode encore le système à points{" "}
+          (<code>POINTS_BONIFICATION_EXC_AVIS_RECTEUR</code>, <code>POINTS_ANCIENNETE_EXC_*</code> dans <code>refs.ts</code>)
+          qui servait de sélection avant la réforme 2024. Ce code est conservé (utile pour le reclassement — quel échelon
+          on obtient une fois promu) mais <strong>ne détermine plus l'éligibilité</strong>, qui suit désormais les règles
+          statutaires ci-dessus.
         </p>
       </section>
 
       <section className="card">
-        <h2>7. Seuil de sélection « BA » (échelons 6 et 8 uniquement)</h2>
+        <h2>7. Bonification d'ancienneté « BA » (échelons 6 et 8 uniquement)</h2>
         <p>
-          Le rectorat ne publie pas son seuil de sélection pour la promotion « au choix » à ces deux échelons. Le classeur
-          source le <strong>déduit empiriquement</strong> chaque campagne, par (grade, échelon départ), à partir des
-          enseignants réellement promus cette année-là — une cascade à 4 niveaux :
+          Permet d'accélérer d'un an le passage à l'échelon supérieur pour environ <strong>30 % des enseignants</strong>,
+          suite aux 1er et 2e rendez-vous de carrière — mais seulement pour ceux qui sont dans la bonne fenêtre
+          d'ancienneté au moment de la campagne :
+        </p>
+        <ul className="rule-list">
+          <li>
+            <strong>Échelon 6 → 7</strong> : être dans la <strong>2ᵉ année</strong> de l'échelon 6 (ancienneté entre 1 et 2
+            ans). Passage en 2 ans au lieu de 3 si accordée.
+          </li>
+          <li>
+            <strong>Échelon 8 → 9</strong> : avoir entre <strong>18 et 30 mois</strong> d'ancienneté dans l'échelon 8.
+            Passage en 2,5 ans au lieu de 3,5 si accordée.
+          </li>
+        </ul>
+        <p className="hint">
+          Cette fenêtre d'éligibilité (<code>isEligibleBonificationAnciennete</code> dans{" "}
+          <code>packages/domain/src/calculations/eligibility.ts</code>) est vérifiée avant même de calculer une
+          estimation — un enseignant hors fenêtre n'affiche aucune estimation BA, quel que soit son barème.
+        </p>
+        <p>
+          Être dans la fenêtre ne garantit pas la bonification : le rectorat ne publie pas son seuil de sélection parmi
+          les enseignants éligibles. Le classeur source le <strong>déduit empiriquement</strong> chaque campagne, par
+          (grade, échelon départ), à partir des enseignants réellement promus cette année-là — une cascade à 4 niveaux :
         </p>
         <ol className="rule-list">
           <li>barème minimum parmi les promus ;</li>

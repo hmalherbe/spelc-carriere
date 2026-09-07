@@ -6,3 +6,4 @@ export * from "./calculations/anciennete.js";
 export * from "./calculations/promotion.js";
 export * from "./calculations/baThreshold.js";
 export * from "./calculations/hcExc.js";
+export * from "./calculations/eligibility.js";
