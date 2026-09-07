@@ -252,10 +252,36 @@ async function seedDemoCampagne() {
   });
 }
 
+/** Real admin account for production, created from env vars rather than a hard-coded demo
+ * password. Idempotent (upsert) — safe to run on every container start. */
+async function seedProductionAdmin() {
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password) {
+    console.log("ADMIN_EMAIL/ADMIN_PASSWORD non définis — aucun compte admin créé (données de référence seedées quand même).");
+    return;
+  }
+  console.log(`Seeding le compte admin (${email})...`);
+  const passwordHash = await bcrypt.hash(password, 10);
+  await prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: { email, name: "Admin", role: "ADMIN", passwordHash },
+  });
+}
+
 async function main() {
   await seedReferenceData();
-  await seedUsers();
-  await seedDemoCampagne();
+
+  // SEED_DEMO_DATA is meant for local dev only — production must never ship the demo accounts
+  // (admin1234, a weak hard-coded password) or fake teachers/adhérents.
+  if (process.env.SEED_DEMO_DATA === "true") {
+    await seedUsers();
+    await seedDemoCampagne();
+  } else {
+    await seedProductionAdmin();
+  }
+
   console.log("Seed complete.");
 }
 

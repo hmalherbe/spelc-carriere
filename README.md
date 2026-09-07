@@ -50,15 +50,19 @@ sudo -u postgres psql -c "CREATE ROLE spelc WITH LOGIN PASSWORD 'spelc_dev_passw
 sudo -u postgres psql -c "CREATE DATABASE spelc OWNER spelc;"
 cd packages/api
 npx prisma migrate dev
-npm run seed          # charge la grille indiciaire + des données de démo
+
+# Ajoute SEED_DEMO_DATA="true" à packages/api/.env pour avoir les comptes/données de démo en local
+# (sans cette variable, seule la grille indiciaire — les données de référence — est chargée ; c'est
+# le comportement voulu en production, voir DEPLOY.md)
+npm run seed
 
 # Lancer l'API (port 4000) et le frontend (port 5173, proxy /api -> :4000)
 npm run dev            # dans packages/api
 cd ../web && npm run dev
 ```
 
-Comptes de démo (créés par le seed) : `admin@spelc.example` / `admin1234` (ADMIN),
-`gestionnaire@spelc.example` / `gest1234` (GESTIONNAIRE).
+Comptes de démo (créés par le seed avec `SEED_DEMO_DATA="true"`) : `admin@spelc.example` /
+`admin1234` (ADMIN), `gestionnaire@spelc.example` / `gest1234` (GESTIONNAIRE).
 
 ```bash
 npm test               # tests de tous les packages (domain, import, api)

@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: spelc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: spelc
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks: [spelc]
+
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://spelc:${POSTGRES_PASSWORD}@db:5432/spelc
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 4000
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
+      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-Spelc}
+      ADEL_URL: ${ADEL_URL:-}
+      ADEL_USERNAME: ${ADEL_USERNAME:-}
+      ADEL_PASSWORD: ${ADEL_PASSWORD:-}
+      ADEL_SPELC_NAME: ${ADEL_SPELC_NAME:-azur}
+    depends_on:
+      - db
+    networks: [spelc]
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks: [spelc]
+
+volumes:
+  db_data:
+
+networks:
+  spelc:
