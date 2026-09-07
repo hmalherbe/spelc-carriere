@@ -5,6 +5,7 @@ import { campagnesRouter } from "./routes/campagnes.js";
 import { teachersRouter } from "./routes/teachers.js";
 import { matchesRouter } from "./routes/matches.js";
 import { baSeuilsRouter } from "./routes/baSeuils.js";
+import { importsRouter } from "./routes/imports.js";
 
 export function createApp() {
   const app = express();
@@ -18,6 +19,7 @@ export function createApp() {
   app.use("/teachers", teachersRouter);
   app.use("/matches", matchesRouter);
   app.use("/ba-seuils", baSeuilsRouter);
+  app.use("/imports", importsRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: `Route inconnue: ${req.method} ${req.path}` });

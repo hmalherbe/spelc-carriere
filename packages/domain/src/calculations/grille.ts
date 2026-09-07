@@ -2,12 +2,22 @@ import { GRILLES, type EchelonCode, type EchelonRow, type GrilleCode } from "../
 import { VALEUR_DU_POINT } from "../data/refs.js";
 
 /**
+ * Numeric échelons are compared without leading zeros, since the rectorat's PDF exports print
+ * them zero-padded (e.g. "06") while the grille data stores plain numbers (6). Non-numeric codes
+ * (hors classe / classe exceptionnelle échelons like "A1", "B2") are compared as-is.
+ */
+function normalizeEchelonKey(echelon: EchelonCode): string {
+  const s = String(echelon);
+  return /^\d+$/.test(s) ? String(Number(s)) : s;
+}
+
+/**
  * Equivalent of the spreadsheet's `VLOOKUP(echelon, INDIRECT(grille), col, FALSE)`.
  * Throws if the échelon doesn't exist in that grille — a missing échelon is a data/mapping bug,
  * not something to silently paper over, since it would silently produce a wrong salary.
  */
 export function findEchelonRow(grille: GrilleCode, echelon: EchelonCode): EchelonRow {
-  const row = GRILLES[grille].find((r) => String(r.echelon) === String(echelon));
+  const row = GRILLES[grille].find((r) => normalizeEchelonKey(r.echelon) === normalizeEchelonKey(echelon));
   if (!row) {
     throw new Error(`Échelon ${echelon} introuvable dans la grille ${grille}`);
   }

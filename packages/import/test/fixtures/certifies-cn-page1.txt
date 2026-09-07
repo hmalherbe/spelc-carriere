@@ -1,0 +1,60 @@
+ ACADEMIE : ACADEMIE DE NICE A V A N C E M E N T D' E C H E L O N PAGE : 1
+ BUREAU DE GESTION : PRV* PERIODE DE TRAITEMENT
+ 4531 : ECR PROFESSEUR CERTIFIE CL. NORMALE
+ DATE : 11/03/2025 DU 01/09/2024
+ AU 31/08/2025
+ PROJET D'AVANCEMENT
+ ECHELON : 02
+!----------------------------------------------------------------------------------------------------------------------------------!
+! NOM USAGE - PRENOM AFFECTATION ECHELON ACTUEL PROCHAINES !
+! DATE DE NAISSANCE DISC. - AVIS EVAL. DATE ACCES REP. PROMOTIONS !
+!----------------------------------------------------------------------------------------------------------------------------------!
+! !
+!ANDRIAMASIARISON 0060744B CLG PR 01/09/2023 !
+! MAMY MIRINAH 22/09/2000 NOTRE-DAME DU SACRE COEUR 0422E ANGLAIS CL. 00a00m00j !
+! 06500 MENTON Pro AN.01/09/2024 !
+!Bareme : .......................................................................................................................!
+! ! EVAECH ! Z1AGRA 0.997 ! Z1ANEC 2.000 ! Z2AGEA 231110 ! ! !
+! 0.000 ! ! ! ! ! ! !
+! ! ! ! ! ! ! !
+! ! ! ! ! ! ! !
+!-----------!-------------------!-------------------!-------------------!-------------------!-------------------!------------------!
+ B A A N
+ NOMBRE DE PROMOUVABLES : 0 1
+ NOMBRE DE PROMUS : 0 1
+ DECIMALES : 0.00 0.00
+ ACADEMIE : ACADEMIE DE NICE A V A N C E M E N T D' E C H E L O N PAGE : 1
+ BUREAU DE GESTION : PRV* PERIODE DE TRAITEMENT
+ 4531 : ECR PROFESSEUR CERTIFIE CL. NORMALE
+ DATE : 11/03/2025 DU 01/09/2024
+ AU 31/08/2025
+ PROJET D'AVANCEMENT
+ ECHELON : 03
+!----------------------------------------------------------------------------------------------------------------------------------!
+! NOM USAGE - PRENOM AFFECTATION ECHELON ACTUEL PROCHAINES !
+! DATE DE NAISSANCE DISC. - AVIS EVAL. DATE ACCES REP. PROMOTIONS !
+!----------------------------------------------------------------------------------------------------------------------------------!
+! !
+!BIOLCHINI 0061458C CLG PR 01/09/2023 !
+! SEBASTIEN 16/03/1994 INSTITUTION ST JOSEPH CARNOLES 1300E MATHEMATIQ AN. 00a00m00j !
+! 06190 ROQUEBRUNE CAP MARTIN Pro AN.01/09/2024 !
+!Bareme : .......................................................................................................................!
+! ! EVAECH ! Z1AGRA 2.000 ! Z1ANEC 2.000 ! Z2AGEA 300516 ! ! !
+! 0.000 ! ! ! ! ! ! !
+! ! ! ! ! ! ! !
+! ! ! ! ! ! ! !
+!-----------!-------------------!-------------------!-------------------!-------------------!-------------------!------------------!
+! !
+!HIGGS 0061127T CLG PR 04/01/2024 !
+! MAIRI 15/06/1998 SAINT BARTHELEMY 1000E HIST GEO AN. 00a00m00j !
+! 06100 NICE Pro AN.04/01/2025 !
+!Bareme : .......................................................................................................................!
+! ! EVAECH ! Z1AGRA 1.000 ! Z1ANEC 1.658 ! Z2AGEA 260217 ! ! !
+! 0.000 ! ! ! ! ! ! !
+! ! ! ! ! ! ! !
+! ! ! ! ! ! ! !
+!-----------!-------------------!-------------------!-------------------!-------------------!-------------------!------------------!
+ B A A N
+ NOMBRE DE PROMOUVABLES : 0 8
+ NOMBRE DE PROMUS : 0 8
+ DECIMALES : 0.00 0.00
