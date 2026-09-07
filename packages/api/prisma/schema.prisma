@@ -88,6 +88,7 @@ model Campagne {
   imports          RectoratImport[]
   teacherSnapshots TeacherSnapshot[]
   baSeuils         BaSeuil[]
+  mailingLogs      MailingLog[]
 }
 
 model RectoratImport {
@@ -154,6 +155,7 @@ model Teacher {
   snapshots      TeacherSnapshot[]
   matchCandidate MatchCandidate?
   computedStates ComputedPromotionState[]
+  mailingLogs    MailingLog[]
 }
 
 // ---------------------------------------------------------------------------
@@ -257,4 +259,33 @@ model BaSeuil {
   updatedAt            DateTime @updatedAt
 
   @@unique([campagneId, grade, echelonDepart])
+}
+
+// ---------------------------------------------------------------------------
+// Mailing — notifies adhérents of their échelon promotion (gain, date) via Brevo. One row per
+// send attempt, so a teacher is never notified twice for the same campagne by accident and the
+// send screen can show what's already gone out.
+// ---------------------------------------------------------------------------
+
+enum MailingStatus {
+  SENT
+  FAILED
+}
+
+model MailingLog {
+  id             String        @id @default(cuid())
+  campagne       Campagne      @relation(fields: [campagneId], references: [id])
+  campagneId     String
+  teacher        Teacher       @relation(fields: [teacherId], references: [id])
+  teacherId      String
+  adherentId     String
+  email          String
+  status         MailingStatus
+  error          String? // Brevo error message, when status = FAILED
+  brevoMessageId String?
+  sentById       String // free-text: User.id at send time, kept even if the user is later deleted
+  sentAt         DateTime      @default(now())
+
+  @@unique([campagneId, teacherId])
+  @@index([campagneId])
 }

@@ -75,31 +75,50 @@ export interface MatchResult {
 const AUTO_CONFIRM_THRESHOLD = 0.92;
 
 /**
- * For each adherent, finds the best-matching teacher among `teachers` (typically: everyone in the
+ * Matches each adherent to at most one teacher among `teachers` (typically: everyone in the
  * current campaign not already linked to a confirmed MatchCandidate — filtering that out is the
  * caller's job, since it needs the DB). Combines nom and prénom similarity, weighting nom higher
  * since prénoms vary more in spelling/usage (nicknames, accents) without indicating a different
  * person.
+ *
+ * Assignment is global, not per-adherent: a teacher can only ever end up matched to one adherent
+ * (MatchCandidate.teacherId is unique in the DB), so if two adherents' best guess both point at the
+ * same free teacher, the higher-confidence pair wins that teacher and the other adherent gets no
+ * candidate (teacherId: null) rather than a doomed duplicate — greedy highest-score-first, the
+ * standard approximation for this kind of bipartite assignment.
  */
 export function matchAdherents(adherents: MatchCandidateAdherent[], teachers: MatchCandidateTeacher[]): MatchResult[] {
-  return adherents.map((adherent) => {
-    let best: { teacherId: string; score: number } | null = null;
+  const pairs: { adherentId: string; teacherId: string; score: number }[] = [];
+  for (const adherent of adherents) {
     for (const teacher of teachers) {
       const nomScore = nameSimilarity(adherent.nom, teacher.nom);
       const prenomScore = nameSimilarity(adherent.prenom, teacher.prenom);
       const score = nomScore * 0.6 + prenomScore * 0.4;
-      if (!best || score > best.score) {
-        best = { teacherId: teacher.teacherId, score };
-      }
+      if (score >= 0.4) pairs.push({ adherentId: adherent.adherentId, teacherId: teacher.teacherId, score });
     }
-    if (!best || best.score < 0.4) {
+  }
+  pairs.sort((a, b) => b.score - a.score);
+
+  const claimedAdherents = new Set<string>();
+  const claimedTeachers = new Set<string>();
+  const assignment = new Map<string, { teacherId: string; score: number }>();
+  for (const pair of pairs) {
+    if (claimedAdherents.has(pair.adherentId) || claimedTeachers.has(pair.teacherId)) continue;
+    claimedAdherents.add(pair.adherentId);
+    claimedTeachers.add(pair.teacherId);
+    assignment.set(pair.adherentId, { teacherId: pair.teacherId, score: pair.score });
+  }
+
+  return adherents.map((adherent) => {
+    const match = assignment.get(adherent.adherentId);
+    if (!match) {
       return { adherentId: adherent.adherentId, teacherId: null, confidence: 0, autoConfirmable: false };
     }
     return {
       adherentId: adherent.adherentId,
-      teacherId: best.teacherId,
-      confidence: Math.round(best.score * 100) / 100,
-      autoConfirmable: best.score >= AUTO_CONFIRM_THRESHOLD,
+      teacherId: match.teacherId,
+      confidence: Math.round(match.score * 100) / 100,
+      autoConfirmable: match.score >= AUTO_CONFIRM_THRESHOLD,
     };
   });
 }

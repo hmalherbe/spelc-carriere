@@ -54,6 +54,24 @@ describe("matchAdherents", () => {
     expect(result.confidence).toBe(0);
   });
 
+  it("never assigns the same teacher to two different adherents — the higher-confidence pair wins the contested teacher", () => {
+    // Both adherents' closest guess is t1 ("MARTIN Camille"); "MARTIN Camille" itself is the exact
+    // match and must win it, leaving the weaker adherent with no candidate rather than a duplicate
+    // teacherId (which would violate the DB's unique constraint on MatchCandidate.teacherId).
+    const results = matchAdherents(
+      [
+        { adherentId: "weak", nom: "MARTINE", prenom: "Camil" },
+        { adherentId: "exact", nom: "MARTIN", prenom: "Camille" },
+      ],
+      teachers,
+    );
+    const exact = results.find((r) => r.adherentId === "exact")!;
+    const weak = results.find((r) => r.adherentId === "weak")!;
+    expect(exact.teacherId).toBe("t1");
+    expect(exact.confidence).toBe(1);
+    expect(weak.teacherId).toBeNull();
+  });
+
   it("doesn't let a similar prénom alone override a clearly different nom", () => {
     // "STEPHANE"/"STEPHANIE" as noms are close, but combined with a matching prénom "Marie" on t3
     // shouldn't outrank an exact nom+prénom match elsewhere for a different adherent.

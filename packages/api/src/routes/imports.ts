@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
+import { asyncHandler } from "../asyncHandler.js";
 import { computeEchelonPromotion, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
 import { extractPdfText, parseRectoratFile, parseAdherentCsv, matchAdherents, normalizeName } from "@spelc/import";
 
@@ -25,7 +26,7 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
   "4512": "AGREGE",
 };
 
-importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), async (req, res) => {
+importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
   const { campagneId } = req.body as { campagneId?: string };
   if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
   if (!req.file) return res.status(400).json({ error: "Fichier PDF requis (champ 'file')" });
@@ -144,9 +145,9 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   }
 
   res.status(201).json({ importId: rectoratImport.id, grade, imported, warnings });
-});
+}));
 
-importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), async (req, res) => {
+importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Fichier CSV requis (champ 'file')" });
 
   const csvText = req.file.buffer.toString("utf-8");
@@ -192,15 +193,26 @@ importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.si
     where: { id: { in: adherentIds }, matchCandidate: null },
   });
 
+  // A teacher can only ever be linked to one adherent (MatchCandidate.teacherId is unique in the
+  // DB) — exclude anyone already claimed by an existing candidate (of any status: AUTO_CONFIRMED,
+  // CONFIRMED, or even a still-open PENDING_REVIEW that already suggested them) from the pool, or
+  // matchAdherents could propose an already-taken teacher and the insert below would fail.
+  const claimedTeacherIds = new Set(
+    (await prisma.matchCandidate.findMany({ where: { teacherId: { not: null } }, select: { teacherId: true } })).map(
+      (m) => m.teacherId as string,
+    ),
+  );
+
   const allTeacherSnapshots = await prisma.teacherSnapshot.findMany({
     distinct: ["teacherId"],
     orderBy: { dateAccesEchelon: "desc" },
     select: { teacherId: true, nomUsage: true, prenom: true },
   });
+  const availableTeachers = allTeacherSnapshots.filter((t) => !claimedTeacherIds.has(t.teacherId));
 
   const matchResults = matchAdherents(
     withoutCandidate.map((a) => ({ adherentId: a.id, nom: a.nom, prenom: a.prenom })),
-    allTeacherSnapshots.map((t) => ({ teacherId: t.teacherId, nom: t.nomUsage, prenom: t.prenom })),
+    availableTeachers.map((t) => ({ teacherId: t.teacherId, nom: t.nomUsage, prenom: t.prenom })),
   );
 
   let autoConfirmed = 0;
@@ -219,4 +231,4 @@ importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.si
   }
 
   res.status(201).json({ created, updated, unmappedFields, matching: { autoConfirmed, pendingReview } });
-});
+}));

@@ -14,6 +14,8 @@ export function Layout() {
           </NavLink>
           <NavLink to="/revue">File de révision</NavLink>
           <NavLink to="/seuils-ba">Seuils BA</NavLink>
+          <NavLink to="/import">Import</NavLink>
+          <NavLink to="/mailing">Mailing</NavLink>
         </nav>
         <div className="user-badge">
           <span>

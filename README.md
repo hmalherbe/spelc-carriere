@@ -20,8 +20,9 @@ exports PDF du rectorat.
 |---|---|
 | **`packages/domain`** — moteur de calcul (grille indiciaire, dates de promotion, gain brut/net, seuil BA, barèmes HC/EXC, reclassements) | ✅ Codé, testé (25 tests), typé strict. Validé contre une vraie valeur observée dans le classeur (148 € de gain net, échelon 5→6 grille AGR). |
 | **`packages/api`** — modèle de données + backend Express/Prisma/JWT | ✅ Schéma validé, migrations appliquées, seed de démo, routes auth/campagnes/teachers/matches/ba-seuils testées de bout en bout (curl + RBAC). |
-| **`packages/web`** — frontend React | ✅ Connexion, tableau de bord enseignants (échelon, gain, estimation BA), file de révision des rapprochements, écran de verrouillage des seuils BA. Vérifié en navigateur (captures d'écran). |
-| **`packages/import`** — parseur PDF rectorat + import adhérents + matching | ✅ Codé, testé (27 tests, dont 1 intégration sur un vrai PDF). Validé de bout en bout sur les 5 vrais fichiers rectorat fournis (458/458 fiches importées, seule 1 anomalie signalée — un glitch d'encodage réel du PDF source) via `POST /imports/rectorat` et `POST /imports/adherents`, base de données réelle. |
+| **`packages/web`** — frontend React | ✅ Connexion, tableau de bord enseignants (échelon, gain, estimation BA), file de révision des rapprochements, écran de verrouillage des seuils BA, écran d'import (PDF rectorat + CSV adhérents), écran de mailing (sélection, aperçu, envoi via Brevo). Vérifié en navigateur (captures d'écran). |
+| **`packages/import`** — parseur PDF rectorat + import adhérents + matching | ✅ Codé, testé (28 tests, dont 1 intégration sur un vrai PDF). Validé de bout en bout sur les 5 vrais fichiers rectorat fournis (458/458 fiches importées, seule 1 anomalie signalée — un glitch d'encodage réel du PDF source) via `POST /imports/rectorat` et `POST /imports/adherents`, base de données réelle. |
+| Mailing (Brevo) | ✅ Envoi d'un e-mail de notification personnalisé (grade, échelon, date, gain) à chaque adhérent dont le rapprochement est confirmé, via l'API transactionnelle Brevo. Historique conservé (`MailingLog`), un adhérent n'est jamais notifié deux fois par accident. Testé (10 tests : template HTML échappé contre l'injection, client Brevo mocké) ; le déclenchement réel nécessite `BREVO_API_KEY`/`BREVO_SENDER_EMAIL` (non fournis dans cet environnement — le comportement "non configuré" a été vérifié en conditions réelles, erreur claire côté UI). |
 
 ## Structure
 
@@ -58,11 +59,23 @@ Comptes de démo (créés par le seed) : `admin@spelc.example` / `admin1234` (AD
 `gestionnaire@spelc.example` / `gest1234` (GESTIONNAIRE).
 
 ```bash
-npm test               # tests du moteur de calcul (packages/domain)
+npm test               # tests de tous les packages (domain, import, api)
+```
+
+### Mailing (Brevo)
+
+L'envoi d'e-mails passe par l'API transactionnelle de [Brevo](https://www.brevo.com/) (ex-Sendinblue).
+Sans clé configurée, l'écran "Mailing" reste utilisable (aperçu, sélection) mais l'envoi renvoie une
+erreur explicite plutôt que d'échouer silencieusement. Pour activer l'envoi réel, ajoutez à
+`packages/api/.env` :
+
+```bash
+BREVO_API_KEY="xkeysib-..."          # clé API Brevo (Paramètres du compte -> Clés API)
+BREVO_SENDER_EMAIL="contact@spelc-nice.fr"   # expéditeur, doit être un e-mail validé dans Brevo
+BREVO_SENDER_NAME="Spelc Nice"       # optionnel, "Spelc" par défaut
 ```
 
 ## Prochaines étapes proposées
 
-1. Écran d'import (upload PDF/CSV) côté frontend — les endpoints `POST /imports/rectorat` et
-   `POST /imports/adherents` sont fonctionnels mais seulement appelables via API pour l'instant.
-2. Export mailing (remplace le publipostage Excel).
+1. Export/rapport imprimable pour la CCMA (remplace la mise en forme Excel du classeur source).
+2. Historique/traçabilité plus fine des imports (diff entre deux exports rectorat successifs).

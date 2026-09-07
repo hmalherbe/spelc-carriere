@@ -5,6 +5,8 @@ import { LoginPage } from "./pages/LoginPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { ReviewQueuePage } from "./pages/ReviewQueuePage.js";
 import { BaSeuilsPage } from "./pages/BaSeuilsPage.js";
+import { ImportPage } from "./pages/ImportPage.js";
+import { MailingPage } from "./pages/MailingPage.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -28,6 +30,8 @@ export function App() {
         <Route index element={<DashboardPage />} />
         <Route path="revue" element={<ReviewQueuePage />} />
         <Route path="seuils-ba" element={<BaSeuilsPage />} />
+        <Route path="import" element={<ImportPage />} />
+        <Route path="mailing" element={<MailingPage />} />
       </Route>
     </Routes>
   );

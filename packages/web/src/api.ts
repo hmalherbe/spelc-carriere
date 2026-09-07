@@ -35,6 +35,22 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Like `request`, but for multipart/form-data uploads — no Content-Type override, so the
+ * browser sets the correct boundary itself. */
+async function upload<T>(path: string, formData: FormData): Promise<T> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new ApiError(body.error ?? "Erreur inconnue", res.status);
+  }
+  return res.json() as Promise<T>;
+}
+
 export interface CurrentUser {
   id: string;
   name: string;
@@ -101,6 +117,62 @@ export interface BaSeuil {
   locked: boolean;
 }
 
+export interface RectoratImportResult {
+  importId: string;
+  grade: string;
+  imported: number;
+  warnings: { nomUsage: string; prenom: string; warnings: string[] }[];
+}
+
+export interface AdherentImportResult {
+  created: number;
+  updated: number;
+  unmappedFields: string[];
+  matching: { autoConfirmed: number; pendingReview: number };
+}
+
+export interface MailingRecipient {
+  teacherId: string;
+  adherentId: string;
+  nom: string;
+  prenom: string;
+  civilite: string | null;
+  grade: string;
+  echelonDepart: string;
+  echelonSuivant: string;
+  indiceActuel: number;
+  futurIndice: number;
+  gainSalaireBrut: number;
+  gainSalaireNet: number;
+  dateProchainePromotion: string | null;
+  email: string | null;
+  lastStatus: "SENT" | "FAILED" | null;
+  lastSentAt: string | null;
+  lastError: string | null;
+}
+
+export interface MailingPreview {
+  to: string | null;
+  subject: string;
+  html: string;
+}
+
+export interface MailingSendResult {
+  sent: number;
+  failed: number;
+  results: { teacherId: string; nom: string; prenom: string; email: string | null; status: "SENT" | "FAILED"; error?: string }[];
+}
+
+export interface MailingLogEntry {
+  id: string;
+  teacherId: string;
+  adherentId: string;
+  email: string;
+  status: "SENT" | "FAILED";
+  error: string | null;
+  sentAt: string;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<{ token: string; user: CurrentUser }>("/auth/login", {
@@ -109,6 +181,8 @@ export const api = {
     }),
   me: () => request<CurrentUser>("/auth/me"),
   campagnes: () => request<Campagne[]>("/campagnes"),
+  createCampagne: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }) =>
+    request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
   pendingMatches: () => request<MatchCandidate[]>("/matches?status=PENDING_REVIEW"),
   confirmMatch: (id: string, teacherId?: string) =>
@@ -117,4 +191,21 @@ export const api = {
   baSeuils: (campagneId: string) => request<BaSeuil[]>(`/ba-seuils?campagneId=${campagneId}`),
   updateBaSeuil: (id: string, data: Partial<Pick<BaSeuil, "minBareme" | "minAncienneteGrade" | "minAncienneteEchelon" | "minAge" | "locked">>) =>
     request<BaSeuil>(`/ba-seuils/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  importRectorat: (campagneId: string, file: File) => {
+    const form = new FormData();
+    form.append("campagneId", campagneId);
+    form.append("file", file);
+    return upload<RectoratImportResult>("/imports/rectorat", form);
+  },
+  importAdherents: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return upload<AdherentImportResult>("/imports/adherents", form);
+  },
+  mailingEligible: (campagneId: string) => request<MailingRecipient[]>(`/mailing/eligible?campagneId=${campagneId}`),
+  mailingPreview: (campagneId: string, teacherId: string) =>
+    request<MailingPreview>(`/mailing/preview?campagneId=${campagneId}&teacherId=${teacherId}`),
+  mailingLog: (campagneId: string) => request<MailingLogEntry[]>(`/mailing/log?campagneId=${campagneId}`),
+  mailingSend: (campagneId: string, teacherIds?: string[]) =>
+    request<MailingSendResult>("/mailing/send", { method: "POST", body: JSON.stringify({ campagneId, teacherIds }) }),
 };
