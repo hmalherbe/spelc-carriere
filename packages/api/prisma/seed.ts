@@ -263,9 +263,12 @@ async function seedProductionAdmin() {
   }
   console.log(`Seeding le compte admin (${email})...`);
   const passwordHash = await bcrypt.hash(password, 10);
+  // update (not {}) so changing ADMIN_PASSWORD in .env and restarting the container actually
+  // takes effect — otherwise a password set once (even accidentally, e.g. during a botched first
+  // deploy) sticks forever regardless of what .env says afterwards.
   await prisma.user.upsert({
     where: { email },
-    update: {},
+    update: { passwordHash, role: "ADMIN" },
     create: { email, name: "Admin", role: "ADMIN", passwordHash },
   });
 }
