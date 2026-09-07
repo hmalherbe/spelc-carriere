@@ -307,6 +307,12 @@ main {
   color: var(--text-muted);
 }
 
+.import-result-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -335,4 +341,41 @@ main {
   margin-top: 8px;
   background: #fafbfc;
   font-size: 0.9rem;
+}
+
+.card p,
+.card ol {
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.card code {
+  background: #eef1f5;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.rule-formula {
+  background: #f6f7f9;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.rule-highlight {
+  background: #fff4e5;
+  border-left: 3px solid #d97706;
+  border-radius: 0 6px 6px 0;
+  padding: 10px 14px;
+}
+
+.rule-list {
+  padding-left: 22px;
 }

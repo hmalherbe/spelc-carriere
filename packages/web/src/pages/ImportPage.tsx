@@ -16,10 +16,9 @@ export function ImportPage() {
   const [newCampagne, setNewCampagne] = useState({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso() });
   const [campagneError, setCampagneError] = useState<string | null>(null);
 
-  const [rectoratFile, setRectoratFile] = useState<File | null>(null);
+  const [rectoratFiles, setRectoratFiles] = useState<File[]>([]);
   const [rectoratBusy, setRectoratBusy] = useState(false);
-  const [rectoratResult, setRectoratResult] = useState<RectoratImportResult | null>(null);
-  const [rectoratError, setRectoratError] = useState<string | null>(null);
+  const [rectoratResults, setRectoratResults] = useState<{ fileName: string; result?: RectoratImportResult; error?: string }[]>([]);
 
   const [adherentsFile, setAdherentsFile] = useState<File | null>(null);
   const [adherentsBusy, setAdherentsBusy] = useState(false);
@@ -54,19 +53,24 @@ export function ImportPage() {
 
   async function submitRectorat(e: React.FormEvent) {
     e.preventDefault();
-    if (!campagneId || !rectoratFile) return;
+    if (!campagneId || rectoratFiles.length === 0) return;
     setRectoratBusy(true);
-    setRectoratError(null);
-    setRectoratResult(null);
-    try {
-      const result = await api.importRectorat(campagneId, rectoratFile);
-      setRectoratResult(result);
-      refreshCampagnes(campagneId);
-    } catch (e) {
-      setRectoratError(String(e));
-    } finally {
-      setRectoratBusy(false);
+    const results: { fileName: string; result?: RectoratImportResult; error?: string }[] = [];
+    setRectoratResults(results);
+    // Sequential, not Promise.all: each file's teacher-matching lookup reads the DB fresh, so
+    // running several at once could let two files independently decide to create the same new
+    // teacher (a name appearing in more than one grade export) instead of reusing one row.
+    for (const file of rectoratFiles) {
+      try {
+        const result = await api.importRectorat(campagneId, file);
+        results.push({ fileName: file.name, result });
+      } catch (err) {
+        results.push({ fileName: file.name, error: String(err) });
+      }
+      setRectoratResults([...results]);
     }
+    refreshCampagnes(campagneId);
+    setRectoratBusy(false);
   }
 
   async function submitAdherents(e: React.FormEvent) {
@@ -158,37 +162,54 @@ export function ImportPage() {
         <h2>Import rectorat (PDF)</h2>
         <p className="hint">
           Fichier "AVANCEMENT D'ECHELON" fourni par le rectorat (un fichier par grade). Le grade et l'échelon sont détectés
-          automatiquement à partir du contenu du PDF.
+          automatiquement à partir du contenu du PDF — tu peux sélectionner les 5 fichiers d'une campagne en une fois, ils
+          sont importés les uns après les autres.
         </p>
         <form className="inline-form" onSubmit={submitRectorat}>
           <input
             type="file"
             accept="application/pdf"
+            multiple
             disabled={!campagneId}
-            onChange={(e) => setRectoratFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => setRectoratFiles(Array.from(e.target.files ?? []))}
           />
-          <button type="submit" disabled={!campagneId || !rectoratFile || rectoratBusy}>
-            {rectoratBusy ? "Import en cours..." : "Importer"}
+          <button type="submit" disabled={!campagneId || rectoratFiles.length === 0 || rectoratBusy}>
+            {rectoratBusy
+              ? `Import en cours (${rectoratResults.length}/${rectoratFiles.length})...`
+              : rectoratFiles.length > 1
+                ? `Importer les ${rectoratFiles.length} fichiers`
+                : "Importer"}
           </button>
         </form>
-        {rectoratError && <p className="error-text">{rectoratError}</p>}
-        {rectoratResult && (
+        {rectoratResults.length > 0 && (
           <div className="import-result">
-            <p>
-              <strong>{rectoratResult.imported}</strong> fiches importées — grade détecté : <strong>{rectoratResult.grade}</strong>
-            </p>
-            {rectoratResult.warnings.length > 0 && (
-              <details>
-                <summary>{rectoratResult.warnings.length} avertissement(s)</summary>
-                <ul>
-                  {rectoratResult.warnings.map((w, i) => (
-                    <li key={i}>
-                      {w.nomUsage} {w.prenom} — {w.warnings.join("; ")}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+            {rectoratResults.map((r, i) => (
+              <div key={i} className={i > 0 ? "import-result-row" : undefined}>
+                <p>
+                  <strong>{r.fileName}</strong>
+                  {r.result ? (
+                    <>
+                      {" "}
+                      — <strong>{r.result.imported}</strong> fiches importées, grade détecté : <strong>{r.result.grade}</strong>
+                    </>
+                  ) : (
+                    <span className="error-text"> — échec : {r.error}</span>
+                  )}
+                </p>
+                {r.result && r.result.warnings.length > 0 && (
+                  <details>
+                    <summary>{r.result.warnings.length} avertissement(s)</summary>
+                    <ul>
+                      {r.result.warnings.map((w, j) => (
+                        <li key={j}>
+                          {w.nomUsage} {w.prenom} — {w.warnings.join("; ")}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </section>
