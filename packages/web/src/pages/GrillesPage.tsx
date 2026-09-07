@@ -97,7 +97,6 @@ export function GrillesPage() {
     () => (selectedGrille ? [...selectedGrille.rows].sort((a, b) => echelonSortValue(a.echelon) - echelonSortValue(b.echelon)) : []),
     [selectedGrille],
   );
-  const showDureeAlternative = rows.some((r) => r.dureeAlternative != null);
 
   async function saveIndice(row: EchelonRowApi) {
     const draft = editing[row.echelon];
@@ -213,7 +212,6 @@ export function GrillesPage() {
                 <th>Échelon suivant</th>
                 <th>Indice</th>
                 <th>Durée (années)</th>
-                {showDureeAlternative && <th>Durée avant vivier 2</th>}
                 {canEdit && <th>Actions</th>}
               </tr>
             </thead>
@@ -237,7 +235,6 @@ export function GrillesPage() {
                       )}
                     </td>
                     <td>{row.dureeAnnees ?? "MAX"}</td>
-                    {showDureeAlternative && <td>{row.dureeAlternative ?? "—"}</td>}
                     {canEdit && (
                       <td>
                         {draft !== undefined && Number(draft) !== row.indice && (
