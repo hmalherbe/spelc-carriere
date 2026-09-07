@@ -35,6 +35,9 @@ export interface AdelScraperConfig {
   debugDir?: string;
   /** Overall timeout for the whole flow, in ms. The export generation step is the slow part. */
   timeoutMs?: number;
+  /** Explicit path to a Chromium executable, when the system-installed one shouldn't be
+   * auto-resolved by Playwright (e.g. a pre-provisioned browser at a fixed path). Optional. */
+  executablePath?: string;
 }
 
 export interface AdelExportResult {
@@ -73,7 +76,7 @@ async function selectOptionByPattern(page: Page, select: ReturnType<Page["locato
 
 export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSyncType): Promise<AdelExportResult> {
   const timeoutMs = config.timeoutMs ?? 180_000;
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, executablePath: config.executablePath });
   let step = "démarrage";
   try {
     const context = await browser.newContext({ acceptDownloads: true });

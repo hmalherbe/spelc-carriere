@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
@@ -12,6 +14,11 @@ adelRouter.use(requireAuth);
 
 class AdelConfigError extends Error {}
 
+// Every real sync attempt writes a screenshot here if a step fails — without this, a broken
+// selector on the first real run against ADEL would leave nothing to debug from but an error
+// string. Not committed (see .gitignore) since a screenshot mid-flow could show member data.
+const ADEL_DEBUG_DIR = process.env.ADEL_DEBUG_DIR ?? join(process.cwd(), "tmp", "adel-debug");
+
 function loadAdelConfig() {
   const loginUrl = process.env.ADEL_URL;
   const username = process.env.ADEL_USERNAME;
@@ -21,7 +28,8 @@ function loadAdelConfig() {
       "Synchronisation ADEL non configurée : définissez ADEL_URL, ADEL_USERNAME et ADEL_PASSWORD (voir README) avant de synchroniser.",
     );
   }
-  return { loginUrl, username, password, spelcName: process.env.ADEL_SPELC_NAME ?? "azur" };
+  mkdirSync(ADEL_DEBUG_DIR, { recursive: true });
+  return { loginUrl, username, password, spelcName: process.env.ADEL_SPELC_NAME ?? "azur", debugDir: ADEL_DEBUG_DIR };
 }
 
 adelRouter.get("/last", asyncHandler(async (req, res) => {
