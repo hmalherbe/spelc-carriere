@@ -162,6 +162,83 @@ button.secondary:hover {
   border: 1px solid var(--border);
 }
 
+.nav-group {
+  position: relative;
+}
+
+.nav-group-label {
+  background: none;
+  border: none;
+  padding: 6px 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-group-label.active {
+  color: var(--accent-dark);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  padding: 6px;
+  min-width: 240px;
+  z-index: 10;
+}
+
+.nav-group:hover .nav-dropdown,
+.nav-group:focus-within .nav-dropdown {
+  display: flex;
+}
+
+.app-header nav .nav-dropdown a {
+  padding: 8px 10px;
+  border-bottom: none;
+}
+
+.app-header nav .nav-dropdown a:hover {
+  background: var(--bg);
+  border-radius: 6px;
+}
+
+.app-header nav .nav-dropdown a.active {
+  background: #eef2fd;
+}
+
+.app-subnav {
+  display: flex;
+  gap: 16px;
+  padding: 8px 24px 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-subnav a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  padding: 4px 0 8px;
+  border-bottom: 2px solid transparent;
+}
+
+.app-subnav a.active {
+  color: var(--accent-dark);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
 main {
   padding: 24px;
   max-width: 1200px;

@@ -9,6 +9,8 @@ import { ImportPage } from "./pages/ImportPage.js";
 import { MailingPage } from "./pages/MailingPage.js";
 import { RulesPage } from "./pages/RulesPage.js";
 import { GrillesPage } from "./pages/GrillesPage.js";
+import { HorsClasseExceptionnellePage } from "./pages/HorsClasseExceptionnellePage.js";
+import { MouvementPage } from "./pages/MouvementPage.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -36,6 +38,8 @@ export function App() {
         <Route path="mailing" element={<MailingPage />} />
         <Route path="regles" element={<RulesPage />} />
         <Route path="grilles" element={<GrillesPage />} />
+        <Route path="hors-classe-exceptionnelle" element={<HorsClasseExceptionnellePage />} />
+        <Route path="mouvement" element={<MouvementPage />} />
       </Route>
     </Routes>
   );
