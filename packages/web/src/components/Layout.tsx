@@ -10,12 +10,13 @@ export function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const inAvancement = AVANCEMENT_PATHS.includes(location.pathname);
-  const inCarriere = inAvancement || location.pathname === "/hors-classe-exceptionnelle";
+  const inCarriere =
+    inAvancement || location.pathname === "/hors-classe-exceptionnelle" || location.pathname === "/reclassement";
 
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>Spelc</h1>
+        <h1>Spelc Côte d'Azur</h1>
         <nav>
           <div className="nav-group">
             <button type="button" className={`nav-group-label${inCarriere ? " active" : ""}`}>
@@ -26,6 +27,7 @@ export function Layout() {
                 Avancement (échelon)
               </Link>
               <NavLink to="/hors-classe-exceptionnelle">Hors classe / Classe exceptionnelle</NavLink>
+              <NavLink to="/reclassement">Reclassement</NavLink>
             </div>
           </div>
           <NavLink to="/mouvement">Mouvement des enseignants</NavLink>
