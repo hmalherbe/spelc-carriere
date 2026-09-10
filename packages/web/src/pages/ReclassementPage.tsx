@@ -1,14 +1,17 @@
 export function ReclassementPage() {
   return (
     <div className="import-page">
-      <section className="card">
-        <h2>Reclassement</h2>
-        <p className="hint">
-          Cette section suivra les reclassements (changement de grade ou de corps — réussite à un concours, liste
-          d'aptitude...) et le report d'ancienneté d'échelon correspondant.
-        </p>
-        <p className="hint">Pas encore développée.</p>
-      </section>
+      <p className="hint">
+        Simulateur de reclassement (grilles PPCR) — calcul de reprise d'ancienneté lors d'un concours, reconstitution
+        virtuelle depuis la hors-classe/classe exceptionnelle, et échelon obtenu lors d'une promotion. Purement local au
+        navigateur (aucune donnée n'est envoyée ni enregistrée) — un outil autonome, pas encore relié aux données des
+        enseignants suivis dans l'application.
+      </p>
+      <iframe
+        src="/reclassement-simulateur.html"
+        title="Simulateur de reclassement"
+        className="reclassement-frame"
+      />
     </div>
   );
 }

@@ -359,6 +359,15 @@ main {
   gap: 20px;
 }
 
+.reclassement-frame {
+  width: 100%;
+  height: calc(100vh - 230px);
+  min-height: 600px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

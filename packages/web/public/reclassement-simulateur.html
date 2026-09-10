@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulateur Intégral de Reclassement - Éducation Nationale</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #2980b9;
+            --bg: #ecf0f1;
+            --white: #ffffff;
+            --border: #bdc3c7;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --disabled: #95a5a6;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--primary); margin: 0; padding: 20px; }
+        .app-container { max-width: 950px; margin: 0 auto; background: var(--white); border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: var(--primary); color: var(--white); padding: 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; }
+        
+        .global-info { background: #fdfefe; padding: 15px 25px; border-bottom: 2px solid var(--border); }
+        .global-info .form-row { margin-bottom: 0; }
+        
+        .tabs { display: flex; background: var(--secondary); flex-wrap: wrap; }
+        .tab-btn { flex: 1; padding: 15px 10px; border: none; background: none; color: var(--white); font-weight: bold; cursor: pointer; transition: background 0.3s; min-width: 200px; }
+        .tab-btn:hover { background: #3d566e; }
+        .tab-btn.active { background: var(--accent); border-bottom: 3px solid var(--white); }
+        
+        .tab-content { display: none; padding: 25px; }
+        .tab-content.active { display: block; }
+        
+        fieldset { border: 1px solid var(--border); border-radius: 5px; padding: 20px; margin-bottom: 20px; background-color: #f9fbfc; }
+        legend { font-weight: bold; color: var(--accent); background: var(--white); padding: 0 10px; border: 1px solid var(--border); border-radius: 4px; }
+        
+        .form-row { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; align-items: flex-end; }
+        .form-group { flex: 1; min-width: 130px; }
+        label { display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; }
+        select, input[type="text"], input[type="date"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        
+        .majoration-block { background-color: #fcf3cf; border-left: 4px solid var(--warning); padding: 15px; margin-top: 15px; border-radius: 4px; display: none; }
+        .majoration-block h4 { margin: 0 0 10px 0; color: #d68910; }
+        .majoration-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .majoration-row input { width: 80px; }
+        .majoration-desc { font-size: 12px; color: #555; font-style: italic; margin-bottom: 5px; }
+        
+        button.action-btn { width: 100%; padding: 12px; background: var(--accent); color: var(--white); border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.3s; }
+        button.action-btn:hover:not(:disabled) { background: #21618c; }
+        button.action-btn:disabled { background: var(--disabled); cursor: not-allowed; }
+        button.secondary-btn { background: #7f8c8d; margin-bottom: 15px; }
+        
+        .result-box { margin-top: 20px; padding: 15px; background: #e8f8f5; border-left: 5px solid var(--success); border-radius: 4px; display: none; }
+        .result-item { margin-bottom: 8px; font-size: 15px; }
+        .highlight { color: var(--success); font-weight: bold; font-size: 16px; }
+        
+        table.services-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .services-table th, .services-table td { border: 1px solid var(--border); padding: 8px; text-align: left; font-size: 14px; }
+        .services-table th { background: var(--bg); }
+        
+        .regles-box { background: #fdfefe; border: 1px solid var(--border); padding: 20px; border-radius: 5px; margin-bottom: 15px; }
+        .regles-box h3 { color: var(--accent); margin-top: 0; border-bottom: 2px solid var(--bg); padding-bottom: 10px; }
+        .regles-box ul { margin-bottom: 0; padding-left: 20px; }
+        .regles-box li { margin-bottom: 10px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <h1>Simulateur de Reclassement (Grilles PPCR)</h1>
+    </div>
+
+    <!-- Identité globale -->
+    <div class="global-info">
+        <div class="form-row">
+            <div class="form-group"><label>Nom</label><input type="text" id="agent-nom" placeholder="Saisir le nom"></div>
+            <div class="form-group"><label>Prénom</label><input type="text" id="agent-prenom" placeholder="Saisir le prénom"></div>
+        </div>
+    </div>
+
+    <!-- Navigation des onglets -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab(event, 'tab1')">1. Concours & Reprise Anc.</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab2')">2. Concours depuis HC/EXC</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab3')">3. Promotion</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab4')" style="background-color: #34495e; border-bottom: 3px solid #f39c12;">Règles de gestion</button>
+    </div>
+
+    <!-- ONGLET 1 : Reprise d'ancienneté (Lauréats concours) -->
+    <div id="tab1" class="tab-content active">
+        <fieldset>
+            <legend>Situation Cible et Origine</legend>
+            <div class="form-row">
+                <div class="form-group"><label>Date d'effet du reclassement</label><input type="date" id="t1-dateReclassement" value="2025-09-01"></div>
+                
+                <div class="form-group">
+                    <label>Corps d'origine</label>
+                    <input type="text" id="t1-corpsOrigine" placeholder="Sera rempli automatiquement...">
+                </div>
+                
+                <div class="form-group">
+                    <label>Corps cible</label>
+                    <select id="t1-corpsCible">
+                        <option value="175">AGREGE (175)</option>
+                        <option value="135">CERTIFIE (135)</option>
+                        <option value="135">PEPS (135)</option>
+                        <option value="135">PLP (135)</option>
+                        <option value="135">Prof. Ecoles (135)</option>
+                        <option value="135">MD 1 (135)</option>
+                        <option value="135">MD 2 (135)</option>
+                    </select>
+                </div>
+            </div>
+        </fieldset>
+        
+        <fieldset>
+            <legend>Services antérieurs (en indiquant en premier la situation la plus récente)</legend>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Nature du service</label>
+                    <select id="t1-typeService" onchange="actualiserDerniereLigne()">
+                        <option value="pond_0.666666667">Activités professionnelles</option>
+                        <option value="coeff_115">AECE</option>
+                        <option value="coeff_100">AED - MI_SE - AESH</option>
+                        <option value="coeff_135">ATER</option>
+                        <option value="coeff_115">CE d'EPS</option>
+                        <option value="coeff_135">CERTIFIE, PE , PEPS, PLP -- CN</option>
+                        <option value="coeff_145">CERTIFIE, PEPS, PLP -- BI-ADMISSIBLE</option>
+                        <option value="coeff_135">Contractuel alternant</option>
+                        <option value="pond_0.666666667">Enseignement hors-contrat</option>
+                        <option value="coeff_135">Enseignement public ou validé</option>
+                        <option value="coeff_100">Instituteur</option>
+                        <option value="coeff_135">MA 1</option>
+                        <option value="coeff_135">MA 2</option>
+                        <option value="coeff_135">MA 3</option>
+                        <option value="coeff_135">MD 1</option>
+                        <option value="coeff_135">MD 2</option>
+                        <option value="coeff_115">PEGC</option>
+                        <option value="pond_1">Service national non pris en compte</option>
+                        <option value="coeff_135">Suppléant 1°D</option>
+                        <option value="coeff_135">Vacations dans le public</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1.5;">
+                    <label>Méthode de saisie (Situation)</label>
+                    <select id="t1-modeSaisie" onchange="changerModeSaisieT1(); actualiserDerniereLigne()">
+                        <option value="1">1. Par Échelon et Reliquat</option>
+                        <option value="2">2. Par Période (Dates)</option>
+                        <option value="3">3. Directement en Jours</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- SITUATION 1 : Échelon + Reliquat -->
+            <div id="t1-sit1" class="form-row">
+                <div class="form-group"><label>Échelon</label><input type="number" id="t1-s1-ech" min="1" value="1" oninput="actualiserDerniereLigne()"></div>
+                <div class="form-group"><label>Début situation</label><input type="date" id="t1-s1-debut" oninput="actualiserDerniereLigne()"></div>
+                <div class="form-group"><label>Reliquat (jours)</label><input type="number" id="t1-s1-rel" value="0" oninput="actualiserDerniereLigne()"></div>
+                <div class="form-group"><label>Fin situation</label><input type="date" id="t1-s1-fin" oninput="actualiserDerniereLigne()"></div>
+                <div class="form-group">
+                    <label>Prise en cpte. anc.</label>
+                    <select id="t1-s1-ouiNon" onchange="actualiserDerniereLigne()"><option value="Oui">Oui</option><option value="Non">Non</option></select>
+                </div>
+            </div>
+
+            <!-- SITUATION 2 : Dates -->
+            <div id="t1-sit2" class="form-row" style="display:none;">
+                <div class="form-group"><label>Début de période</label><input type="date" id="t1-s2-debut" oninput="actualiserDerniereLigne()"></div>
+                <div class="form-group"><label>Fin de période</label><input type="date" id="t1-s2-fin" oninput="actualiserDerniereLigne()"></div>
+            </div>
+
+            <!-- SITUATION 3 : Nb Jours -->
+            <div id="t1-sit3" class="form-row" style="display:none;">
+                <div class="form-group"><label>Nb jours (à prendre en compte)</label><input type="number" id="t1-s3-jours" value="0" oninput="actualiserDerniereLigne()"></div>
+            </div>
+
+            <button type="button" class="action-btn secondary-btn" onclick="ajouterService()">+ Ajouter cette situation</button>
+            
+            <table class="services-table" id="t1-tableServices">
+                <thead><tr><th>Nature</th><th>Détail de la situation</th><th>Jours Bruts</th><th>Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </fieldset>
+        <button id="btn-calc-tab1" class="action-btn" onclick="calculerTab1()" disabled>Calculer le reclassement (Onglet 1)</button>
+        <div id="res-tab1" class="result-box"></div>
+    </div>
+
+    <!-- ONGLET 2 : Concours depuis HC/EXC -->
+    <div id="tab2" class="tab-content">
+        <fieldset>
+            <legend>1. Grade et Échelon d'origine</legend>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Grade d'origine</label>
+                    <select id="t2-gradeOrigine" onchange="verifierMajorations()">
+                        <optgroup label="Hors Classe (HC)">
+                            <option value="HC_175">AGREGE HC</option>
+                            <option value="HC_135" selected>CERTIFIE HC</option>
+                            <option value="HC_135">PEPS HC</option>
+                            <option value="HC_135">PEGC HC</option>
+                            <option value="HC_135">PLP HC</option>
+                            <option value="HC_135">Prof. Ecoles HC</option>
+                        </optgroup>
+                        <optgroup label="Classe Exceptionnelle (EXC)">
+                            <option value="EXC_135">CERTIFIE EXC</option>
+                            <option value="EXC_135">PEPS EXC</option>
+                            <option value="EXC_135">PLP EXC</option>
+                            <option value="EXC_135">Prof. Ecoles EXC</option>
+                            <option value="EXC_175">Prof. de Chaire Supérieure</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="form-group"><label>Échelon actuel</label><input type="number" id="t2-echelon" min="1" max="11" value="5" onchange="verifierMajorations()"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Date d'effet de l'échelon actuel</label><input type="date" id="t2-dateEchelon" value="2024-09-01"></div>
+            </div>
+            <div id="bloc-majorations" class="majoration-block">
+                <h4>Majorations d'ancienneté (Décret 2022-708)</h4>
+                <div id="majo-CN11" style="display:none; margin-bottom:15px;"><div class="majoration-desc"><strong>Note (1) :</strong> Durée conservée au 11e échelon CN au-delà de 2a 6m.</div><div class="majoration-row"><input type="number" id="m_cn11_a" min="0" value="0"> ans <input type="number" id="m_cn11_m" min="0" max="11" value="0"> mois <input type="number" id="m_cn11_j" min="0" max="29" value="0"> jours</div></div>
+                <div id="majo-HC6" style="display:none; margin-bottom:15px;"><div class="majoration-desc"><strong>Note (2) :</strong> Durée conservée au 6e échelon HC au-delà de 3 ans.</div><div class="majoration-row"><input type="number" id="m_hc6_a" min="0" value="0"> ans <input type="number" id="m_hc6_m" min="0" max="11" value="0"> mois <input type="number" id="m_hc6_j" min="0" max="29" value="0"> jours</div></div>
+                <div id="majo-EXC4" style="display:none;"><div class="majoration-desc"><strong>Note (3) :</strong> Durée conservée au 4e échelon EXC au-delà de 3 ans.</div><div class="majoration-row"><input type="number" id="m_exc4_a" min="0" value="0"> ans <input type="number" id="m_exc4_m" min="0" max="11" value="0"> mois <input type="number" id="m_exc4_j" min="0" max="29" value="0"> jours</div></div>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>2. Situation cible (Reclassement)</legend>
+            <div class="form-row">
+                <div class="form-group"><label>Date du reclassement</label><input type="date" id="t2-dateReclassement" value="2026-09-01"></div>
+                <div class="form-group"><label>Grade cible</label><select disabled><option>Agrégé - Classe Normale (Coeff: 175)</option></select></div>
+            </div>
+        </fieldset>
+        <button class="action-btn" onclick="calculerTab2()">Calculer le reclassement</button>
+        <div id="res-tab2" class="result-box"></div>
+    </div>
+
+    <!-- ONGLET 3 : Promotion -->
+    <div id="tab3" class="tab-content">
+        <fieldset>
+            <legend>Avancement de grade</legend>
+            <div class="form-row"><div class="form-group"><label>Date de promotion</label><input type="date" id="t3-datePromotion" value="2027-09-01"></div></div>
+            <div class="form-row">
+                <div class="form-group"><label>Grade d'origine (Certifié/PLP/PE)</label><select id="t3-gradeOrigine"><option value="CN_TO_HC">Classe Normale vers Hors Classe</option><option value="HC_TO_EXC">Hors Classe vers Classe Exceptionnelle</option></select></div>
+                <div class="form-group"><label>Échelon d'origine</label><input type="number" id="t3-echelon" min="1" max="11" value="11"></div>
+            </div>
+            <div class="form-row"><div class="form-group"><label>Date d'entrée dans l'échelon actuel</label><input type="date" id="t3-dateEchelon" value="2024-09-01"></div></div>
+        </fieldset>
+        <button class="action-btn" onclick="calculerTab3()">Calculer la promotion</button>
+        <div id="res-tab3" class="result-box"></div>
+    </div>
+
+    <!-- ONGLET 4 : Règles de gestion -->
+    <div id="tab4" class="tab-content">
+        <div class="regles-box">
+            <h3>1. Concours & Reprise d'ancienneté</h3>
+            <ul>
+                <li><strong>Méthode comptable :</strong> Calculs sur la base d'une année comptable de 360 jours et mois de 30 jours.</li>
+                <li><strong>Pondération des services :</strong> Les services sont repris en appliquant le rapport entre le coefficient caractéristique d'origine et le coefficient cible.</li>
+            </ul>
+        </div>
+        <div class="regles-box">
+            <h3>2. Concours depuis la Hors Classe ou Classe Exceptionnelle</h3>
+            <ul><li><strong>Reconstitution virtuelle :</strong> Les agents HC/EXC accédant à un corps supérieur font l'objet d'une reconstitution virtuelle dans la classe normale.</li></ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- GESTION DES ONGLETS ---
+    function openTab(evt, tabName) {
+        let i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; }
+        tablinks = document.getElementsByClassName("tab-btn");
+        for (i = 0; i < tablinks.length; i++) { tablinks[i].className = tablinks[i].className.replace(" active", ""); }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+        if(tabName === 'tab2') verifierMajorations();
+    }
+
+    // --- FONCTIONS MATHÉMATIQUES UTILES ---
+    function calculerJoursComptables(d1Str, d2Str) {
+        if (!d1Str || !d2Str) return 0;
+        let d1 = new Date(d1Str), d2 = new Date(d2Str);
+        return ((d2.getFullYear() - d1.getFullYear()) * 360) + ((d2.getMonth() - d1.getMonth()) * 30) + (d2.getDate() - d1.getDate());
+    }
+
+    function formaterJours(jours) {
+        let a = Math.floor(jours / 360); let reste = jours % 360;
+        let m = Math.floor(reste / 30); let j = reste % 30;
+        return `${a} an(s), ${m} mois et ${j} jour(s)`;
+    }
+
+    function determinerEchelon(jours, grille) {
+        let ech = 1, seuil = 0;
+        for (let i = grille.length - 1; i >= 0; i--) {
+            if (jours >= grille[i]) { ech = i + 1; seuil = grille[i]; break; }
+        }
+        return { echelon: ech, report: jours - seuil };
+    }
+
+    // --- GRILLES DE RECHERCHE ---
+    const grilles = {
+        'CN_CERT': [0, 360, 720, 1440, 2160, 3060, 4140, 5220, 6480, 7920, 9360],
+        'CN_AGR':  [0, 360, 720, 1440, 2160, 3060, 4140, 5220, 6480, 7920, 9360]
+    };
+    const grillesOrigine = {
+        'PROFS': [0, 360, 720, 1440, 2160, 3060, 4140, 5220, 6480, 7920, 9360],
+        'MA_1': [0, 1080, 2160, 3240, 4680, 6120, 7560, 9000],
+        'INSTIT': [0, 270, 540, 900, 1440, 1980, 2520, 3600, 4770, 6210, 7650]
+    };
+
+    // --- ONGLET 1 : CONCOURS & REPRISE ---
+    let listeServices = [];
+    
+    function changerModeSaisieT1() {
+        let mode = document.getElementById('t1-modeSaisie').value;
+        document.getElementById('t1-sit1').style.display = mode === "1" ? "flex" : "none";
+        document.getElementById('t1-sit2').style.display = mode === "2" ? "flex" : "none";
+        document.getElementById('t1-sit3').style.display = mode === "3" ? "flex" : "none";
+    }
+
+    function recupererSaisieCourante() {
+        const typeSelect = document.getElementById('t1-typeService');
+        const typeVal = typeSelect.value;
+        const typeText = typeSelect.options[typeSelect.selectedIndex].text;
+        
+        let mode = document.getElementById('t1-modeSaisie').value;
+        let joursBruts = 0;
+        let detailsSituation = "";
+
+        if (mode === "1") {
+            let grilleKey = "PROFS";
+            if (typeText.includes("Instituteur")) {
+                grilleKey = "INSTIT";
+            } else if (typeText.startsWith("MA ")) {
+                grilleKey = "MA_1";
+            }
+
+            let ech = parseInt(document.getElementById('t1-s1-ech').value) || 1;
+            let ouiNon = document.getElementById('t1-s1-ouiNon').value;
+            let rel = parseInt(document.getElementById('t1-s1-rel').value) || 0;
+            let dDebut = document.getElementById('t1-s1-debut').value;
+            let dFin = document.getElementById('t1-s1-fin').value;
+            
+            let baseJoursEchelon = 0;
+            if (ouiNon === "Oui" && ech > 0) {
+                if (ech > 1) {
+                    let grille = grillesOrigine[grilleKey];
+                    baseJoursEchelon = grille[Math.min(ech - 1, grille.length - 1)] || 0;
+                }
+            }
+            
+            let joursDansEchelon = (dDebut && dFin) ? calculerJoursComptables(dDebut, dFin) : 0;
+            joursBruts = baseJoursEchelon + rel + joursDansEchelon;
+            
+            detailsSituation = `Échelon ${ech} (Base: ${baseJoursEchelon}j) + Période (${joursDansEchelon}j) + Reliquat (${rel}j)`;
+        } 
+        else if (mode === "2") {
+            let dDebut = document.getElementById('t1-s2-debut').value;
+            let dFin = document.getElementById('t1-s2-fin').value;
+            // Ne calculer que si les deux dates sont présentes
+            joursBruts = (dDebut && dFin) ? calculerJoursComptables(dDebut, dFin) : 0;
+            detailsSituation = `Du ${dDebut} au ${dFin}`;
+        } 
+        else if (mode === "3") {
+            joursBruts = parseInt(document.getElementById('t1-s3-jours').value) || 0;
+            detailsSituation = `Saisie directe: ${joursBruts} jours`;
+        }
+
+        let objType = typeVal.split('_');
+        return { typeText, detailsSituation, joursBruts, calcType: objType[0], val: objType[1] };
+    }
+
+    function ajouterService() {
+        let nvService = recupererSaisieCourante();
+        listeServices.push(nvService);
+        
+        let champCorps = document.getElementById('t1-corpsOrigine');
+        if (listeServices.length === 1 && champCorps.value.trim() === "") {
+            champCorps.value = nvService.typeText;
+        }
+
+        majTableServices();
+    }
+
+    function actualiserDerniereLigne() {
+        if (listeServices.length > 0) {
+            // Remplace la dernière ligne du tableau par les valeurs actuelles du formulaire
+            listeServices[listeServices.length - 1] = recupererSaisieCourante();
+            majTableServices();
+        }
+    }
+
+    function majTableServices() {
+        const tbody = document.getElementById('t1-tableServices').getElementsByTagName('tbody')[0];
+        tbody.innerHTML = "";
+        listeServices.forEach((s, index) => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td>${s.typeText}</td><td>${s.detailsSituation}</td><td>${s.joursBruts} j</td><td><button onclick="supprimerService(${index})">X</button></td>`;
+            tbody.appendChild(tr);
+        });
+
+        // Gestion du bouton de calcul (grisé si aucune ligne)
+        const btnCalc = document.getElementById('btn-calc-tab1');
+        btnCalc.disabled = (listeServices.length === 0);
+    }
+
+    function supprimerService(index) { 
+        listeServices.splice(index, 1); 
+        majTableServices(); 
+    }
+
+    function calculerTab1() {
+        const coeffCible = parseInt(document.getElementById('t1-corpsCible').value);
+        let nom = document.getElementById('agent-nom').value || "Non renseigné";
+        let prenom = document.getElementById('agent-prenom').value || "Non renseigné";
+        let corpsOrigine = document.getElementById('t1-corpsOrigine').value || "Non précisé";
+        
+        let totalJoursRetenus = 0;
+        
+        listeServices.forEach(s => {
+            if(s.calcType === 'pond') { totalJoursRetenus += s.joursBruts * parseFloat(s.val); } 
+            else { totalJoursRetenus += s.joursBruts * (parseInt(s.val) / coeffCible); }
+        });
+        
+        totalJoursRetenus = Math.floor(totalJoursRetenus);
+        let grille = coeffCible === 175 ? grilles['CN_AGR'] : grilles['CN_CERT'];
+        let resultat = determinerEchelon(totalJoursRetenus, grille);
+
+        document.getElementById('res-tab1').innerHTML = `
+            <div class="result-item"><strong>Agent :</strong> ${nom} ${prenom}</div>
+            <div class="result-item"><strong>Corps d'origine :</strong> ${corpsOrigine}</div>
+            <div class="result-item">Total de l'ancienneté reconnue (appliquée au coeff ${coeffCible}) : <strong>${totalJoursRetenus} jours</strong></div>
+            <hr>
+            <div class="result-item highlight">Classement : Échelon ${resultat.echelon}</div>
+            <div class="result-item">Report d'ancienneté : <strong>${resultat.report} jours</strong> <em>(${formaterJours(resultat.report)})</em></div>
+        `;
+        document.getElementById('res-tab1').style.display = 'block';
+    }
+
+    // --- ONGLET 2 ET 3 ---
+    function verifierMajorations() {
+        const gradeVal = document.getElementById('t2-gradeOrigine').value;
+        const ech = parseInt(document.getElementById('t2-echelon').value);
+        const bloc = document.getElementById('bloc-majorations');
+        const divCN11 = document.getElementById('majo-CN11'), divHC6 = document.getElementById('majo-HC6'), divEXC4 = document.getElementById('majo-EXC4');
+        divCN11.style.display = 'none'; divHC6.style.display = 'none'; divEXC4.style.display = 'none';
+        let showBloc = false;
+        if (gradeVal.startsWith('HC_')) {
+            if (ech >= 5) { divCN11.style.display = 'block'; showBloc = true; }
+            if (ech >= 7) { divHC6.style.display = 'block'; showBloc = true; }
+        } else if (gradeVal.startsWith('EXC_')) {
+            if (ech >= 3) { divCN11.style.display = 'block'; showBloc = true; }
+            if (ech >= 4) { divHC6.style.display = 'block'; showBloc = true; }
+            if (ech >= 5) { divEXC4.style.display = 'block'; showBloc = true; }
+        }
+        bloc.style.display = showBloc ? 'block' : 'none';
+    }
+    
+    function convertirSaisieEnJours(idPrefix) {
+        return ((parseInt(document.getElementById(idPrefix + '_a').value) || 0) * 360) + ((parseInt(document.getElementById(idPrefix + '_m').value) || 0) * 30) + (parseInt(document.getElementById(idPrefix + '_j').value) || 0);
+    }
+    
+    function calculerTab2() {
+        const gradeInput = document.getElementById('t2-gradeOrigine').value;
+        const typeGrade = gradeInput.split('_')[0], coeffOrigine = parseInt(gradeInput.split('_')[1]);
+        const ech = parseInt(document.getElementById('t2-echelon').value);
+        const dEchelon = document.getElementById('t2-dateEchelon').value, dReclassement = document.getElementById('t2-dateReclassement').value;
+        
+        let baseTheoriqueCN = 0;
+        const S_CN8 = 5220, S_CN9 = 6480, S_CN10 = 7920, S_CN11 = 9360;
+        if (typeGrade === 'HC') {
+            switch(ech) {
+                case 1: baseTheoriqueCN = S_CN8; break; case 2: baseTheoriqueCN = S_CN9 + 720; break;
+                case 3: baseTheoriqueCN = S_CN10; break; case 4: baseTheoriqueCN = S_CN11; break;
+                case 5: baseTheoriqueCN = S_CN11 + 900; break; case 6: baseTheoriqueCN = S_CN11 + 1980; break;
+                case 7: baseTheoriqueCN = S_CN11 + 3060; break; default: baseTheoriqueCN = 0;
+            }
+        } else if (typeGrade === 'EXC') {
+            switch(ech) {
+                case 1: baseTheoriqueCN = S_CN10; break; case 2: baseTheoriqueCN = S_CN11; break;
+                case 3: baseTheoriqueCN = S_CN11 + 900; break; case 4: baseTheoriqueCN = S_CN11 + 1980; break;
+                case 5: baseTheoriqueCN = S_CN11 + 3060; break; default: baseTheoriqueCN = 0;
+            }
+        }
+
+        let joursAcquis = calculerJoursComptables(dEchelon, dReclassement);
+        let majCN11 = (typeGrade === 'HC' && ech >= 5) || (typeGrade === 'EXC' && ech >= 3) ? convertirSaisieEnJours('m_cn11') : 0;
+        let majHC6 = (typeGrade === 'HC' && ech >= 7) || (typeGrade === 'EXC' && ech >= 4) ? convertirSaisieEnJours('m_hc6') : 0;
+        let majEXC4 = (typeGrade === 'EXC' && ech >= 5) ? convertirSaisieEnJours('m_exc4') : 0;
+        
+        let totalVirtuelCN = baseTheoriqueCN + joursAcquis + majCN11 + majHC6 + majEXC4;
+        let totalReconstitue = Math.floor(totalVirtuelCN * (coeffOrigine / 175));
+        let resultat = determinerEchelon(totalReconstitue, grilles['CN_AGR']);
+
+        let recapMaj = "";
+        if(majCN11 > 0) recapMaj += `<li>Majoration CN 11 retenue : <strong>${majCN11} jours</strong></li>`;
+        if(majHC6 > 0) recapMaj += `<li>Majoration HC 6 retenue : <strong>${majHC6} jours</strong></li>`;
+        if(majEXC4 > 0) recapMaj += `<li>Majoration EXC 4 retenue : <strong>${majEXC4} jours</strong></li>`;
+
+        let nom = document.getElementById('agent-nom').value || "Non renseigné";
+        let prenom = document.getElementById('agent-prenom').value || "Non renseigné";
+
+        document.getElementById('res-tab2').innerHTML = `
+            <div class="result-item"><strong>Agent :</strong> ${nom} ${prenom}</div>
+            <div class="result-item">Base théorique d'équivalence : <strong>${baseTheoriqueCN} jours</strong></div>
+            <div class="result-item">Ancienneté dans l'échelon : <strong>${joursAcquis} jours</strong></div>
+            ${recapMaj !== "" ? `<ul>${recapMaj}</ul>` : ""}
+            <div class="result-item">Total cumulé converti Agrégé (${coeffOrigine}/175) : <strong>${totalReconstitue} jours</strong></div>
+            <hr>
+            <div class="result-item highlight">➤ Nouveau Grade : Agrégé (Classe Normale)</div>
+            <div class="result-item highlight">➤ Échelon : ${resultat.echelon}</div>
+            <div class="result-item">➤ Report d'ancienneté : <strong>${resultat.report} jours</strong> <em>(${formaterJours(resultat.report)})</em></div>
+        `;
+        document.getElementById('res-tab2').style.display = 'block';
+    }
+
+    function calculerTab3() {
+        const typePromo = document.getElementById('t3-gradeOrigine').value;
+        const echelon = parseInt(document.getElementById('t3-echelon').value);
+        const dEchelon = document.getElementById('t3-dateEchelon').value;
+        const dPromo = document.getElementById('t3-datePromotion').value;
+        
+        let joursAcquis = calculerJoursComptables(dEchelon, dPromo);
+        let nouvelEchelon = 1;
+        
+        if (typePromo === 'CN_TO_HC') {
+            if (echelon === 9) nouvelEchelon = 2;
+            else if (echelon === 10) nouvelEchelon = 3;
+            else if (echelon === 11) {
+                if (joursAcquis > 900) nouvelEchelon = 5; 
+                else nouvelEchelon = 4;
+            }
+        } else {
+            if (echelon === 2 || echelon === 3) nouvelEchelon = 1;
+            else if (echelon >= 4) nouvelEchelon = echelon - 2; 
+        }
+
+        let nom = document.getElementById('agent-nom').value || "Non renseigné";
+        let prenom = document.getElementById('agent-prenom').value || "Non renseigné";
+
+        document.getElementById('res-tab3').innerHTML = `
+            <div class="result-item"><strong>Agent :</strong> ${nom} ${prenom}</div>
+            <div class="result-item">Ancienneté accumulée dans l'échelon avant promotion : <strong>${joursAcquis} jours</strong></div>
+            <hr>
+            <div class="result-item highlight">Nouveau Grade : ${typePromo === 'CN_TO_HC' ? 'Hors Classe' : 'Classe Exceptionnelle'} - Échelon ${nouvelEchelon}</div>
+            <div class="result-item">Report d'ancienneté conservé : <strong>${joursAcquis} jours</strong></div>
+        `;
+        document.getElementById('res-tab3').style.display = 'block';
+    }
+
+    window.onload = () => { document.getElementById('tab1').style.display = 'block'; };
+</script>
+
+</body>
+</html>
