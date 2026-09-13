@@ -85,6 +85,7 @@
         <button class="tab-btn active" onclick="openTab(event, 'tab1')">Reclt concours &amp; Reprise anc.</button>
         <button class="tab-btn" onclick="openTab(event, 'tab2')">Reclt concours HC et EXC</button>
         <button class="tab-btn" onclick="openTab(event, 'tab3')">Reclassement HC et EXC</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab4')" style="background-color: #34495e; border-bottom: 3px solid #f39c12;">Règles de calcul</button>
     </div>
 
     <!-- ONGLET 1 : Reprise d'ancienneté (Lauréats concours) -->
@@ -248,6 +249,38 @@
         </fieldset>
         <button class="action-btn" onclick="calculerTab3()">Calculer la promotion</button>
         <div id="res-tab3" class="result-box"></div>
+    </div>
+
+    <!-- ONGLET 4 : Règles de calcul -->
+    <div id="tab4" class="tab-content">
+        <p style="font-size: 13px; color: #555; font-style: italic; margin-top: 0;">
+            Ce simulateur applique strictement les règles de parité de l'Art. L914-1 du Code de l'éducation, en
+            s'appuyant sur le Décret de 1951 modifié (notamment par les décrets 2022-708 et 2023-729).
+        </p>
+        <div class="regles-box">
+            <h3>1. Reclt concours &amp; Reprise anc.</h3>
+            <ul>
+                <li><strong>Méthode comptable :</strong> calcul en jours sur une base comptable (années de 360 jours, mois de 30 jours).</li>
+                <li><strong>Pondération des services :</strong> chaque service antérieur est retenu soit par une pondération directe, soit en appliquant le rapport entre le coefficient caractéristique du corps d'origine et celui du corps cible.</li>
+                <li><strong>Classement :</strong> le total des jours ainsi retenus détermine l'échelon de classement dans le corps cible, le reste étant le report d'ancienneté conservé dans ce nouvel échelon.</li>
+            </ul>
+        </div>
+        <div class="regles-box">
+            <h3>2. Reclt concours HC et EXC</h3>
+            <ul>
+                <li><strong>Reconstitution virtuelle :</strong> les agents en hors-classe ou classe exceptionnelle reçus à un concours d'un corps supérieur font l'objet d'une reconstitution virtuelle dans la classe normale du corps d'origine, à partir d'une base théorique d'équivalence propre à chaque échelon HC/EXC.</li>
+                <li><strong>Majorations d'ancienneté (décret 2022-708) :</strong> une durée conservée au-delà de certains seuils est ajoutée à la base théorique — 11e échelon de la classe normale, 6e échelon de la hors-classe, 4e échelon de la classe exceptionnelle.</li>
+                <li><strong>Conversion :</strong> le total obtenu est converti au coefficient du corps cible pour déterminer l'échelon et le report d'ancienneté.</li>
+            </ul>
+        </div>
+        <div class="regles-box">
+            <h3>3. Reclassement HC et EXC</h3>
+            <ul>
+                <li><strong>Correspondance directe :</strong> pour un passage de la classe normale à la hors-classe, ou de la hors-classe à la classe exceptionnelle, l'échelon d'arrivée dépend directement de l'échelon de départ selon une correspondance fixée par les grilles.</li>
+                <li><strong>Cas particulier du 11e échelon :</strong> le report d'ancienneté déjà accumulé dans cet échelon de la classe normale détermine si l'agent est classé au 4e ou au 5e échelon de la hors-classe.</li>
+                <li><strong>Report conservé :</strong> le report d'ancienneté acquis dans l'échelon d'origine est intégralement conservé dans le nouvel échelon.</li>
+            </ul>
+        </div>
     </div>
 </div>
 
