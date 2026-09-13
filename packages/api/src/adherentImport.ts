@@ -1,5 +1,12 @@
 import { prisma } from "./db.js";
 import { matchAdherents, type AdherentRecord } from "@spelc/import";
+import { GRADE_MAPPINGS } from "@spelc/domain";
+
+// Second-degree grade labels (CCMA scope) — the only rectorat data imported so far. An adherent
+// whose grade isn't one of these (first-degree/CCMI, or unrecognized) can never be matched against
+// any teacher currently in the system, so proposing one would only ever produce a permanent
+// "Aucune correspondance trouvée" entry cluttering the review queue.
+const CCMA_GRADES = new Set(GRADE_MAPPINGS.filter((g) => g.degre === 2).map((g) => g.grade.toUpperCase()));
 
 export interface ImportAdherentRecordsResult {
   created: number;
@@ -47,10 +54,13 @@ export async function importAdherentRecords(records: AdherentRecord[]): Promise<
   }
 
   // Run matching only for adherents that don't already have a MatchCandidate — a confirmed or
-  // even auto-confirmed/pending link from a previous import is never re-litigated here.
-  const withoutCandidate = await prisma.adherent.findMany({
-    where: { id: { in: adherentIds }, matchCandidate: null },
-  });
+  // even auto-confirmed/pending link from a previous import is never re-litigated here. Also
+  // restricted to CCMA-eligible (second-degree) grades — see CCMA_GRADES above.
+  const withoutCandidate = (
+    await prisma.adherent.findMany({
+      where: { id: { in: adherentIds }, matchCandidate: null },
+    })
+  ).filter((a) => a.grade != null && CCMA_GRADES.has(a.grade.toUpperCase()));
 
   // A teacher can only ever be linked to one adherent (MatchCandidate.teacherId is unique in the
   // DB) — exclude anyone already claimed by an existing candidate (of any status: AUTO_CONFIRMED,
