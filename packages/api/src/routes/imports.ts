@@ -16,9 +16,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 /**
  * Maps the rectorat's own numeric grade code (as printed on every export, e.g. "4531 : ECR
  * PROFESSEUR CERTIFIE CL. NORMALE") to our normalized grade label (GradeMapping.grade in
- * @spelc/domain, e.g. "CERTIFIE"). Only the 5 codes actually observed in the sample files are
- * mapped — an unrecognized code fails the import loudly rather than silently misfiling records
- * under the wrong grille (wrong grille -> wrong indice -> wrong salary, silently).
+ * @spelc/domain, e.g. "CERTIFIE"). Only the codes actually observed in imported files are mapped —
+ * an unrecognized code fails the import loudly rather than silently misfiling records under the
+ * wrong grille (wrong grille -> wrong indice -> wrong salary, silently).
  */
 const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
   "4531": "CERTIFIE",
@@ -26,6 +26,11 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
   "4534": "CERTIFIE EXC",
   "4511": "AGREGE HC",
   "4512": "AGREGE",
+  "4311": "PEPS",
+  "4312": "PEPS HC",
+  "4754": "PLP",
+  "4755": "PLP HC",
+  "4757": "PLP EXC",
 };
 
 importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
