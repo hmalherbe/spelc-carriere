@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { api, type AdelSyncLogEntry, type AdelSyncResult, type AdelSyncType, type Campagne, type RectoratImportResult } from "../api.js";
+import {
+  api,
+  type AdelSyncLogEntry,
+  type AdelSyncResult,
+  type AdelSyncType,
+  type AdherentImportResult,
+  type Campagne,
+  type RectoratImportResult,
+} from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 function todayIso(): string {
@@ -33,6 +41,11 @@ export function ImportPage() {
   const [adelBusy, setAdelBusy] = useState(false);
   const [adelResult, setAdelResult] = useState<AdelSyncResult | null>(null);
   const [adelError, setAdelError] = useState<string | null>(null);
+
+  const [adherentFile, setAdherentFile] = useState<File | null>(null);
+  const [adherentBusy, setAdherentBusy] = useState(false);
+  const [adherentResult, setAdherentResult] = useState<AdherentImportResult | null>(null);
+  const [adherentError, setAdherentError] = useState<string | null>(null);
 
   function refreshAdelLast(type: AdelSyncType) {
     api.adelLastSync(type).then(setAdelLast).catch(() => setAdelLast(null));
@@ -102,6 +115,23 @@ export function ImportPage() {
       setAdelError(String(e));
     } finally {
       setAdelBusy(false);
+    }
+  }
+
+  async function submitAdherentFile(e: React.FormEvent) {
+    e.preventDefault();
+    if (!adherentFile) return;
+    setAdherentBusy(true);
+    setAdherentError(null);
+    setAdherentResult(null);
+    try {
+      const result = await api.importAdherents(adherentFile);
+      setAdherentResult(result);
+      setAdherentFile(null);
+    } catch (e) {
+      setAdherentError(String(e));
+    } finally {
+      setAdherentBusy(false);
     }
   }
 
@@ -291,6 +321,37 @@ export function ImportPage() {
             </p>
             {adelResult.unmappedFields.length > 0 && (
               <p className="hint">Colonnes non reconnues dans l'export : {adelResult.unmappedFields.join(", ")}</p>
+            )}
+          </div>
+        )}
+
+        <p className="hint" style={{ marginTop: 16 }}>
+          En secours si la synchronisation automatique ne fonctionne pas : exporte l'annuaire des adhérents à la main
+          depuis ADEL (Excel ou CSV), puis dépose le fichier ici — même moteur de rapprochement que la synchronisation
+          automatique.
+        </p>
+        <form className="inline-form" onSubmit={submitAdherentFile}>
+          <input
+            type="file"
+            accept=".csv,.xlsx"
+            onChange={(e) => setAdherentFile(e.target.files?.[0] ?? null)}
+          />
+          <button type="submit" disabled={!adherentFile || adherentBusy}>
+            {adherentBusy ? "Import en cours..." : "Importer le fichier"}
+          </button>
+        </form>
+        {adherentError && <p className="error-text">{adherentError}</p>}
+        {adherentResult && (
+          <div className="import-result">
+            <p>
+              <strong>{adherentResult.created}</strong> créés, <strong>{adherentResult.updated}</strong> mis à jour.
+            </p>
+            <p>
+              Rapprochement : <strong>{adherentResult.matching.autoConfirmed}</strong> automatique(s),{" "}
+              <strong>{adherentResult.matching.pendingReview}</strong> à vérifier dans la file de révision.
+            </p>
+            {adherentResult.unmappedFields.length > 0 && (
+              <p className="hint">Colonnes non reconnues dans le fichier : {adherentResult.unmappedFields.join(", ")}</p>
             )}
           </div>
         )}

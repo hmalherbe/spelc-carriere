@@ -6,7 +6,7 @@ import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords } from "../adherentImport.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { computeEchelonPromotion, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
-import { extractPdfText, parseRectoratFile, parseAdherentCsv, normalizeName } from "@spelc/import";
+import { extractPdfText, parseRectoratFile, parseAdherentCsv, parseAdherentXlsx, normalizeName } from "@spelc/import";
 
 export const importsRouter = Router();
 importsRouter.use(requireAuth);
@@ -167,11 +167,15 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   res.status(201).json({ importId: rectoratImport.id, grade, imported, warnings });
 }));
 
+// Manual fallback to the ADEL automation: same export a human would download by hand from ADEL
+// (Excel) or the older CSV format, uploaded and matched through the exact same engine.
 importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "Fichier CSV requis (champ 'file')" });
+  if (!req.file) return res.status(400).json({ error: "Fichier requis (champ 'file')" });
 
-  const csvText = req.file.buffer.toString("utf-8");
-  const { records, unmappedFields } = parseAdherentCsv(csvText);
+  const isXlsx = /\.xlsx$/i.test(req.file.originalname);
+  const { records, unmappedFields } = isXlsx
+    ? await parseAdherentXlsx(req.file.buffer)
+    : parseAdherentCsv(req.file.buffer.toString("utf-8"));
   const { created, updated, matching } = await importAdherentRecords(records);
 
   res.status(201).json({ created, updated, unmappedFields, matching });
