@@ -122,6 +122,17 @@ export interface BaSeuil {
   locked: boolean;
 }
 
+export interface AdherentEligible {
+  adherentId: string;
+  nom: string;
+  prenom: string;
+  grade: string | null;
+  /** 2 = second degré (CCMA), 1 = premier degré (CCMI), null = grade inconnu. */
+  degre: 1 | 2 | null;
+  dateProchainePromotion: string | null;
+  nonPresentDansRectorat: boolean;
+}
+
 export interface RectoratImportResult {
   importId: string;
   grade: string;
@@ -245,7 +256,9 @@ export const api = {
   createCampagne: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }) =>
     request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
-  pendingMatches: () => request<MatchCandidate[]>("/matches?status=PENDING_REVIEW"),
+  pendingMatches: (campagneId?: string) =>
+    request<MatchCandidate[]>(`/matches?status=PENDING_REVIEW${campagneId ? `&campagneId=${campagneId}` : ""}`),
+  adherentsEligibles: (campagneId: string) => request<AdherentEligible[]>(`/adherents/eligibles?campagneId=${campagneId}`),
   confirmMatch: (id: string, teacherId?: string) =>
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),
   rejectMatch: (id: string) => request(`/matches/${id}/reject`, { method: "POST" }),

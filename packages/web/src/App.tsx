@@ -4,6 +4,7 @@ import { Layout } from "./components/Layout.js";
 import { LoginPage } from "./pages/LoginPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { ReviewQueuePage } from "./pages/ReviewQueuePage.js";
+import { AdherentsEligiblesPage } from "./pages/AdherentsEligiblesPage.js";
 import { BaSeuilsPage } from "./pages/BaSeuilsPage.js";
 import { ImportPage } from "./pages/ImportPage.js";
 import { MailingPage } from "./pages/MailingPage.js";
@@ -34,6 +35,7 @@ export function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="revue" element={<ReviewQueuePage />} />
+        <Route path="adherents-eligibles" element={<AdherentsEligiblesPage />} />
         <Route path="seuils-ba" element={<BaSeuilsPage />} />
         <Route path="import" element={<ImportPage />} />
         <Route path="mailing" element={<MailingPage />} />

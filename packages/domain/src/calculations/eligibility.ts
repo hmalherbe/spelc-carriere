@@ -56,3 +56,14 @@ export function isEligibleClasseExceptionnelle(echelonHorsClasse: EchelonCode, c
   const echelon = Number(echelonHorsClasse);
   return Number.isFinite(echelon) && echelon >= 5;
 }
+
+/**
+ * Un adhérent est "éligible à la CCMA/CCMI" pour une campagne donnée si sa date de prochaine
+ * promotion — calculée à partir de sa date de dernier changement d'échelon et de la durée de cet
+ * échelon (voir computeEchelonPromotion) — tombe dans la période de cette campagne. Toutes les
+ * dates sont des chaînes ISO ("AAAA-MM-JJ"), comparables lexicographiquement.
+ */
+export function isEligibleCampagne(dateProchainePromotion: string | null, periodeDebut: string, periodeFin: string): boolean {
+  if (!dateProchainePromotion) return false;
+  return dateProchainePromotion >= periodeDebut && dateProchainePromotion <= periodeFin;
+}

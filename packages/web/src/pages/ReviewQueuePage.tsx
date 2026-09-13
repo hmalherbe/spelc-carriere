@@ -1,44 +1,69 @@
 import { useEffect, useState } from "react";
-import { api, type MatchCandidate } from "../api.js";
+import { api, type Campagne, type MatchCandidate } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 export function ReviewQueuePage() {
   const { user } = useAuth();
+  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
+  const [campagneId, setCampagneId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<MatchCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const canReview = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
-  function refresh() {
+  useEffect(() => {
+    api.campagnes().then((c) => {
+      setCampagnes(c);
+      if (c.length > 0) setCampagneId(c[0].id);
+      else setLoading(false);
+    });
+  }, []);
+
+  function refresh(id: string) {
     setLoading(true);
     api
-      .pendingMatches()
+      .pendingMatches(id)
       .then(setCandidates)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }
 
-  useEffect(refresh, []);
+  useEffect(() => {
+    if (campagneId) refresh(campagneId);
+  }, [campagneId]);
 
   async function confirm(id: string, teacherId: string | null) {
-    if (!teacherId) return;
+    if (!teacherId || !campagneId) return;
     await api.confirmMatch(id, teacherId);
-    refresh();
+    refresh(campagneId);
   }
 
   async function reject(id: string) {
+    if (!campagneId) return;
     await api.rejectMatch(id);
-    refresh();
+    refresh(campagneId);
   }
 
   if (error) return <p className="error-text">{error}</p>;
 
   return (
     <div>
-      <h2>File de révision des rapprochements adhérents ↔ enseignants</h2>
+      <div className="toolbar">
+        <h2>File de révision des rapprochements adhérents ↔ enseignants</h2>
+        {campagnes.length > 0 && (
+          <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
+            {campagnes.map((c) => (
+              <option key={c.id} value={c.id}>
+                Campagne {c.anneeScolaire}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
       <p className="hint">
-        Une fois confirmé ou rejeté ici, un lien reste permanent — seuls les nouveaux cas ambigus reviennent dans cette file lors des
-        prochains imports.
+        Limité aux adhérents éligibles à la CCMA/CCMI pour cette campagne (prochaine promotion d'échelon prévue dans sa
+        période). Une fois confirmé ou rejeté ici, un lien reste permanent — seuls les nouveaux cas ambigus reviennent
+        dans cette file lors des prochains imports.
       </p>
       {loading ? (
         <p>Chargement...</p>

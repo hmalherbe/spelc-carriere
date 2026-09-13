@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isEligibleBonificationAnciennete, isEligibleClasseExceptionnelle, isEligibleHorsClasse } from "../src/calculations/eligibility.js";
+import {
+  isEligibleBonificationAnciennete,
+  isEligibleCampagne,
+  isEligibleClasseExceptionnelle,
+  isEligibleHorsClasse,
+} from "../src/calculations/eligibility.js";
 
 describe("isEligibleBonificationAnciennete", () => {
   it("échelon 6: eligible only in the 2nd year (1 <= ancienneté < 2 years)", () => {
@@ -54,5 +59,28 @@ describe("isEligibleClasseExceptionnelle (règles post-réforme 2024)", () => {
 
   it("a plain number never matches for an agrégé, since their HC grille labels 4-6 as A1-A3", () => {
     expect(isEligibleClasseExceptionnelle(5, "agrege")).toBe(false);
+  });
+});
+
+describe("isEligibleCampagne", () => {
+  const periodeDebut = "2025-09-01";
+  const periodeFin = "2026-08-31";
+
+  it("eligible when the date falls strictly inside the period", () => {
+    expect(isEligibleCampagne("2026-02-15", periodeDebut, periodeFin)).toBe(true);
+  });
+
+  it("eligible on the exact boundary dates (inclusive)", () => {
+    expect(isEligibleCampagne(periodeDebut, periodeDebut, periodeFin)).toBe(true);
+    expect(isEligibleCampagne(periodeFin, periodeDebut, periodeFin)).toBe(true);
+  });
+
+  it("not eligible before the period starts or after it ends", () => {
+    expect(isEligibleCampagne("2025-08-31", periodeDebut, periodeFin)).toBe(false);
+    expect(isEligibleCampagne("2026-09-01", periodeDebut, periodeFin)).toBe(false);
+  });
+
+  it("not eligible when there is no next promotion date (échelon plafond, ou donnée manquante)", () => {
+    expect(isEligibleCampagne(null, periodeDebut, periodeFin)).toBe(false);
   });
 });
