@@ -55,7 +55,7 @@ export function BaSeuilsPage() {
   return (
     <div>
       <div className="toolbar">
-        <h2>Seuils de promotion "au choix" (bonification d'ancienneté, échelons 6/8)</h2>
+        <h2>Bonification d'ancienneté, échelons 6/8</h2>
         {campagnes.length > 0 && (
           <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
             {campagnes.map((c) => (
@@ -74,7 +74,7 @@ export function BaSeuilsPage() {
       {loading ? (
         <p>Chargement...</p>
       ) : seuils.length === 0 ? (
-        <p className="hint">Aucun seuil calculé pour cette campagne (pas encore de promotion "au choix" confirmée aux échelons 6/8).</p>
+        <p className="hint">Aucun seuil calculé pour cette campagne (pas encore de bonification d'ancienneté confirmée aux échelons 6/8).</p>
       ) : (
       <table className="data-table">
         <thead>

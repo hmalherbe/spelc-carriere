@@ -9,7 +9,7 @@ exports PDF du rectorat.
 
 - **Matching adhérent ↔ enseignant** : un lien confirmé est permanent (ID stable en base) ; seuls
   les nouveaux cas ambigus remontent dans une file de révision manuelle à chaque import.
-- **Seuil de promotion "au choix" (BA, échelons 6/8)** : estimé automatiquement à partir des
+- **Seuil de bonification d'ancienneté (BA, échelons 6/8)** : estimé automatiquement à partir des
   résultats confirmés de la campagne, mais verrouillable/corrigeable par un admin.
 - **Périmètre V1** : académie de Nice (06/83) uniquement, multi-utilisateurs avec rôles
   (ADMIN / GESTIONNAIRE / LECTURE).
