@@ -68,6 +68,13 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
     teacherIdByName.set(`${normalizeName(s.nomUsage)}|${normalizeName(s.prenom)}`, s.teacherId);
   }
 
+  // Re-importing a corrected file for a grade already loaded in this campagne must supersede the
+  // old fiches, not sit alongside them — otherwise every affected teacher would show up twice on
+  // the dashboard. Safe to do only after the name -> teacherId map above is built, so a teacher
+  // whose only snapshot was in this campagne still resolves to their existing Teacher row instead
+  // of forking a new one once their old snapshot is gone.
+  await prisma.teacherSnapshot.deleteMany({ where: { campagneId, grade } });
+
   // Loaded once per import, not per row: an admin's edited indices / revalorised valeur du point
   // (see routes/grilles.ts) must be reflected in newly computed promotions.
   const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
