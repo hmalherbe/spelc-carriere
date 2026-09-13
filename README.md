@@ -94,7 +94,7 @@ npx playwright install chromium
 
 Puis dans `packages/api/.env` :
 ```bash
-ADEL_URL="https://annuaire-spelc.bayard-service.com/annuaire_spelc/Admin.jsp#listepersonnes"
+ADEL_URL="https://annuaire-spelc.bayard-service.com/annuaire_spelc/Login.jsp#listepersonnes"
 ADEL_USERNAME="..."
 ADEL_PASSWORD="..."
 ADEL_SPELC_NAME="azur"   # optionnel, "azur" par défaut — filtre "nom du Spelc"
