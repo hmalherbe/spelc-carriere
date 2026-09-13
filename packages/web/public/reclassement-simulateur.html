@@ -82,10 +82,9 @@
 
     <!-- Navigation des onglets -->
     <div class="tabs">
-        <button class="tab-btn active" onclick="openTab(event, 'tab1')">1. Concours & Reprise Anc.</button>
-        <button class="tab-btn" onclick="openTab(event, 'tab2')">2. Concours depuis HC/EXC</button>
-        <button class="tab-btn" onclick="openTab(event, 'tab3')">3. Promotion</button>
-        <button class="tab-btn" onclick="openTab(event, 'tab4')" style="background-color: #34495e; border-bottom: 3px solid #f39c12;">Règles de gestion</button>
+        <button class="tab-btn active" onclick="openTab(event, 'tab1')">Reclt concours &amp; Reprise anc.</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab2')">Reclt concours HC et EXC</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab3')">Reclassement HC et EXC</button>
     </div>
 
     <!-- ONGLET 1 : Reprise d'ancienneté (Lauréats concours) -->
@@ -249,21 +248,6 @@
         </fieldset>
         <button class="action-btn" onclick="calculerTab3()">Calculer la promotion</button>
         <div id="res-tab3" class="result-box"></div>
-    </div>
-
-    <!-- ONGLET 4 : Règles de gestion -->
-    <div id="tab4" class="tab-content">
-        <div class="regles-box">
-            <h3>1. Concours & Reprise d'ancienneté</h3>
-            <ul>
-                <li><strong>Méthode comptable :</strong> Calculs sur la base d'une année comptable de 360 jours et mois de 30 jours.</li>
-                <li><strong>Pondération des services :</strong> Les services sont repris en appliquant le rapport entre le coefficient caractéristique d'origine et le coefficient cible.</li>
-            </ul>
-        </div>
-        <div class="regles-box">
-            <h3>2. Concours depuis la Hors Classe ou Classe Exceptionnelle</h3>
-            <ul><li><strong>Reconstitution virtuelle :</strong> Les agents HC/EXC accédant à un corps supérieur font l'objet d'une reconstitution virtuelle dans la classe normale.</li></ul>
-        </div>
     </div>
 </div>
 
