@@ -18,6 +18,11 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("fr-FR");
 }
 
+function formatAnciennete(annees: number | null): string {
+  if (annees == null) return "—";
+  return `${annees.toFixed(2)} an(s)`;
+}
+
 /** Has SOME link to an adhérent record, confirmed or not — used by the adhérent/non-adhérent filter. */
 function isLinkedToAdherent(t: TeacherListItem): boolean {
   return t.matching.status === "AUTO_CONFIRMED" || t.matching.status === "CONFIRMED" || t.matching.status === "PENDING_REVIEW";
@@ -53,6 +58,8 @@ export function DashboardPage() {
   const [baFilter, setBaFilter] = useState<BaFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
   const [echelonFilter, setEchelonFilter] = useState<string>("all");
+  const [ancienneteMin, setAncienneteMin] = useState<string>("");
+  const [ancienneteMax, setAncienneteMax] = useState<string>("");
   const [sortKey, setSortKey] = useState<SortKey>("nom");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -83,6 +90,8 @@ export function DashboardPage() {
   );
 
   const visibleTeachers = useMemo(() => {
+    const min = ancienneteMin === "" ? null : Number(ancienneteMin);
+    const max = ancienneteMax === "" ? null : Number(ancienneteMax);
     const filtered = teachers.filter((t) => {
       if (adherentFilter === "adherent" && !isLinkedToAdherent(t)) return false;
       if (adherentFilter === "non_adherent" && isLinkedToAdherent(t)) return false;
@@ -90,6 +99,8 @@ export function DashboardPage() {
       if (baFilter === "non_eligible" && t.baEligible !== false) return false;
       if (gradeFilter !== "all" && t.grade !== gradeFilter) return false;
       if (echelonFilter !== "all" && t.echelonActuel !== echelonFilter) return false;
+      if (min !== null && (t.ancienneteEchelon == null || t.ancienneteEchelon < min)) return false;
+      if (max !== null && (t.ancienneteEchelon == null || t.ancienneteEchelon > max)) return false;
       return true;
     });
 
@@ -106,7 +117,7 @@ export function DashboardPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [teachers, adherentFilter, baFilter, gradeFilter, echelonFilter, sortKey, sortDir]);
+  }, [teachers, adherentFilter, baFilter, gradeFilter, echelonFilter, ancienneteMin, ancienneteMax, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -177,6 +188,14 @@ export function DashboardPage() {
             ))}
           </select>
         </label>
+        <label>
+          Anc. échelon min (années)
+          <input type="number" step="0.1" min="0" value={ancienneteMin} onChange={(e) => setAncienneteMin(e.target.value)} />
+        </label>
+        <label>
+          Anc. échelon max (années)
+          <input type="number" step="0.1" min="0" value={ancienneteMax} onChange={(e) => setAncienneteMax(e.target.value)} />
+        </label>
       </div>
 
       {loading ? (
@@ -196,6 +215,7 @@ export function DashboardPage() {
                 Échelon{sortIndicator("echelon")}
               </th>
               <th>Date échelon actuel</th>
+              <th>Ancienneté échelon</th>
               <th>Prochaine promotion</th>
               <th>Gain net</th>
               <th>Adhérent</th>
@@ -215,6 +235,7 @@ export function DashboardPage() {
                     {t.echelonActuel} → {t.computedState?.echelonSuivant ?? "—"}
                   </td>
                   <td>{formatDate(t.dateAccesEchelon)}</td>
+                  <td>{formatAnciennete(t.ancienneteEchelon)}</td>
                   <td>{formatDate(t.computedState?.dateProchainePromotion ?? null)}</td>
                   <td className={t.computedState && t.computedState.gainSalaireNet > 0 ? "gain-positive" : ""}>
                     {t.computedState ? euros(t.computedState.gainSalaireNet) : "—"}

@@ -99,6 +99,7 @@ teachersRouter.get("/", async (req, res) => {
       grade: snap.grade,
       echelonActuel: snap.echelonActuel,
       dateAccesEchelon: snap.dateAccesEchelon,
+      ancienneteEchelon: snap.ancienneteEchelon,
       avisEvaluation: snap.avisEvaluation,
       computedState: state
         ? {

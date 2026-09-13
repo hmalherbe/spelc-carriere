@@ -86,6 +86,7 @@ export interface TeacherListItem {
   grade: string;
   echelonActuel: string;
   dateAccesEchelon: string;
+  ancienneteEchelon: number | null;
   avisEvaluation: number | null;
   computedState: ComputedState | null;
   matching:
