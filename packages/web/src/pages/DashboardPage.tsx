@@ -83,6 +83,8 @@ export function DashboardPage() {
       .finally(() => setLoading(false));
   }, [campagneId]);
 
+  const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
+
   const grades = useMemo(() => Array.from(new Set(teachers.map((t) => t.grade))).sort(), [teachers]);
   const echelons = useMemo(
     () => Array.from(new Set(teachers.map((t) => t.echelonActuel))).sort((a, b) => echelonSortValue(a) - echelonSortValue(b)),
@@ -148,6 +150,12 @@ export function DashboardPage() {
           </select>
         )}
       </div>
+      {selectedCampagne && (
+        <p className="hint">
+          Période du {formatDate(selectedCampagne.periodeDebut)} au {formatDate(selectedCampagne.periodeFin)} — date CCMA :{" "}
+          {formatDate(selectedCampagne.dateCcma)}.
+        </p>
+      )}
 
       <div className="inline-form">
         <label>
