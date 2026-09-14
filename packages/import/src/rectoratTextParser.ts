@@ -32,6 +32,14 @@ export interface ParsedTeacherRecord {
   typePromotion: string | null; // AN / CL / BA / RE, from the "durée restante" token
   dureeRestante: string | null; // raw "AAaMMmJJj" text
   dateProchainePromotionRectorat: string | null; // ISO date, as stated by the rectorat itself
+  // The "TRACK.date" marker (e.g. "BA.18/07/2025") — distinct from typePromotion/dureeRestante
+  // above (the record's own default/fallback track's remaining time): this is the rectorat's own
+  // projection or determination for a specific mechanism, most often used for BA since it's a
+  // competitive selection rather than a simple countdown. "Pro " prefixed ("Pro BA.18/07/2025")
+  // means CONFIRMED/GRANTED this cycle; unprefixed ("BA.18/07/2025") means only ELIGIBLE — a
+  // candidate whose selection isn't decided yet. Verified against real files: "Pro" = "Promu".
+  proTypePromotion: "AN" | "CL" | "BA" | null;
+  proConfirmee: boolean; // true only when the marker above was "Pro "-prefixed
   /** Fields this parser could not confidently extract for this record — surface these for manual review rather than silently guessing. */
   warnings: string[];
 }
@@ -47,7 +55,7 @@ export interface ParsedRectoratFile {
 const DATE_RE = /(\d{2})\/(\d{2})\/(\d{4})/;
 const RNE_RE = /\b(\d{7}[A-Z])\b/;
 const DUREE_RESTANTE_RE = /\b(AN|CL|BA|RE)\.\s*(\d{2}a\d{2}m\d{2}j)\b/;
-const PRO_DATE_RE = /\b(?:Pro\s+)?(AN|CL|BA)\.(\d{2}\/\d{2}\/\d{4})\b/;
+const PRO_DATE_RE = /\b(Pro\s+)?(AN|CL|BA)\.(\d{2}\/\d{2}\/\d{4})\b/;
 const DISCIPLINE_CODE_RE = /\b(\d{4}[A-Z])\s+/;
 // The token that normally follows the discipline libellé: "AN."/"CL."/"BA."/"RE." (sometimes
 // corrupted by an OCR/encoding glitch into a single mangled character — still 1-2 chars + "."),
@@ -204,7 +212,9 @@ function parseRecordChunk(chunk: string, echelon: string): ParsedTeacherRecord |
     ageEncodedRectorat: baremeMatch?.[4] ?? null,
     typePromotion: dureeMatch?.[1] ?? null,
     dureeRestante: dureeMatch?.[2] ?? null,
-    dateProchainePromotionRectorat: proDateMatch ? toIsoDate(proDateMatch[2]) : null,
+    dateProchainePromotionRectorat: proDateMatch ? toIsoDate(proDateMatch[3]) : null,
+    proTypePromotion: (proDateMatch?.[2] as "AN" | "CL" | "BA" | undefined) ?? null,
+    proConfirmee: proDateMatch ? proDateMatch[1] !== undefined : false,
     warnings,
   };
 }

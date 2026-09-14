@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth/middleware.js";
 import { estimateAgainstSeuil, isEligibleHorsClasse, isEligibleClasseExceptionnelle, GRADE_MAPPINGS } from "@spelc/domain";
+import { parseZ2AGEA } from "@spelc/import";
 
 export const teachersRouter = Router();
 
@@ -56,42 +57,39 @@ teachersRouter.get("/", async (req, res) => {
       ? isEligibleClasseExceptionnelle(snap.echelonActuel, gradeMapping.grille === "HC_AGR" ? "agrege" : "autre")
       : null;
 
-    // null = not applicable (not on an arrival page the BA mechanism can lead to), same
-    // convention as horsClasseEligible/classeExceptionnelleEligible above. Trusting the
-    // rectorat's own typePromotion flag directly, rather than reconstructing an ancienneté
-    // eligibility window ourselves — it's the rectorat's actual determination, not our estimate.
-    const baEligible = baEchelonDepart !== undefined ? snap.typePromotion === "BA" : null;
+    // null = not applicable (not on an arrival page the BA mechanism can lead to). Otherwise, true
+    // whenever the rectorat's own "TRACK.date" marker names BA — whether or not it's confirmed
+    // (see proConfirmee below): a candidate not yet selected is still "éligible".
+    const baEligible = baEchelonDepart !== undefined ? snap.proTypePromotion === "BA" : null;
 
     const baEstimate =
-      baEligible === true &&
-      baEchelonDepart !== undefined &&
-      seuil &&
-      snap.avisEvaluation != null &&
-      snap.ancienneteGrade != null &&
-      snap.ancienneteEchelon != null
-        ? estimateAgainstSeuil(
-            {
-              grade: snap.grade,
-              echelonDepart: baEchelonDepart,
-              barreme: snap.avisEvaluation,
-              ancienneteGrade: snap.ancienneteGrade,
-              ancienneteEchelon: snap.ancienneteEchelon,
-              // Age isn't wired up yet (the rectorat's Z2AGEA encoding needs its own parser) —
-              // treated as best-case so the estimate falls back to the ancienneté tie-break only.
-              age: 0,
-            },
-            seuil
-              ? {
-                  grade: seuil.grade,
-                  echelonDepart: seuil.echelonDepart as 6 | 8,
-                  nombrePromusBA: seuil.nombrePromusBa,
-                  minBarreme: seuil.minBareme,
-                  minAncienneteGrade: seuil.minAncienneteGrade,
-                  minAncienneteEchelon: seuil.minAncienneteEchelon,
-                  minAge: seuil.minAge,
-                }
-              : undefined,
-          )
+      baEligible === true && baEchelonDepart !== undefined
+        ? snap.proConfirmee
+          ? // "Pro BA.date" — the rectorat already granted this promotion, nothing to estimate.
+            "promu_estime"
+          : seuil && snap.avisEvaluation != null && snap.ancienneteGrade != null && snap.ancienneteEchelon != null
+            ? estimateAgainstSeuil(
+                {
+                  grade: snap.grade,
+                  echelonDepart: baEchelonDepart,
+                  barreme: snap.avisEvaluation,
+                  ancienneteGrade: snap.ancienneteGrade,
+                  ancienneteEchelon: snap.ancienneteEchelon,
+                  age: snap.ageEncodedRectorat ? parseZ2AGEA(snap.ageEncodedRectorat).annees : 0,
+                },
+                seuil
+                  ? {
+                      grade: seuil.grade,
+                      echelonDepart: seuil.echelonDepart as 6 | 8,
+                      nombrePromusBA: seuil.nombrePromusBa,
+                      minBarreme: seuil.minBareme,
+                      minAncienneteGrade: seuil.minAncienneteGrade,
+                      minAncienneteEchelon: seuil.minAncienneteEchelon,
+                      minAge: seuil.minAge,
+                    }
+                  : undefined,
+              )
+            : null
         : null;
 
     return {

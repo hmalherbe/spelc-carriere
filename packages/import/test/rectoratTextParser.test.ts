@@ -45,6 +45,8 @@ describe("parseRectoratFile — CERTIFIESCN page 1 (échelons 02 and 03, no avis
     expect(r.ancienneteEchelon).toBeCloseTo(2.0);
     expect(r.ageEncodedRectorat).toBe("231110");
     expect(r.warnings).toEqual([]);
+    expect(r.proTypePromotion).toBe("AN");
+    expect(r.proConfirmee).toBe(true); // "Pro AN.01/09/2024" — confirmed, not merely eligible
   });
 
   it("correctly assigns échelon 03 records to the second section, not the first", () => {
@@ -63,7 +65,7 @@ describe("parseRectoratFile — CERTIFIESCN page 1 (échelons 02 and 03, no avis
 describe("parseRectoratFile — CERTIFIESCN échelon 07 (avis de carrière + edge cases)", () => {
   const result = parseRectoratFile(fixture("certifies-cn-echelon07.txt"));
 
-  it("parses a record with an avis and a 'Pro BA.date' on the person line itself", () => {
+  it("parses a record with an avis and a 'Pro BA.date' on the person line itself — 'Pro' means CONFIRMED/GRANTED this cycle", () => {
     const r = result.records.find((r) => r.nomUsage === "FERRAND")!;
     expect(r).toBeDefined();
     expect(r.avisEvaluation).toBe(4);
@@ -71,13 +73,17 @@ describe("parseRectoratFile — CERTIFIESCN échelon 07 (avis de carrière + edg
     expect(r.dureeRestante).toBe("00a00m00j");
     expect(r.dateProchainePromotionRectorat).toBe("2025-03-01");
     expect(r.nomEtablissement).toBe("MARIE FRANCE");
+    expect(r.proTypePromotion).toBe("BA");
+    expect(r.proConfirmee).toBe(true);
   });
 
-  it("parses a record where the 'BA.date' has no 'Pro' prefix", () => {
+  it("parses a record where the 'BA.date' has no 'Pro' prefix — meaning ELIGIBLE (candidate) but not yet granted", () => {
     const r = result.records.find((r) => r.nomUsage === "AIACH")!;
     expect(r).toBeDefined();
     expect(r.dateProchainePromotionRectorat).toBe("2025-07-18");
     expect(r.avisEvaluation).toBe(3);
+    expect(r.proTypePromotion).toBe("BA");
+    expect(r.proConfirmee).toBe(false);
   });
 
   it("parses a contractuel record with no établissement at all, without crashing", () => {
@@ -92,6 +98,9 @@ describe("parseRectoratFile — CERTIFIESCN échelon 07 (avis de carrière + edg
     // still recovers the discipline and the barème block even with no établissement columns
     expect(r.disciplineCode).toBe("1300E");
     expect(r.ancienneteGrade).toBeCloseTo(6.997);
+    // also carries an unconfirmed "BA.date" marker (eligible, not granted) alongside its RE track
+    expect(r.proTypePromotion).toBe("BA");
+    expect(r.proConfirmee).toBe(false);
   });
 });
 

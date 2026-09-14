@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords } from "../adherentImport.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
+import { recomputeBaSeuils } from "../baSeuilCompute.js";
 import { computeEchelonPromotion, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
 import {
   extractPdfText,
@@ -124,9 +125,12 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
         avisEvaluation: record.avisEvaluation,
         ancienneteGrade: record.ancienneteGrade,
         ancienneteEchelon: record.ancienneteEchelon,
+        ageEncodedRectorat: record.ageEncodedRectorat,
         typePromotion: record.typePromotion,
         dureeRestante: record.dureeRestante,
         dateProchainePromotionRectorat: record.dateProchainePromotionRectorat ? new Date(record.dateProchainePromotionRectorat) : null,
+        proTypePromotion: record.proTypePromotion,
+        proConfirmee: record.proConfirmee,
       },
     });
 
@@ -170,6 +174,11 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
       warnings.push({ nomUsage: record.nomUsage, prenom: record.prenom, warnings: record.warnings });
     }
   }
+
+  // The BA seuils an admin sees on the "Seuils BA" page are auto-inferred from this campagne's own
+  // imported BA promotions — recomputed after every rectorat import so they reflect the latest
+  // data, without ever touching a row the admin has locked (see baSeuilCompute.ts).
+  await recomputeBaSeuils(campagneId);
 
   res.status(201).json({ importId: rectoratImport.id, grade, imported, warnings });
 }));
