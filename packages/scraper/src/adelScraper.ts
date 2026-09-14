@@ -156,10 +156,15 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
     await page.getByRole("button", { name: /export/i }).or(page.getByText(/^export$/i)).first().click();
 
     // --- 5. Choose "export excel suite à une recherche" in the popup ---
+    // Confirmed live: this "Export" dialog is an in-page modal, not a real new browser
+    // window/tab — the waitForEvent("popup") below will (correctly) time out and fall back to the
+    // main page. Every ADEL page also has its own "Recherche Express" combobox in the header, so
+    // targeting the modal's dropdown by label (with `.last()` as a positional fallback, since the
+    // modal is appended after the rest of the page) avoids grabbing that one by accident.
     step = "choix du type d'export dans la popup";
     const popupPromise = page.waitForEvent("popup", { timeout: 5_000 }).catch(() => null);
     const popup = (await popupPromise) ?? page;
-    const exportSelect = popup.getByRole("combobox").first();
+    const exportSelect = popup.getByLabel(/s[ée]lectionner un export/i).or(popup.getByRole("combobox").last());
     await selectOptionByPattern(popup, exportSelect, /export excel.*recherche/i);
 
     // --- 6. Generate, then download ---
