@@ -54,6 +54,34 @@ function normalizeHeader(header: string): string {
     .toLowerCase();
 }
 
+/** Splits raw CSV text into rows, respecting double-quoted fields — a quoted field (e.g. a
+ * "Commentaire" column with the union's own free-text notes) may itself contain a line break,
+ * which must not be treated as a row boundary. A naive `text.split(/\r?\n/)` would cut such a
+ * field into several fake rows, and if a fragment happens to land back on the nom/prénom column
+ * position, it is read as a bogus extra adherent — that's the row-splitting half of the fix for
+ * the "phantom adherent" bug (a stray quote is still possible if a comment itself contains an
+ * unescaped `"`, but that's a source-data issue, not one this parser can resolve). */
+function splitCsvRows(text: string): string[] {
+  const rows: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+    } else if (!inQuotes && (char === "\n" || char === "\r")) {
+      if (char === "\r" && text[i + 1] === "\n") i++;
+      rows.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (current.length > 0) rows.push(current);
+  return rows;
+}
+
 /** Minimal CSV line splitter supporting double-quoted fields (with "" as an escaped quote) — no
  * external dependency needed for a well-formed spreadsheet export. */
 function parseCsvLine(line: string): string[] {
@@ -101,7 +129,7 @@ export interface AdherentParseResult {
 }
 
 export function parseAdherentCsv(csvText: string): AdherentParseResult {
-  const lines = csvText.split(/\r?\n/).filter((l) => l.length > 0);
+  const lines = splitCsvRows(csvText).filter((l) => l.length > 0);
   if (lines.length === 0) return { records: [], unmappedFields: Object.keys(HEADER_ALIASES) as (keyof AdherentRecord)[] };
 
   const headerCells = parseCsvLine(lines[0]).map(normalizeHeader);
