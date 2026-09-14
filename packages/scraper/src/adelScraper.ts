@@ -5,24 +5,28 @@ import { join } from "node:path";
 
 /**
  * Automates the manual export documented by the Spelc: log into ADEL (the union's own membership
- * database, hosted by Bayard Service), open the "outils de recherche" query tool for a given
- * CCMA/CCMI campaign, filter by Spelc name, and download the resulting Excel export — the exact
- * same file a human would otherwise save by hand.
+ * database, hosted by Bayard Service), open the "outil de recherche" query tool, select the
+ * pre-built query for the given CCMA/CCMI campaign from ADEL's own query tree, filter by Spelc
+ * name, and download the resulting Excel export — the exact same file a human would otherwise
+ * save by hand.
  *
- * This is a best-effort port of a manual click-path described by the Spelc, not something we could
- * inspect live (see git history / the conversation this was built from) — the selectors below are
- * written to be as resilient as reasonably possible (role/text-based, not brittle CSS classes) but
- * they WILL need adjusting against the real site on the first live run. Every step captures a
- * screenshot to `debugDir` on failure so a broken selector is a one-look fix, not a guessing game.
+ * Login and the CCMA navigation path (Gestion -> Outil de recherche -> "Enseignants second degré
+ * (ENS 2°D)" -> filtre "Nom du SPELC" -> Appliquer) are confirmed against the real site. The CCMI
+ * query label is inferred by the same naming pattern but not yet confirmed, and the export step
+ * itself (what happens after clicking "Export" — a popup with a format choice, or a direct
+ * download) is still unconfirmed. Every step captures a screenshot to `debugDir` on failure so a
+ * broken selector is a one-look fix, not a guessing game.
  */
 
 export type AdelSyncType = "CCMA" | "CCMI";
 
-// The query-tool IDs the Spelc gave us for each campaign type — fixed URL fragments in ADEL's
-// hash-routed single-page app.
-const QUERY_TOOL_ID: Record<AdelSyncType, string> = {
-  CCMI: "r310",
-  CCMA: "r301",
+// The saved query's exact label in ADEL's "Arbre des requêtes" (query tree), under Gestion ->
+// Outil de recherche -> Générale -> ENSEIGNANTS / SALARIES / RETRAITES. Confirmed live for CCMA
+// (second degré) against the real site; CCMI (premier degré) is inferred by the same naming
+// pattern and NOT yet confirmed — check the debug screenshot if a CCMI sync fails at this step.
+const QUERY_LABEL: Record<AdelSyncType, string> = {
+  CCMA: "Enseignants second degré (ENS 2°D)",
+  CCMI: "Enseignants premier degré (ENS 1°D)",
 };
 
 export interface AdelScraperConfig {
@@ -115,25 +119,37 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
       await page.waitForLoadState("networkidle");
     }
 
-    // --- 2. Navigate to the query tool ---
-    // Try a direct hash navigation first (fast path for a hash-routed SPA); if the expected field
-    // isn't there afterwards, fall back to clicking through Gestion -> outils de recherche.
+    // --- 2. Navigate to the query tool and select the right saved query ---
+    // Not a direct URL: ADEL exposes a tree of pre-built, named queries ("Arbre des requêtes")
+    // under Gestion -> Outil de recherche, not one URL per query. Click through to the query tool,
+    // then click the query's own label in the tree — expanding its parent group first if a fresh
+    // session starts with the tree collapsed.
     step = "navigation vers l'outil de requêtage";
-    const queryUrl = `${config.loginUrl.split("#")[0]}#gestionoutilrequetage/${QUERY_TOOL_ID[type]}`;
-    await page.goto(queryUrl);
+    await page.getByText("Gestion", { exact: true }).first().click();
+    await page
+      .getByText(/outil de recherche/i)
+      .first()
+      .click()
+      .catch(() => {});
     await page.waitForLoadState("networkidle");
 
-    const spelcField = page.getByLabel(/nom du spelc/i).or(page.getByPlaceholder(/nom du spelc/i));
-    if (!(await spelcField.first().isVisible().catch(() => false))) {
-      await page.getByText("Gestion", { exact: true }).first().click();
-      await page.getByText(/outils de recherche/i).first().click();
-      await page.getByRole("link", { name: new RegExp(QUERY_TOOL_ID[type], "i") }).first().click();
-      await page.waitForLoadState("networkidle");
+    const queryLabel = QUERY_LABEL[type];
+    const queryLeaf = page.getByText(queryLabel, { exact: true });
+    if (!(await queryLeaf.first().isVisible().catch(() => false))) {
+      await page
+        .getByText("ENSEIGNANTS / SALARIES / RETRAITES", { exact: true })
+        .first()
+        .click()
+        .catch(() => {});
     }
+    await queryLeaf.first().click();
+    await page.waitForLoadState("networkidle");
 
     // --- 3. Filter by Spelc name ---
     step = "filtre nom du Spelc";
     await page.getByLabel(/nom du spelc/i).or(page.getByPlaceholder(/nom du spelc/i)).first().fill(config.spelcName);
+    await page.getByRole("button", { name: /appliquer/i }).first().click();
+    await page.waitForLoadState("networkidle");
 
     // --- 4. Export ---
     step = "clic sur export";
