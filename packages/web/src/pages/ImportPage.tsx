@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   api,
+  type AcademicEmailImportResult,
   type AdelSyncLogEntry,
   type AdelSyncResult,
   type AdelSyncType,
@@ -46,6 +47,11 @@ export function ImportPage() {
   const [adherentBusy, setAdherentBusy] = useState(false);
   const [adherentResult, setAdherentResult] = useState<AdherentImportResult | null>(null);
   const [adherentError, setAdherentError] = useState<string | null>(null);
+
+  const [academicEmailFile, setAcademicEmailFile] = useState<File | null>(null);
+  const [academicEmailBusy, setAcademicEmailBusy] = useState(false);
+  const [academicEmailResult, setAcademicEmailResult] = useState<AcademicEmailImportResult | null>(null);
+  const [academicEmailError, setAcademicEmailError] = useState<string | null>(null);
 
   function refreshAdelLast(type: AdelSyncType) {
     api.adelLastSync(type).then(setAdelLast).catch(() => setAdelLast(null));
@@ -132,6 +138,23 @@ export function ImportPage() {
       setAdherentError(String(e));
     } finally {
       setAdherentBusy(false);
+    }
+  }
+
+  async function submitAcademicEmailFile(e: React.FormEvent) {
+    e.preventDefault();
+    if (!academicEmailFile) return;
+    setAcademicEmailBusy(true);
+    setAcademicEmailError(null);
+    setAcademicEmailResult(null);
+    try {
+      const result = await api.importAcademicEmails(academicEmailFile);
+      setAcademicEmailResult(result);
+      setAcademicEmailFile(null);
+    } catch (e) {
+      setAcademicEmailError(String(e));
+    } finally {
+      setAcademicEmailBusy(false);
     }
   }
 
@@ -353,6 +376,34 @@ export function ImportPage() {
             {adherentResult.unmappedFields.length > 0 && (
               <p className="hint">Colonnes non reconnues dans le fichier : {adherentResult.unmappedFields.join(", ")}</p>
             )}
+          </div>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Emails académiques (non-adhérents)</h2>
+        <p className="hint">
+          Un adhérent est notifié à son adresse personnelle. Un non-adhérent n'en a pas — c'est ce fichier (l'annuaire du
+          personnel de l'académie : Nom, Prénom, Adresse mail) qui permet de le joindre à la place, par recherche sur son
+          nom et prénom. Sans correspondance dans ce fichier, aucun envoi n'est possible pour cette personne, faute
+          d'adresse connue. Chaque import remplace entièrement le précédent.
+        </p>
+        <form className="inline-form" onSubmit={submitAcademicEmailFile}>
+          <input
+            type="file"
+            accept=".xlsx,.xlsm"
+            onChange={(e) => setAcademicEmailFile(e.target.files?.[0] ?? null)}
+          />
+          <button type="submit" disabled={!academicEmailFile || academicEmailBusy}>
+            {academicEmailBusy ? "Import en cours..." : "Importer le fichier"}
+          </button>
+        </form>
+        {academicEmailError && <p className="error-text">{academicEmailError}</p>}
+        {academicEmailResult && (
+          <div className="import-result">
+            <p>
+              <strong>{academicEmailResult.imported}</strong> adresses importées.
+            </p>
           </div>
         )}
       </section>

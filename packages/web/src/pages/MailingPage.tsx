@@ -102,8 +102,10 @@ export function MailingPage() {
         )}
       </div>
       <p className="hint">
-        Seuls les adhérents dont le rapprochement avec un enseignant a été confirmé (automatiquement ou manuellement) et pour
-        qui une adresse e-mail est connue apparaissent ici. L'envoi se fait via Brevo.
+        Tout enseignant ayant un résultat de promotion pour cette campagne apparaît ici. Un adhérent (rapprochement
+        confirmé) est notifié à son adresse personnelle ; un non-adhérent, à son adresse académique si elle est connue
+        (import "Emails académiques" de la page Import) — sinon aucun envoi n'est possible pour lui. L'envoi se fait via
+        Brevo.
       </p>
 
       {error && <p className="error-text">{error}</p>}
@@ -150,6 +152,7 @@ export function MailingPage() {
               {canSend && <th></th>}
               <th>Nom</th>
               <th>Prénom</th>
+              <th>Adhérent</th>
               <th>Grade</th>
               <th>Échelon</th>
               <th>Gain net</th>
@@ -168,6 +171,11 @@ export function MailingPage() {
                 )}
                 <td>{r.nom}</td>
                 <td>{r.prenom}</td>
+                <td>
+                  <span className={`badge ${r.isAdherent ? "badge-auto_confirmed" : "badge-non_adherent"}`}>
+                    {r.isAdherent ? "Adhérent" : "Non adhérent"}
+                  </span>
+                </td>
                 <td>{r.grade}</td>
                 <td>
                   {r.echelonDepart} → {r.echelonSuivant}

@@ -5,60 +5,108 @@ import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { buildPromotionEmail } from "../mailing/template.js";
 import { loadBrevoConfig, sendBrevoEmail, BrevoConfigError } from "../mailing/brevo.js";
+import { normalizeName } from "@spelc/import";
 
 export const mailingRouter = Router();
 mailingRouter.use(requireAuth);
 
 /**
- * A recipient is eligible once their adherent↔enseignant link has been resolved
- * (AUTO_CONFIRMED or human-CONFIRMED — never REJECTED/PENDING_REVIEW), the promotion engine has
- * produced a result for this campagne, and we have an email address to send to.
+ * Every teacher with a promotion result for this campagne is a potential recipient — not just
+ * adhérents. Per product decision, the address used depends on membership:
+ *   - adhérent (their adherent↔enseignant link is AUTO_CONFIRMED or human-CONFIRMED) -> their
+ *     personal address (mailPersonnel), never falling back to an academic one;
+ *   - non-adhérent (no confirmed link) -> looked up by nom/prénom in AcademicEmail, the académie's
+ *     own staff-directory export — the only address we have any hope of knowing for them, since
+ *     they never gave the union a personal one. Not found there -> no address, no send.
  */
 async function eligibleRecipients(campagneId: string) {
-  const candidates = await prisma.matchCandidate.findMany({
-    where: { status: { in: ["AUTO_CONFIRMED", "CONFIRMED"] }, teacherId: { not: null } },
+  const snapshots = await prisma.teacherSnapshot.findMany({
+    where: { campagneId },
     include: {
-      adherent: true,
       teacher: {
         include: {
           computedStates: { where: { campagneId } },
-          snapshots: { where: { campagneId }, take: 1 },
+          matchCandidate: { include: { adherent: true } },
         },
       },
     },
   });
 
+  const academicEmails = await prisma.academicEmail.findMany();
+  const academicEmailByName = new Map<string, string>();
+  for (const a of academicEmails) {
+    const key = `${normalizeName(a.nom)}|${normalizeName(a.prenom)}`;
+    if (!academicEmailByName.has(key)) academicEmailByName.set(key, a.email);
+  }
+
   const logs = await prisma.mailingLog.findMany({ where: { campagneId } });
   const logByTeacherId = new Map(logs.map((l) => [l.teacherId, l]));
 
-  return candidates
-    .filter((c) => c.teacher && c.teacher.computedStates.length > 0 && c.teacher.snapshots.length > 0)
-    .map((c) => {
-      const teacher = c.teacher!;
-      const state = teacher.computedStates[0];
-      const snapshot = teacher.snapshots[0];
-      const email = c.adherent.mailPersonnel ?? c.adherent.mailAcademique ?? null;
-      const log = logByTeacherId.get(teacher.id) ?? null;
-      return {
-        teacherId: teacher.id,
-        adherentId: c.adherent.id,
-        nom: c.adherent.nom,
-        prenom: c.adherent.prenom,
-        civilite: c.adherent.civilite,
-        grade: snapshot.grade,
-        echelonDepart: state.echelonDepart,
-        echelonSuivant: state.echelonSuivant,
-        indiceActuel: state.indiceActuel,
-        futurIndice: state.futurIndice,
-        gainSalaireBrut: state.gainSalaireBrut,
-        gainSalaireNet: state.gainSalaireNet,
-        dateProchainePromotion: state.dateProchainePromotion,
-        email,
-        lastStatus: log?.status ?? null,
-        lastSentAt: log?.sentAt ?? null,
-        lastError: log?.error ?? null,
-      };
+  const seenTeacherIds = new Set<string>();
+  const result: {
+    teacherId: string;
+    adherentId: string | null;
+    isAdherent: boolean;
+    nom: string;
+    prenom: string;
+    civilite: string | null;
+    grade: string;
+    echelonDepart: string;
+    echelonSuivant: string;
+    indiceActuel: number;
+    futurIndice: number;
+    gainSalaireBrut: number;
+    gainSalaireNet: number;
+    dateProchainePromotion: Date | null;
+    email: string | null;
+    lastStatus: string | null;
+    lastSentAt: Date | null;
+    lastError: string | null;
+  }[] = [];
+
+  for (const snap of snapshots) {
+    const teacher = snap.teacher;
+    if (seenTeacherIds.has(teacher.id)) continue; // a duplicate reimport could leave >1 snapshot for the same teacher
+    seenTeacherIds.add(teacher.id);
+
+    const state = teacher.computedStates[0];
+    if (!state) continue;
+
+    const candidate = teacher.matchCandidate;
+    const isAdherent = candidate != null && (candidate.status === "AUTO_CONFIRMED" || candidate.status === "CONFIRMED");
+
+    const adherent = isAdherent ? candidate!.adherent : null;
+    const nom = adherent?.nom ?? snap.nomUsage;
+    const prenom = adherent?.prenom ?? snap.prenom;
+    const civilite = adherent?.civilite ?? null;
+    const email = adherent
+      ? adherent.mailPersonnel
+      : (academicEmailByName.get(`${normalizeName(snap.nomUsage)}|${normalizeName(snap.prenom)}`) ?? null);
+
+    const log = logByTeacherId.get(teacher.id) ?? null;
+    result.push({
+      teacherId: teacher.id,
+      adherentId: adherent?.id ?? null,
+      isAdherent,
+      nom,
+      prenom,
+      civilite,
+      grade: snap.grade,
+      echelonDepart: state.echelonDepart,
+      echelonSuivant: state.echelonSuivant,
+      indiceActuel: state.indiceActuel,
+      futurIndice: state.futurIndice,
+      gainSalaireBrut: state.gainSalaireBrut,
+      gainSalaireNet: state.gainSalaireNet,
+      dateProchainePromotion: state.dateProchainePromotion,
+      email,
+      lastStatus: log?.status ?? null,
+      lastSentAt: log?.sentAt ?? null,
+      lastError: log?.error ?? null,
     });
+  }
+
+  return result;
 }
 
 mailingRouter.get("/eligible", asyncHandler(async (req, res) => {

@@ -6,7 +6,14 @@ import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords } from "../adherentImport.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { computeEchelonPromotion, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
-import { extractPdfText, parseRectoratFile, parseAdherentCsv, parseAdherentXlsx, normalizeName } from "@spelc/import";
+import {
+  extractPdfText,
+  parseRectoratFile,
+  parseAdherentCsv,
+  parseAdherentXlsx,
+  parseAcademicEmailXlsx,
+  normalizeName,
+} from "@spelc/import";
 
 export const importsRouter = Router();
 importsRouter.use(requireAuth);
@@ -180,3 +187,27 @@ importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.si
 
   res.status(201).json({ created, updated, unmappedFields, matching });
 }));
+
+// Académie staff-directory export (nom/prénom -> adresse mail académique) — used by the mailing
+// feature to reach non-adhérents, who have no personal address on file. A reference dataset with
+// no stable ID to upsert against between imports and nothing else referencing it, so each import
+// simply replaces the whole table wholesale rather than trying to reconcile row by row.
+importsRouter.post(
+  "/academic-emails",
+  requireRole("ADMIN", "GESTIONNAIRE"),
+  upload.single("file"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "Fichier requis (champ 'file')" });
+
+    const { records, unmappedFields } = await parseAcademicEmailXlsx(req.file.buffer);
+    if (unmappedFields.length > 0) {
+      return res
+        .status(422)
+        .json({ error: `Colonnes attendues introuvables dans le fichier : ${unmappedFields.join(", ")}`, unmappedFields });
+    }
+
+    await prisma.$transaction([prisma.academicEmail.deleteMany({}), prisma.academicEmail.createMany({ data: records })]);
+
+    res.status(201).json({ imported: records.length });
+  }),
+);

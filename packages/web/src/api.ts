@@ -147,6 +147,10 @@ export interface AdherentImportResult {
   matching: { autoConfirmed: number; pendingReview: number };
 }
 
+export interface AcademicEmailImportResult {
+  imported: number;
+}
+
 export type AdelSyncType = "CCMA" | "CCMI";
 
 export interface AdelSyncLogEntry {
@@ -169,7 +173,10 @@ export interface AdelSyncResult {
 
 export interface MailingRecipient {
   teacherId: string;
-  adherentId: string;
+  adherentId: string | null;
+  /** false = non-adhérent, notified at their academic address (looked up by nom/prénom) instead
+   * of a personal one, since none is known for them. */
+  isAdherent: boolean;
   nom: string;
   prenom: string;
   civilite: string | null;
@@ -275,6 +282,11 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return upload<AdherentImportResult>("/imports/adherents", form);
+  },
+  importAcademicEmails: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return upload<AcademicEmailImportResult>("/imports/academic-emails", form);
   },
   adelLastSync: (type: AdelSyncType) => request<AdelSyncLogEntry | null>(`/adel/last?type=${type}`),
   adelSync: (type: AdelSyncType) => request<AdelSyncResult>("/adel/sync", { method: "POST", body: JSON.stringify({ type }) }),

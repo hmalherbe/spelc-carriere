@@ -183,6 +183,22 @@ model Adherent {
   matchCandidate MatchCandidate?
 }
 
+// Académie staff-directory export (nom/prénom -> adresse mail académique), imported separately
+// from the Spelc adhérent roster. Used only to email teachers who are NOT (yet) adhérents — an
+// adhérent is always mailed at their personal address; a non-adhérent has no personal address on
+// file, so this is the only way to reach them. Looked up by normalized nom+prénom at send time,
+// never linked 1:1 to a Teacher/Adherent row (this data covers far more people than the union
+// tracks, and changes independently on its own import cadence).
+model AcademicEmail {
+  id         String   @id @default(cuid())
+  nom        String
+  prenom     String
+  email      String
+  importedAt DateTime @default(now())
+
+  @@index([nom, prenom])
+}
+
 // ---------------------------------------------------------------------------
 // Matching: per product decision, the first resolution of an adherent↔teacher link is
 // reviewed by a human and then PERMANENT (a stable Teacher/Adherent pairing) — later imports
@@ -262,9 +278,10 @@ model BaSeuil {
 }
 
 // ---------------------------------------------------------------------------
-// Mailing — notifies adhérents of their échelon promotion (gain, date) via Brevo. One row per
-// send attempt, so a teacher is never notified twice for the same campagne by accident and the
-// send screen can show what's already gone out.
+// Mailing — notifies teachers of their échelon promotion (gain, date) via Brevo: adhérents at
+// their personal address, non-adhérents at their academic address (see AcademicEmail). One row
+// per send attempt, so a teacher is never notified twice for the same campagne by accident and
+// the send screen can show what's already gone out.
 // ---------------------------------------------------------------------------
 
 enum MailingStatus {
@@ -278,7 +295,7 @@ model MailingLog {
   campagneId     String
   teacher        Teacher       @relation(fields: [teacherId], references: [id])
   teacherId      String
-  adherentId     String
+  adherentId     String? // null for a non-adhérent notified at their academic address
   email          String
   status         MailingStatus
   error          String? // Brevo error message, when status = FAILED
