@@ -1,13 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth/middleware.js";
-import {
-  estimateAgainstSeuil,
-  isEligibleBonificationAnciennete,
-  isEligibleHorsClasse,
-  isEligibleClasseExceptionnelle,
-  GRADE_MAPPINGS,
-} from "@spelc/domain";
+import { estimateAgainstSeuil, isEligibleHorsClasse, isEligibleClasseExceptionnelle, GRADE_MAPPINGS } from "@spelc/domain";
 
 export const teachersRouter = Router();
 
@@ -37,11 +31,18 @@ teachersRouter.get("/", async (req, res) => {
 
   const result = snapshots.map((snap) => {
     const state = snap.teacher.computedStates[0];
-    const echelonDepart = state ? Number(state.echelonDepart) : undefined;
+
+    // The rectorat's "ECHELON : NN" page groups every record by the échelon it would ARRIVE at
+    // if promoted this cycle, not the échelon it currently holds (confirmed against real files:
+    // the page-footer "B A / A N" promouvables counts are per arrival page, and a "BA." marker —
+    // the rectorat's own flag for "this promotion is a bonification d'ancienneté" — only ever
+    // shows up there). BA only exists for the 6->7 and 8->9 transitions, so BA candidates
+    // départ-échelon 6 are filed on the "07" page and départ-échelon 8 on the "09" page — never
+    // on "06"/"08" themselves, which is why cross-checking an ancienneté window on those pages
+    // used to find nobody eligible.
+    const baEchelonDepart: 6 | 8 | undefined = snap.echelonActuel === "07" ? 6 : snap.echelonActuel === "09" ? 8 : undefined;
     const seuil =
-      echelonDepart === 6 || echelonDepart === 8
-        ? seuils.find((s) => s.grade === snap.grade && s.echelonDepart === echelonDepart)
-        : undefined;
+      baEchelonDepart !== undefined ? seuils.find((s) => s.grade === snap.grade && s.echelonDepart === baEchelonDepart) : undefined;
 
     const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === snap.grade);
 
@@ -55,22 +56,23 @@ teachersRouter.get("/", async (req, res) => {
       ? isEligibleClasseExceptionnelle(snap.echelonActuel, gradeMapping.grille === "HC_AGR" ? "agrege" : "autre")
       : null;
 
-    // PPCR eligibility windows: échelon 6 -> 7 only in the échelon's 2nd year, échelon 8 -> 9 only
-    // between 18 and 30 months in — outside that window a teacher isn't even a BA candidate this
-    // campaign, whatever their barème/ancienneté, so no estimate should be shown at all.
-    // null = not applicable (not échelon 6/8, or missing ancienneté data), same convention as
-    // horsClasseEligible/classeExceptionnelleEligible below.
-    const baEligible =
-      (echelonDepart === 6 || echelonDepart === 8) && snap.ancienneteEchelon != null
-        ? isEligibleBonificationAnciennete(echelonDepart, snap.ancienneteEchelon)
-        : null;
+    // null = not applicable (not on an arrival page the BA mechanism can lead to), same
+    // convention as horsClasseEligible/classeExceptionnelleEligible above. Trusting the
+    // rectorat's own typePromotion flag directly, rather than reconstructing an ancienneté
+    // eligibility window ourselves — it's the rectorat's actual determination, not our estimate.
+    const baEligible = baEchelonDepart !== undefined ? snap.typePromotion === "BA" : null;
 
     const baEstimate =
-      baEligible === true && seuil && snap.avisEvaluation != null && snap.ancienneteGrade != null && snap.ancienneteEchelon != null
+      baEligible === true &&
+      baEchelonDepart !== undefined &&
+      seuil &&
+      snap.avisEvaluation != null &&
+      snap.ancienneteGrade != null &&
+      snap.ancienneteEchelon != null
         ? estimateAgainstSeuil(
             {
               grade: snap.grade,
-              echelonDepart: echelonDepart as 6 | 8,
+              echelonDepart: baEchelonDepart,
               barreme: snap.avisEvaluation,
               ancienneteGrade: snap.ancienneteGrade,
               ancienneteEchelon: snap.ancienneteEchelon,

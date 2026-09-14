@@ -16,6 +16,14 @@ import type { EchelonBA } from "./baThreshold.js";
  * threshold in baThreshold.ts), but being OUTSIDE it means "not even a candidate this campaign".
  *   - échelon 6 -> 7 : "être dans la 2e année de cet échelon" -> ancienneté in [1, 2) years.
  *   - échelon 8 -> 9 : "entre 18 et 30 mois" -> ancienneté in [1.5, 2.5] years.
+ *
+ * NOT currently used to read BA status off an imported rectorat snapshot (see teachers.ts): the
+ * rectorat's own "ECHELON : NN" export groups every record by the échelon it would ARRIVE at if
+ * promoted this cycle, not the échelon it currently holds, so a snapshot's `echelonActuel`/
+ * `ancienneteEchelon` don't line up with this window the way you'd expect — the rectorat's own
+ * `typePromotion === "BA"` flag on the "07"/"09" arrival pages is the reliable signal there.
+ * This function stays useful for estimating BA candidacy from other sources (e.g. adhérent data)
+ * that don't carry that rectorat page structure.
  */
 export function isEligibleBonificationAnciennete(echelonDepart: EchelonBA, ancienneteEchelonAnnees: number): boolean {
   if (echelonDepart === 6) {
