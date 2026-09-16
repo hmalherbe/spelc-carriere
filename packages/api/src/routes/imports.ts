@@ -44,12 +44,16 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
 importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
   const { campagneId } = req.body as { campagneId?: string };
   if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
-  if (!req.file) return res.status(400).json({ error: "Fichier PDF requis (champ 'file')" });
+  if (!req.file) return res.status(400).json({ error: "Fichier requis (champ 'file'), en PDF ou en texte brut" });
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
 
-  const text = await extractPdfText(req.file.buffer);
+  // Accepts either the rectorat's native PDF export, or the same "AVANCEMENT D'ECHELON" content
+  // already as plain text (e.g. copié-collé depuis un lecteur PDF, ou déjà extrait par un autre
+  // outil) — same parser either way, just skipping the PDF text-extraction step for .txt.
+  const isTxt = /\.txt$/i.test(req.file.originalname);
+  const text = isTxt ? req.file.buffer.toString("utf-8") : await extractPdfText(req.file.buffer);
   const parsed = parseRectoratFile(text);
 
   const grade = RECTORAT_GRADE_CODE_MAP[parsed.gradeCode];

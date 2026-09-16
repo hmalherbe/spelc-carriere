@@ -19,8 +19,8 @@ function formatSyncDate(iso: string): string {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" });
 }
 
-function pdfFilesOnly(files: File[]): File[] {
-  return files.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+function rectoratFilesOnly(files: File[]): File[] {
+  return files.filter((f) => /\.(pdf|txt)$/i.test(f.name));
 }
 
 export function ImportPage() {
@@ -235,22 +235,22 @@ export function ImportPage() {
       </section>
 
       <section className="card">
-        <h2>Import rectorat (PDF)</h2>
+        <h2>Import rectorat (PDF ou texte)</h2>
         <p className="hint">
-          Fichier "AVANCEMENT D'ECHELON" fourni par le rectorat (un fichier par grade). Le grade et l'échelon sont détectés
-          automatiquement à partir du contenu du PDF — tu peux sélectionner les 5 fichiers d'une campagne en une fois, ou
-          choisir directement le dossier qui les contient (les fichiers non-PDF du dossier sont ignorés). Ils sont importés
-          les uns après les autres.
+          Fichier "AVANCEMENT D'ECHELON" fourni par le rectorat (un fichier par grade), en PDF ou déjà en texte brut (.txt —
+          par exemple un copié-collé depuis un lecteur PDF). Le grade et l'échelon sont détectés automatiquement à partir du
+          contenu — tu peux sélectionner les 5 fichiers d'une campagne en une fois, ou choisir directement le dossier qui les
+          contient (les fichiers d'un autre format sont ignorés). Ils sont importés les uns après les autres.
         </p>
         <form className="inline-form" onSubmit={submitRectorat}>
           <label>
             Fichiers
             <input
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,.pdf,.txt"
               multiple
               disabled={!campagneId}
-              onChange={(e) => setRectoratFiles(pdfFilesOnly(Array.from(e.target.files ?? [])))}
+              onChange={(e) => setRectoratFiles(rectoratFilesOnly(Array.from(e.target.files ?? [])))}
             />
           </label>
           <label>
@@ -264,7 +264,7 @@ export function ImportPage() {
                   el.setAttribute("directory", "");
                 }
               }}
-              onChange={(e) => setRectoratFiles(pdfFilesOnly(Array.from(e.target.files ?? [])))}
+              onChange={(e) => setRectoratFiles(rectoratFilesOnly(Array.from(e.target.files ?? [])))}
             />
           </label>
           <button type="submit" disabled={!campagneId || rectoratFiles.length === 0 || rectoratBusy}>
