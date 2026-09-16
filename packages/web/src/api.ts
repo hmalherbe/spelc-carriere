@@ -77,8 +77,6 @@ export interface ComputedState {
   dateProchainePromotion: string | null;
 }
 
-export type BaEstimate = "promu_estime" | "non_promu_estime" | "indetermine" | null;
-
 export interface TeacherListItem {
   teacherId: string;
   nom: string;
@@ -100,12 +98,12 @@ export interface TeacherListItem {
    * ci-dessus quand le candidat n'est pas encore confirmé, fournie ici explicitement pour la
    * colonne BA. null = non applicable. */
   baEchelonDepart: 6 | 8 | null;
-  /** Résultat du classement des candidats BA de cette section contre l'effectif réel donné par le
-   * rectorat (pas d'estimation) : true = promu, false = non promu — les deux sont des faits acquis.
-   * null = classement impossible (effectif ou données manquantes) ou baEligible n'est pas true —
-   * voir baEstimate dans ce cas pour une estimation de repli. */
-  baConfirmee: boolean | null;
-  baEstimate: BaEstimate;
+  /** "national" = agrégé, candidat BA (marqué "BA." dans le fichier rectorat) — la promotion se
+   * décide au niveau national, non déterminable depuis ce fichier, donc seule la candidature est
+   * affichée. "promu" / "non_promu" = candidat BA d'un autre grade, statut donné directement par
+   * le marqueur "Pro" du rectorat ("Pro BA." = promu, "BA." seul = éligible mais pas promu).
+   * null = pas candidat BA ce cycle (pas de marqueur "BA."), indépendamment de baEligible. */
+  baStatus: "national" | "promu" | "non_promu" | null;
   /** null = not applicable (mauvais échelon, ou données d'ancienneté manquantes) — pas "non éligible". */
   baEligible: boolean | null;
   horsClasseEligible: boolean | null;

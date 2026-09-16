@@ -51,15 +51,15 @@ function baCell(t: TeacherListItem): { label: string; className: string } {
   if (t.baEligible === null) return { label: "—", className: "" };
   const dep = t.baEchelonDepart != null ? ` (éch. ${t.baEchelonDepart})` : "";
   if (!t.baEligible) return { label: `Non éligible${dep}`, className: "badge badge-indetermine" };
-  // baConfirmee is the result of ranking every BA candidate in this échelon's section against the
-  // rectorat's own known headcount for it (see routes/teachers.ts) — true/false are both facts,
-  // not guesses, hence no "(estimé)" wording; only a genuine null (couldn't rank) falls back to
-  // baEstimate's guess below.
-  if (t.baConfirmee === true) return { label: `Promu confirmé${dep}`, className: "badge badge-promu_estime" };
-  if (t.baConfirmee === false) return { label: `Non promu confirmé${dep}`, className: "badge badge-non_promu_estime" };
-  if (t.baEstimate === "promu_estime") return { label: `Éligible${dep} — promu (estimé)`, className: "badge badge-promu_estime" };
-  if (t.baEstimate === "non_promu_estime") return { label: `Éligible${dep} — non promu (estimé)`, className: "badge badge-non_promu_estime" };
-  return { label: `Éligible${dep}`, className: "badge badge-indetermine" };
+  // baEligible seul (pas de marqueur "BA." ce cycle) : dans la fenêtre d'ancienneté, mais pas
+  // candidat BA — ex. suivi sur un autre mécanisme (AN/CL/RE) ce tour-ci.
+  if (t.baStatus === null) return { label: `Éligible${dep}`, className: "badge badge-indetermine" };
+  // Agrégés : la promotion BA se décide au niveau national, pas dans ce fichier départemental —
+  // on ne peut donc jamais dire "promu"/"non promu" de manière fiable pour eux (voir teachers.ts).
+  if (t.baStatus === "national") return { label: `BA${dep}`, className: "badge badge-indetermine" };
+  // Pour tout autre grade, le marqueur "Pro" du rectorat tranche directement, sans estimation.
+  if (t.baStatus === "promu") return { label: `Promu BA${dep}`, className: "badge badge-promu_estime" };
+  return { label: `Éligible à la BA - non promu${dep}`, className: "badge badge-non_promu_estime" };
 }
 
 type SortKey = "nom" | "grade" | "echelon";
