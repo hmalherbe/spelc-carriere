@@ -100,6 +100,26 @@ describe("parseAdherentCsv — ancienIndice tolerates a non-numeric cell instead
   });
 });
 
+describe("parseAdherentCsv — dateEffet tolerates a placeholder or out-of-range date instead of crashing on Invalid Date", () => {
+  // Reproduces a real production crash (GUILLEMIN Maxime): "00/00/0000" in the "promo" column
+  // matches the DD/MM/YYYY digit shape but isn't a real calendar date — dateEffet is a Prisma
+  // DateTime? column, and new Date("0000-00-00") is an Invalid Date that Prisma rejects, taking
+  // down the whole import over that one row.
+  const csv = [
+    "nom,prenom,promo",
+    "GUILLEMIN,Maxime,00/00/0000", // real-world placeholder "no date" value
+    "MARTIN,Camille,31/04/2023", // April has only 30 days
+    "DUPONT,Julien,29/02/2023", // 2023 isn't a leap year
+    "PETIT,Marc,01/09/2023", // clean, valid date
+  ].join("\n");
+
+  const { records } = parseAdherentCsv(csv);
+
+  it("falls back to null for a placeholder or calendar-impossible date, parses a clean date normally", () => {
+    expect(records.map((r) => r.dateEffet)).toEqual([null, null, null, "2023-09-01"]);
+  });
+});
+
 describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore columns, distinct from the older Jasper export)", () => {
   // Exact header row supplied by the union (tab-separated as copied from their file; built as an
   // array here to keep the value <-> column correspondence below readable and typo-proof).

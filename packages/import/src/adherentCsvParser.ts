@@ -133,10 +133,25 @@ function parseCsvLine(line: string): string[] {
   return fields;
 }
 
+/** Real exports sometimes carry a placeholder date ("00/00/0000") or an out-of-range one (day 31
+ * in a 30-day month, day 29 in a non-leap February...) that matches the DD/MM/YYYY digit shape
+ * without being a real calendar date. `new Date("YYYY-MM-DD")` is NOT a reliable guard against
+ * these — verified it silently rolls an out-of-range day into the following month instead of
+ * producing an Invalid Date (e.g. "2023-04-31" parses as if it were May 1st) — so this validates
+ * month/day ranges explicitly instead. Matters here because dateEffet is a Prisma DateTime?
+ * column: passing it a genuinely Invalid Date (the month=00 placeholder case, which really does
+ * fail to parse) throws and crashes the whole import over one bad row — the exact real production
+ * crash this was built to fix (GUILLEMIN Maxime, "00/00/0000" in the "promo" column). */
 function toIsoDateFromFrench(text: string): string | null {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text.trim());
   if (!m) return null;
   const [, dd, mm, yyyy] = m;
+  const day = Number(dd);
+  const month = Number(mm);
+  const year = Number(yyyy);
+  if (month < 1 || month > 12) return null;
+  const daysInMonth = new Date(year, month, 0).getDate(); // day 0 of `month` = last day of the previous (0-indexed) one, i.e. of `month` itself here
+  if (day < 1 || day > daysInMonth) return null;
   return `${yyyy}-${mm}-${dd}`;
 }
 
