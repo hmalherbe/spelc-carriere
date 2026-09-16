@@ -19,6 +19,13 @@ describe("pointsAccesHorsClasse", () => {
     // bonification 1er degré Excellent = 120, points ancienneté for clé 93 = 10
     expect(pointsAccesHorsClasse("Excellent", 1, 9, 3)).toBe(130);
   });
+
+  it("uses the 1er-degré ancienneté column, not the 2nd-degré one, past clé 110 where they diverge", () => {
+    // bonification 1er degré Excellent = 120, points ancienneté 1er degré for clé 119 = 120
+    expect(pointsAccesHorsClasse("Excellent", 1, 11, 9)).toBe(240);
+    // bonification 2nd degré Excellent = 145, points ancienneté 2nd degré for clé 119 = 160
+    expect(pointsAccesHorsClasse("Excellent", 2, 11, 9)).toBe(305);
+  });
 });
 
 describe("pointsAccesClasseExceptionnelle", () => {

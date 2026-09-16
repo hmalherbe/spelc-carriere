@@ -48,7 +48,8 @@ export function pointsAccesHorsClasse(
   if (!bonification) throw new Error(`Avis inconnu: ${avis}`);
   const pointsBonification = degre === 1 ? bonification.points1erDegre : bonification.points2ndDegre;
   const cle = ancienneteCle(echelon, ancienneteDansEchelon);
-  const pointsAnciennete = vlookupApprox(POINTS_ANCIENNETE_HC, "cle", cle).points;
+  const ancienneteRow = vlookupApprox(POINTS_ANCIENNETE_HC, "cle", cle);
+  const pointsAnciennete = degre === 1 ? ancienneteRow.points1erDegre : ancienneteRow.points2ndDegre;
   return pointsBonification + pointsAnciennete;
 }
 

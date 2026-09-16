@@ -75,14 +75,28 @@ export const POINTS_BONIFICATION_EXC_AVIS_RECTEUR: { avis: string; points: numbe
 ];
 
 /**
- * Points d'ancienneté pour l'accès à la hors classe.
+ * Points d'ancienneté pour l'accès à la hors classe — deux barèmes distincts (1er degré / 2nd
+ * degré), comme pour POINTS_BONIFICATION_HC_AVIS_RECTEUR ; ils coïncident jusqu'à clé 103 puis
+ * divergent à partir de clé 110 (échelon 11).
  * key = échelon*10 + ancienneté dans l'échelon (ex: échelon 9, 2 ans d'ancienneté -> clé 92)
  */
-export const POINTS_ANCIENNETE_HC: { cle: number; points: number }[] = [
-  { cle: 92, points: 0 }, { cle: 93, points: 10 }, { cle: 100, points: 20 }, { cle: 101, points: 30 },
-  { cle: 102, points: 40 }, { cle: 103, points: 50 }, { cle: 110, points: 60 }, { cle: 111, points: 70 },
-  { cle: 112, points: 80 }, { cle: 113, points: 100 }, { cle: 114, points: 110 }, { cle: 115, points: 120 },
-  { cle: 116, points: 130 }, { cle: 117, points: 140 }, { cle: 118, points: 150 }, { cle: 119, points: 160 },
+export const POINTS_ANCIENNETE_HC: { cle: number; points1erDegre: number; points2ndDegre: number }[] = [
+  { cle: 92, points1erDegre: 0, points2ndDegre: 0 },
+  { cle: 93, points1erDegre: 10, points2ndDegre: 10 },
+  { cle: 100, points1erDegre: 20, points2ndDegre: 20 },
+  { cle: 101, points1erDegre: 30, points2ndDegre: 30 },
+  { cle: 102, points1erDegre: 40, points2ndDegre: 40 },
+  { cle: 103, points1erDegre: 50, points2ndDegre: 50 },
+  { cle: 110, points1erDegre: 70, points2ndDegre: 60 },
+  { cle: 111, points1erDegre: 80, points2ndDegre: 70 },
+  { cle: 112, points1erDegre: 90, points2ndDegre: 80 },
+  { cle: 113, points1erDegre: 100, points2ndDegre: 100 },
+  { cle: 114, points1erDegre: 110, points2ndDegre: 110 },
+  { cle: 115, points1erDegre: 120, points2ndDegre: 120 },
+  { cle: 116, points1erDegre: 120, points2ndDegre: 130 },
+  { cle: 117, points1erDegre: 120, points2ndDegre: 140 },
+  { cle: 118, points1erDegre: 120, points2ndDegre: 150 },
+  { cle: 119, points1erDegre: 120, points2ndDegre: 160 },
 ];
 
 /** Points d'ancienneté pour l'accès à la classe exceptionnelle — certifiés/PLP/PEPS/Prof. Ecoles HC. */
