@@ -158,7 +158,10 @@ teachersRouter.get("/", async (req, res) => {
           grilles: liveGrilles,
           valeurDuPoint: liveValeurDuPoint,
         });
-        echelonActuelAffiche = String(baEchelonDepart);
+        // Zero-padded to match the convention every raw echelonActuel value already uses ("06",
+        // "07"...) — an unpadded "6" here would silently fork the dashboard's Échelon dropdown and
+        // filters into two entries for the same échelon, one per underlying string.
+        echelonActuelAffiche = String(baEchelonDepart).padStart(2, "0");
         computedStateAffiche = {
           grilleCode: promotion.grille,
           echelonSuivant: String(promotion.echelonSuivant),
