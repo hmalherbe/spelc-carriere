@@ -247,7 +247,6 @@ export function DashboardPage() {
               <th>Gain net</th>
               <th>Adhérent</th>
               <th>Éligibilité BA</th>
-              <th>Éligibilité HC / Exc.</th>
             </tr>
           </thead>
           <tbody>
@@ -259,7 +258,8 @@ export function DashboardPage() {
                   <td>{t.prenom}</td>
                   <td>{t.grade}</td>
                   <td>
-                    {t.echelonActuel} → {t.computedState?.echelonSuivant ?? "—"}
+                    {formatEchelonLabel(t.echelonActuel)} →{" "}
+                    {t.computedState ? formatEchelonLabel(t.computedState.echelonSuivant) : "—"}
                   </td>
                   <td>{formatDate(t.dateAccesEchelon)}</td>
                   <td>{formatAnciennete(t.ancienneteEchelon)}</td>
@@ -271,24 +271,6 @@ export function DashboardPage() {
                     <span className={`badge badge-${t.matching.status.toLowerCase()}`}>{MATCHING_LABEL[t.matching.status]}</span>
                   </td>
                   <td>{ba.className ? <span className={ba.className}>{ba.label}</span> : ba.label}</td>
-                  <td>
-                    {t.horsClasseEligible === null && t.classeExceptionnelleEligible === null ? (
-                      "—"
-                    ) : (
-                      <div className="row-actions">
-                        {t.horsClasseEligible !== null && (
-                          <span className={`badge ${t.horsClasseEligible ? "badge-promu_estime" : "badge-indetermine"}`}>
-                            HC {t.horsClasseEligible ? "éligible" : "non éligible"}
-                          </span>
-                        )}
-                        {t.classeExceptionnelleEligible !== null && (
-                          <span className={`badge ${t.classeExceptionnelleEligible ? "badge-promu_estime" : "badge-indetermine"}`}>
-                            Exc. {t.classeExceptionnelleEligible ? "éligible" : "non éligible"}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </td>
                 </tr>
               );
             })}
