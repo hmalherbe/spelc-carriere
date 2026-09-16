@@ -100,8 +100,10 @@ export interface TeacherListItem {
    * ci-dessus quand le candidat n'est pas encore confirmé, fournie ici explicitement pour la
    * colonne BA. null = non applicable. */
   baEchelonDepart: 6 | 8 | null;
-  /** true = promotion BA confirmée par le rectorat (fait acquis) ; false = candidat encore en
-   * lice (résultat estimé) ; null = non applicable (baEligible n'est pas true). */
+  /** Résultat du classement des candidats BA de cette section contre l'effectif réel donné par le
+   * rectorat (pas d'estimation) : true = promu, false = non promu — les deux sont des faits acquis.
+   * null = classement impossible (effectif ou données manquantes) ou baEligible n'est pas true —
+   * voir baEstimate dans ce cas pour une estimation de repli. */
   baConfirmee: boolean | null;
   baEstimate: BaEstimate;
   /** null = not applicable (mauvais échelon, ou données d'ancienneté manquantes) — pas "non éligible". */

@@ -148,12 +148,22 @@ model TeacherSnapshot {
   dureeRestante                  String? // "XXaYYmZZj" raw text, kept verbatim for audit/debugging
   dateProchainePromotionRectorat DateTime? // as stated BY the rectorat itself, kept separate from our own computed estimate
   // The "TRACK.date" marker (e.g. "BA.18/07/2025" or "Pro BA.18/07/2025") — distinct from
-  // typePromotion/dureeRestante above. "Pro " prefixed means CONFIRMED/GRANTED this cycle;
-  // unprefixed means only ELIGIBLE (candidate, not yet resolved) — verified against real files
-  // ("Pro" = "Promu"). Drives baEligible (routes/teachers.ts) and the BA seuil computation
-  // (baSeuilCompute.ts), which only counts proConfirmee=true records as actual promotions.
+  // typePromotion/dureeRestante above. Drives baEligible in routes/teachers.ts ("BA" = candidate
+  // for the bonification d'ancienneté this cycle, whether granted or not).
+  // NOTE: the "Pro " prefix ("Promu") reliably marks a CONFIRMED promotion for AN/CL/RE (automatic
+  // mechanisms — verified against many real records), but NOT for BA specifically: on a real file,
+  // the two candidates actually granted BA carried no "Pro" prefix at all, only their barème
+  // ranking set them apart from the rest of the section. So proConfirmee is trustworthy for
+  // AN/CL/RE, but BA confirmation is instead derived by ranking every BA candidate in a section
+  // against nombrePromusBaSection below (see rankBACandidates in @spelc/domain, used from
+  // routes/teachers.ts) — not from this flag.
   proTypePromotion               String? // AN / CL / BA
   proConfirmee                   Boolean @default(false)
+  // The échelon section's own "NOMBRE DE PROMUS" (BA column) from the rectorat file — the exact
+  // count of how many BA candidates in this (grade, échelon actuel) group were actually granted
+  // the bonification this cycle. Same value repeated across every record in the section
+  // (denormalized for simplicity); null when the footer wasn't found/parseable.
+  nombrePromusBaSection           Int?
 
   @@index([campagneId, teacherId])
 }

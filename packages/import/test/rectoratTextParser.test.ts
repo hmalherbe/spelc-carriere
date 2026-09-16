@@ -129,6 +129,43 @@ describe("parseRectoratFile — AGREGESHC (hors classe, includes an encoding gli
   });
 });
 
+describe("parseRectoratFile — AGREGES-CN échelon 07 (real production excerpt, spans 2 physical pages, no 'Pro' on the 2 actually-promoted BA candidates)", () => {
+  const result = parseRectoratFile(fixture("agrege-cn-echelon07.txt"));
+
+  it("extracts the grade code/label", () => {
+    expect(result.gradeCode).toBe("4512");
+    expect(result.gradeLabel).toContain("PROFESSEUR AGREGE CL. NORMALE");
+  });
+
+  it("parses all 5 records, merging both physical pages of the same échelon section", () => {
+    expect(result.records).toHaveLength(5);
+    expect(result.records.map((r) => r.nomUsage)).toEqual(["ADAM", "LABORIE", "LOMBARD", "BOURGEON", "BALLOUARD"]);
+  });
+
+  it("extracts the section's 'NOMBRE DE PROMUS' footer once, from the page where it actually appears", () => {
+    expect(result.sections).toEqual([{ echelon: "07", nombrePromusBA: 2, nombrePromusAN: 3 }]);
+  });
+
+  it("ADAM and LABORIE carry an unconfirmed BA marker (no 'Pro') despite being the section's actual 2 BA promus", () => {
+    const adam = result.records.find((r) => r.nomUsage === "ADAM")!;
+    const laborie = result.records.find((r) => r.nomUsage === "LABORIE")!;
+    expect(adam.proTypePromotion).toBe("BA");
+    expect(adam.proConfirmee).toBe(false);
+    expect(adam.avisEvaluation).toBe(4);
+    expect(laborie.proTypePromotion).toBe("BA");
+    expect(laborie.proConfirmee).toBe(false);
+    expect(laborie.avisEvaluation).toBe(3);
+  });
+
+  it("the other 3 (AN track, non-competitive) are confirmed via 'Pro AN.date' and carry no BA marker", () => {
+    for (const nom of ["LOMBARD", "BOURGEON", "BALLOUARD"]) {
+      const r = result.records.find((r) => r.nomUsage === nom)!;
+      expect(r.proTypePromotion).toBe("AN");
+      expect(r.proConfirmee).toBe(true);
+    }
+  });
+});
+
 describe("parseZ2AGEA", () => {
   it("decodes the AAMMJJ age encoding (verified against a real rectorat example)", () => {
     expect(parseZ2AGEA("290402")).toEqual({ annees: 29, mois: 4, jours: 2 });

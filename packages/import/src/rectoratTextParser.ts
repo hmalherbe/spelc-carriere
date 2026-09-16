@@ -44,12 +44,29 @@ export interface ParsedTeacherRecord {
   warnings: string[];
 }
 
+/**
+ * Per-échelon-section summary line ("NOMBRE DE PROMUS : <BA> <AN>") — the rectorat's own count of
+ * how many candidates actually cleared each mechanism this cycle. This is the ground truth for
+ * "how many BA promotions happened on this page": a per-record marker ("Pro"-prefixed or not)
+ * turns out NOT to reliably distinguish confirmed-promoted from merely-eligible for BA (verified
+ * against a real file: two candidates with no "Pro" prefix on their BA marker were still exactly
+ * the section's "NOMBRE DE PROMUS" count for BA) — so ranking every BA candidate in a section by
+ * barème (see rankBACandidates in @spelc/domain) and taking this many from the top is the reliable
+ * way to know who was actually promoted.
+ */
+export interface RectoratSectionSummary {
+  echelon: string;
+  nombrePromusBA: number | null;
+  nombrePromusAN: number | null;
+}
+
 export interface ParsedRectoratFile {
   gradeCode: string; // e.g. "4531"
   gradeLabel: string; // e.g. "ECR PROFESSEUR CERTIFIE CL. NORMALE"
   periodeDebut: string | null; // ISO date
   periodeFin: string | null; // ISO date
   records: ParsedTeacherRecord[];
+  sections: RectoratSectionSummary[];
 }
 
 const DATE_RE = /(\d{2})\/(\d{2})\/(\d{4})/;
@@ -64,6 +81,9 @@ const DISCIPLINE_CODE_RE = /\b(\d{4}[A-Z])\s+/;
 // (perfectly legible) discipline name right before it.
 const TRAILING_PROMO_MARKER_RE = /\s*\S{1,2}\.(?:\s*\d{2}a\d{2}m\d{2}j)?\s*$/;
 const AVIS_LINE_RE = /\b([0-4])\s+(EXCELLENT|TRES SATIS|SATIS|A CONSOLID|NON RENS)\b/;
+// The section footer's "NOMBRE DE PROMUS" line: two counts, BA then AN, in that column order
+// (matches both the "B A   A N" and "BA      AN" header-row spellings seen across real exports).
+const PROMUS_FOOTER_RE = /NOMBRE DE PROMUS\s*:?\s*(\d+)\s+(\d+)/;
 const BAREME_LINE_RE = /!\s*EVAECH\s*(\d)?\s*!\s*Z1AGRA\s+([\d.]+)\s*!\s*Z1ANEC\s+([\d.]+)\s*!\s*Z2AGEA\s+(\d{6})\s*!/;
 // Établissement type codes as they appear in the rectorat exports (collège/lycée/lycée pro/etc.)
 const TYPE_ETAB_RE = /\b(CLG|LGT|LG|LPO|LP|LT|LYT|ECS|SEP)\s+(PR|CC)\b/;
@@ -91,6 +111,11 @@ export function parseRectoratFile(rawText: string): ParsedRectoratFile {
   const periodeMatch = /DU\s+(\d{2}\/\d{2}\/\d{4})[\s\S]*?AU\s+(\d{2}\/\d{2}\/\d{4})/.exec(rawText);
 
   const records: ParsedTeacherRecord[] = [];
+  // Keyed by échelon rather than pushed per chunk: the same "ECHELON : NN" section can span
+  // several physical PDF pages (repeating the header on each), with the summary footer appearing
+  // only once, after the LAST chunk — so a later chunk's footer (if found) overwrites an earlier
+  // chunk's absence of one, and every chunk for the same échelon converges on one summary.
+  const sectionsByEchelon = new Map<string, RectoratSectionSummary>();
 
   // Split the text on "ECHELON : NN" headers, keeping track of which échelon each following
   // chunk of records belongs to.
@@ -99,6 +124,13 @@ export function parseRectoratFile(rawText: string): ParsedRectoratFile {
     const echelon = echelonSections[i];
     const sectionText = echelonSections[i + 1] ?? "";
     records.push(...parseSectionRecords(sectionText, echelon));
+
+    const promusMatch = PROMUS_FOOTER_RE.exec(sectionText);
+    if (promusMatch) {
+      sectionsByEchelon.set(echelon, { echelon, nombrePromusBA: Number(promusMatch[1]), nombrePromusAN: Number(promusMatch[2]) });
+    } else if (!sectionsByEchelon.has(echelon)) {
+      sectionsByEchelon.set(echelon, { echelon, nombrePromusBA: null, nombrePromusAN: null });
+    }
   }
 
   return {
@@ -107,6 +139,7 @@ export function parseRectoratFile(rawText: string): ParsedRectoratFile {
     periodeDebut: periodeMatch ? toIsoDate(periodeMatch[1]) : null,
     periodeFin: periodeMatch ? toIsoDate(periodeMatch[2]) : null,
     records,
+    sections: Array.from(sectionsByEchelon.values()),
   };
 }
 

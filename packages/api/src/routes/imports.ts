@@ -96,6 +96,8 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   // (see routes/grilles.ts) must be reflected in newly computed promotions.
   const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
 
+  const nombrePromusBaBySection = new Map(parsed.sections.map((s) => [s.echelon, s.nombrePromusBA]));
+
   const warnings: { nomUsage: string; prenom: string; warnings: string[] }[] = [];
   let imported = 0;
 
@@ -135,6 +137,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
         dateProchainePromotionRectorat: record.dateProchainePromotionRectorat ? new Date(record.dateProchainePromotionRectorat) : null,
         proTypePromotion: record.proTypePromotion,
         proConfirmee: record.proConfirmee,
+        nombrePromusBaSection: nombrePromusBaBySection.get(record.echelonActuel) ?? null,
       },
     });
 
