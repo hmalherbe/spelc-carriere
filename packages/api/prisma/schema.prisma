@@ -357,3 +357,21 @@ model AdelSyncLog {
 
   @@index([type, syncedAt])
 }
+
+// ---------------------------------------------------------------------------
+// App settings — admin-editable via the "Paramètres" screen, so a credential change (e.g. the
+// ADEL password rotating) doesn't require touching the server's .env and redeploying. A single
+// row (id fixed to "singleton") rather than a generic key/value table: there's exactly one thing
+// to configure today, and a real table keeps each field's shape — and the password's encryption —
+// explicit instead of stringly-typed.
+// ---------------------------------------------------------------------------
+
+model AdelConfig {
+  id                String   @id @default("singleton")
+  loginUrl          String?
+  username          String?
+  passwordEncrypted String? // AES-256-GCM via ../src/crypto.ts — never stored in plaintext, never returned to the client
+  spelcName         String   @default("azur")
+  updatedAt         DateTime @updatedAt
+  updatedById       String? // free-text: User.id at time of edit, kept even if the user is later deleted
+}

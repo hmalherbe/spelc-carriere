@@ -92,7 +92,10 @@ Prérequis unique (une seule fois par machine) :
 npx playwright install chromium
 ```
 
-Puis dans `packages/api/.env` :
+Les identifiants se saisissent depuis l'onglet **Paramètres** de l'application (compte ADMIN) — le
+mot de passe est chiffré avant stockage en base et n'est jamais renvoyé au navigateur. Ils peuvent
+aussi être définis via `packages/api/.env` (utile pour un premier déploiement automatisé) ; les
+valeurs saisies dans Paramètres prennent le pas dès qu'elles existent :
 ```bash
 ADEL_URL="https://annuaire-spelc.bayard-service.com/annuaire_spelc/Login.jsp#listepersonnes"
 ADEL_USERNAME="..."

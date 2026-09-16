@@ -8,6 +8,7 @@ import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords } from "../adherentImport.js";
 import { parseAdherentXlsx } from "@spelc/import";
 import { scrapeAdelExport, type AdelSyncType } from "@spelc/scraper";
+import { decryptSecret } from "../crypto.js";
 
 export const adelRouter = Router();
 adelRouter.use(requireAuth);
@@ -19,17 +20,22 @@ class AdelConfigError extends Error {}
 // string. Not committed (see .gitignore) since a screenshot mid-flow could show member data.
 const ADEL_DEBUG_DIR = process.env.ADEL_DEBUG_DIR ?? join(process.cwd(), "tmp", "adel-debug");
 
-function loadAdelConfig() {
-  const loginUrl = process.env.ADEL_URL;
-  const username = process.env.ADEL_USERNAME;
-  const password = process.env.ADEL_PASSWORD;
+// The Paramètres screen (routes/settings.ts) lets an admin set/rotate these without touching the
+// server's .env — the DB row wins whenever it's set, falling back field-by-field to the env vars
+// so an existing deployment configured only via .env keeps working unchanged.
+async function loadAdelConfig() {
+  const dbConfig = await prisma.adelConfig.findUnique({ where: { id: "singleton" } });
+  const loginUrl = dbConfig?.loginUrl || process.env.ADEL_URL;
+  const username = dbConfig?.username || process.env.ADEL_USERNAME;
+  const password = dbConfig?.passwordEncrypted ? decryptSecret(dbConfig.passwordEncrypted) : process.env.ADEL_PASSWORD;
+  const spelcName = dbConfig?.spelcName || process.env.ADEL_SPELC_NAME || "azur";
   if (!loginUrl || !username || !password) {
     throw new AdelConfigError(
-      "Synchronisation ADEL non configurée : définissez ADEL_URL, ADEL_USERNAME et ADEL_PASSWORD (voir README) avant de synchroniser.",
+      "Synchronisation ADEL non configurée : renseignez l'identifiant et le mot de passe dans l'onglet Paramètres avant de synchroniser.",
     );
   }
   mkdirSync(ADEL_DEBUG_DIR, { recursive: true });
-  return { loginUrl, username, password, spelcName: process.env.ADEL_SPELC_NAME ?? "azur", debugDir: ADEL_DEBUG_DIR };
+  return { loginUrl, username, password, spelcName, debugDir: ADEL_DEBUG_DIR };
 }
 
 adelRouter.get("/last", asyncHandler(async (req, res) => {
@@ -50,7 +56,7 @@ adelRouter.post("/sync", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(asyn
 
   let config;
   try {
-    config = loadAdelConfig();
+    config = await loadAdelConfig();
   } catch (e) {
     if (e instanceof AdelConfigError) return res.status(400).json({ error: e.message });
     throw e;

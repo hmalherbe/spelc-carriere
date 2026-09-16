@@ -191,6 +191,15 @@ export interface AdelSyncResult {
   matching: { autoConfirmed: number; pendingReview: number };
 }
 
+export interface AdelSettings {
+  loginUrl: string | null;
+  username: string | null;
+  spelcName: string;
+  /** Never the password itself — only whether one is currently configured. */
+  hasPassword: boolean;
+  updatedAt: string | null;
+}
+
 export interface MailingRecipient {
   teacherId: string;
   adherentId: string | null;
@@ -324,4 +333,7 @@ export const api = {
     }),
   createValeurDuPoint: (valeur: number, applicableA: string) =>
     request<ValeurDuPointApi>("/grilles/valeur-du-point", { method: "POST", body: JSON.stringify({ valeur, applicableA }) }),
+  adelSettings: () => request<AdelSettings>("/settings/adel"),
+  updateAdelSettings: (data: { loginUrl: string; username: string; password?: string; spelcName: string }) =>
+    request<AdelSettings>("/settings/adel", { method: "PUT", body: JSON.stringify(data) }),
 };

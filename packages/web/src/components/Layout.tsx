@@ -31,6 +31,7 @@ export function Layout() {
             </div>
           </div>
           <NavLink to="/mouvement">Mouvement des enseignants</NavLink>
+          <NavLink to="/parametres">Paramètres</NavLink>
         </nav>
         <div className="user-badge">
           <span>

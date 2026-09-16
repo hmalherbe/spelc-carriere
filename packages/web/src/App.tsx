@@ -13,6 +13,7 @@ import { GrillesPage } from "./pages/GrillesPage.js";
 import { HorsClasseExceptionnellePage } from "./pages/HorsClasseExceptionnellePage.js";
 import { ReclassementPage } from "./pages/ReclassementPage.js";
 import { MouvementPage } from "./pages/MouvementPage.js";
+import { SettingsPage } from "./pages/SettingsPage.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -44,6 +45,7 @@ export function App() {
         <Route path="hors-classe-exceptionnelle" element={<HorsClasseExceptionnellePage />} />
         <Route path="reclassement" element={<ReclassementPage />} />
         <Route path="mouvement" element={<MouvementPage />} />
+        <Route path="parametres" element={<SettingsPage />} />
       </Route>
     </Routes>
   );

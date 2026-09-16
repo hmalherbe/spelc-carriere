@@ -10,6 +10,7 @@ import { mailingRouter } from "./routes/mailing.js";
 import { adelRouter } from "./routes/adel.js";
 import { grillesRouter } from "./routes/grilles.js";
 import { adherentsRouter } from "./routes/adherents.js";
+import { settingsRouter } from "./routes/settings.js";
 
 export function createApp() {
   const app = express();
@@ -28,6 +29,7 @@ export function createApp() {
   app.use("/adel", adelRouter);
   app.use("/grilles", grillesRouter);
   app.use("/adherents", adherentsRouter);
+  app.use("/settings", settingsRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: `Route inconnue: ${req.method} ${req.path}` });
