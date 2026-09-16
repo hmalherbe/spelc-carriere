@@ -40,6 +40,10 @@ describe("parseAdherentCsv", () => {
     expect(records[1].mailPersonnel).toBeNull();
   });
 
+  it("extracts civilité from a dedicated 'Civ.' column whose value is already just the civilité, trailing period included", () => {
+    expect(records[1].civilite).toBe("M");
+  });
+
   it("reports every known field as unmapped when the header row doesn't match at all", () => {
     const result = parseAdherentCsv("Foo,Bar\n1,2");
     expect(result.unmappedFields.length).toBeGreaterThan(0);
@@ -65,6 +69,21 @@ describe("parseAdherentCsv", () => {
     const { records } = parseAdherentCsv(withComment);
     expect(records).toHaveLength(2);
     expect(records.map((r) => `${r.nom} ${r.prenom}`)).toEqual(["FERRER Florence", "MARTIN Camille"]);
+  });
+});
+
+describe("parseAdherentCsv — civilité extracted from 'nom_long' when there's no dedicated 'Civ.' column", () => {
+  const csv = [
+    "nom_long,nom,prenom",
+    "Mme MARTIN Camille,MARTIN,Camille",
+    "Mlle DUPONT Julie,DUPONT,Julie",
+    "M PETIT Marc,PETIT,Marc", // no trailing period on the civilité token
+  ].join("\n");
+
+  const { records } = parseAdherentCsv(csv);
+
+  it("isolates just the leading civilité token, ignoring the rest of the name that follows it", () => {
+    expect(records.map((r) => r.civilite)).toEqual(["Mme", "Mlle", "M"]);
   });
 });
 
@@ -99,17 +118,20 @@ describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore 
   // grade ("AGREGE", "CERTIFIE HC"...) and "promo" the date of the last échelon change.
   set("echelle", "CERTIFIE HC");
   set("promo", "01/09/2023");
+  // Confirmed by the union: this export has no dedicated "Civ." column — the civilité is the
+  // leading token of "nom_long" instead ("M. MARTIN Camille"), alongside the full name.
+  set("nom_long", "Mme MARTIN Camille");
 
   const csv = [headerCols.join(","), row.join(",")].join("\n");
   const { records, unmappedFields } = parseAdherentCsv(csv);
 
   it("maps every field this export actually has a column for, via its underscore/oddly-named headers", () => {
-    // civilite and mailAcademique genuinely have no corresponding column in this export (no "Civ."
-    // nor separate academic-email column) — everything else does, once mapped.
-    expect(unmappedFields).toEqual(expect.arrayContaining(["civilite", "mailAcademique"]));
-    expect(unmappedFields).not.toEqual(expect.arrayContaining(["grade", "dateEffet"]));
+    // mailAcademique genuinely has no corresponding column in this export (no separate
+    // academic-email column) — everything else does, once mapped.
+    expect(unmappedFields).toEqual(["mailAcademique"]);
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({
+      civilite: "Mme",
       nom: "MARTIN",
       prenom: "Camille",
       nomNaissance: "DURAND",

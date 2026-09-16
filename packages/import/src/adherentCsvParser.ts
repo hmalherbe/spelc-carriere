@@ -28,7 +28,11 @@ export interface AdherentRecord {
 // written unaccented — normalizeHeader() strips diacritics from both sides of the comparison, so
 // "Mél."/"Mel." and "Prénom"/"Prenom" resolve to the same alias without listing both.
 const HEADER_ALIASES: Record<keyof AdherentRecord, string[]> = {
-  civilite: ["civ."],
+  // "nom_long" (export adhérents ADEL) : confirmé par l'utilisateur — pas une colonne civilité
+  // dédiée comme "Civ.", mais le nom complet préfixé ("M. MARTIN Camille") ; extractCivilite()
+  // ci-dessous en isole juste le préfixe, en ignorant le reste (nom/prénom viennent déjà de leurs
+  // propres colonnes).
+  civilite: ["civ.", "nom_long"],
   nom: ["nom"],
   prenom: ["prenom"],
   // "nom_naissance" : en-tête de l'export "adhérents" ADEL (colonnes à underscores), distinct de
@@ -136,6 +140,18 @@ function toIsoDateFromFrench(text: string): string | null {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// Matches a leading "M"/"Mme"/"Mlle" (with an optional trailing period), whether followed by more
+// text ("Mme MARTIN Camille" — the "nom_long" export column) or nothing at all (a dedicated "Civ."
+// column, whose whole value already IS just the civilité). The downstream consumer
+// (civilitePrefix() in mailing/template.ts) only checks the "mme"/"m" prefix, so no further
+// normalization is needed beyond isolating this token from whatever follows it.
+const CIVILITE_PREFIX_RE = /^(mme|mlle|m)\.?(?=\s|$)/i;
+
+function extractCivilite(text: string): string | null {
+  const m = CIVILITE_PREFIX_RE.exec(text.trim());
+  return m ? m[1] : null;
+}
+
 export interface AdherentParseResult {
   records: AdherentRecord[];
   /** Field names for which no matching column header was found in the file at all — surfaced once,
@@ -173,9 +189,10 @@ export function parseAdherentCsv(csvText: string): AdherentParseResult {
 
     const ancienIndiceRaw = get("ancienIndice");
     const dateEffetRaw = get("dateEffet");
+    const civiliteRaw = get("civilite");
 
     records.push({
-      civilite: get("civilite"),
+      civilite: civiliteRaw ? extractCivilite(civiliteRaw) : null,
       nom: nom ?? "",
       prenom: prenom ?? "",
       nomNaissance: get("nomNaissance"),
