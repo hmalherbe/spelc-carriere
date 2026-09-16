@@ -140,6 +140,17 @@ function toIsoDateFromFrench(text: string): string | null {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/** Real exports sometimes carry a non-numeric value in what's otherwise a numeric column ("NC", a
+ * stray annotation, a comma as decimal separator) — `Number()` alone turns any of those into NaN,
+ * which crashes the whole import downstream (ancienIndice is a Prisma Int? column; passing it NaN
+ * throws rather than being silently stored as invalid data). Falling back to null here treats an
+ * unparseable value the same way a blank cell already is, instead of failing the entire file over
+ * one bad row. */
+function toIntOrNull(text: string): number | null {
+  const n = Number(text.trim().replace(",", "."));
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
 // Matches a leading "M"/"Mme"/"Mlle" (with an optional trailing period), whether followed by more
 // text ("Mme MARTIN Camille" — the "nom_long" export column) or nothing at all (a dedicated "Civ."
 // column, whose whole value already IS just the civilité). The downstream consumer
@@ -200,7 +211,7 @@ export function parseAdherentCsv(csvText: string): AdherentParseResult {
       ancienEchelon: get("ancienEchelon"),
       statut: get("statut"),
       typeContrat: get("typeContrat"),
-      ancienIndice: ancienIndiceRaw ? Number(ancienIndiceRaw) : null,
+      ancienIndice: ancienIndiceRaw ? toIntOrNull(ancienIndiceRaw) : null,
       dateEffet: dateEffetRaw ? toIsoDateFromFrench(dateEffetRaw) : null,
       mailPersonnel: get("mailPersonnel"),
       mailAcademique: get("mailAcademique"),

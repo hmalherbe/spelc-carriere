@@ -87,6 +87,19 @@ describe("parseAdherentCsv — civilité extracted from 'nom_long' when there's 
   });
 });
 
+describe("parseAdherentCsv — ancienIndice tolerates a non-numeric cell instead of producing NaN", () => {
+  // Reproduces a real crash: ancienIndice is a Prisma Int? column, and Number("NC") / Number("715,00")
+  // both evaluate to NaN — passed straight to Prisma, that throws and takes down the whole import
+  // (every other, perfectly valid row included) instead of just this one field being null.
+  const csv = ["nom,prenom,indice", "MARTIN,Camille,NC", "DUPONT,Julien,\"715,00\"", "PETIT,Marc,481"].join("\n");
+
+  const { records } = parseAdherentCsv(csv);
+
+  it("falls back to null for an unparseable value and a comma-decimal value, parses a clean integer normally", () => {
+    expect(records.map((r) => r.ancienIndice)).toEqual([null, 715, 481]);
+  });
+});
+
 describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore columns, distinct from the older Jasper export)", () => {
   // Exact header row supplied by the union (tab-separated as copied from their file; built as an
   // array here to keep the value <-> column correspondence below readable and typo-proof).
