@@ -31,16 +31,25 @@ const HEADER_ALIASES: Record<keyof AdherentRecord, string[]> = {
   civilite: ["civ."],
   nom: ["nom"],
   prenom: ["prenom"],
-  nomNaissance: ["nom naissance"],
+  // "nom_naissance" : en-tête de l'export "adhérents" ADEL (colonnes à underscores), distinct de
+  // l'ancien export "ADEL Etat Jasper" ("nom naissance", avec espace) — les deux formats coexistent.
+  nomNaissance: ["nom naissance", "nom_naissance"],
   grade: ["grade"],
-  ancienEchelon: ["ancien echelon"],
+  // "echelon" (export adhérents ADEL) en plus de "ancien echelon" (export Jasper) : les deux
+  // désignent le même rôle ici — le dernier échelon connu d'ADEL, utilisé comme repère de repli
+  // tant que le rectorat n'a pas fourni de donnée plus fraîche pour cette personne.
+  ancienEchelon: ["ancien echelon", "echelon"],
   statut: ["statut"],
-  typeContrat: ["type de contrat"],
-  ancienIndice: ["ancien indice"],
+  // "contrat" (export adhérents ADEL) en plus de "type de contrat" (export Jasper).
+  typeContrat: ["type de contrat", "contrat"],
+  // "indice" (export adhérents ADEL) en plus de "ancien indice" (export Jasper) — même rôle de repli
+  // que ancienEchelon ci-dessus.
+  ancienIndice: ["ancien indice", "indice"],
   dateEffet: ["date_effet", "date effet"],
-  mailPersonnel: ["mel.", "mail perso", "mail personnel"],
+  mailPersonnel: ["mel.", "mail perso", "mail personnel", "email"],
   mailAcademique: ["mail academique"],
-  departement: ["departement"],
+  // "departement_rattachem" : en-tête (tronqué) de l'export adhérents ADEL pour ce même champ.
+  departement: ["departement", "departement_rattachem"],
   spelc: ["spelc"],
 };
 

@@ -67,3 +67,55 @@ describe("parseAdherentCsv", () => {
     expect(records.map((r) => `${r.nom} ${r.prenom}`)).toEqual(["FERRER Florence", "MARTIN Camille"]);
   });
 });
+
+describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore columns, distinct from the older Jasper export)", () => {
+  // Exact header row supplied by the union (tab-separated as copied from their file; built as an
+  // array here to keep the value <-> column correspondence below readable and typo-proof).
+  const headerCols = [
+    "id_personne", "nom_long", "nom", "prenom", "nom_naissance", "date_naissance", "adresse_1", "adresse_2",
+    "adresse_3", "code_postal", "ville", "email", "telephone_fixe", "mobile", "spelc", "departement_rattachem",
+    "situation", "statut", "contrat", "fonction", "groupe_fonct", "fonction2", "groupe_fonc2", "fonction3",
+    "groupe_fonc3", "Correspondant", "discipline", "echelle", "echelon", "indice", "temps_travail", "promo",
+    "note_pedagogique", "note_administrative", "date_derniere_inspecti", "type_acces_grade", "annee_acces_grade",
+    "Anciennete_deduire", "Reliquat", "Éducateur_chrétien", "Couple", "LIRe", "Revue_locale", "mnec",
+    "Soumis_cotisation", "Sympathisant", "Mouvement", "Retraite", "Date_depart_retraite", "Commentaire",
+    "num_adherent", "Rendez_vous_de_carrièr", "Vivier_1", "Alerte_Infos",
+  ];
+  const row = headerCols.map(() => "");
+  const set = (col: string, value: string) => {
+    row[headerCols.indexOf(col)] = value;
+  };
+  set("nom", "MARTIN");
+  set("prenom", "Camille");
+  set("nom_naissance", "DURAND");
+  set("email", "camille.martin@example.com");
+  set("spelc", "Oui");
+  set("departement_rattachem", "06");
+  set("statut", "Titulaire");
+  set("contrat", "Contrat définitif");
+  set("echelon", "5");
+  set("indice", "481");
+
+  const csv = [headerCols.join(","), row.join(",")].join("\n");
+  const { records, unmappedFields } = parseAdherentCsv(csv);
+
+  it("maps nom/prenom/nomNaissance/spelc/departement/statut/typeContrat/ancienEchelon/ancienIndice/mailPersonnel from their underscore headers", () => {
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      nom: "MARTIN",
+      prenom: "Camille",
+      nomNaissance: "DURAND",
+      mailPersonnel: "camille.martin@example.com",
+      spelc: "Oui",
+      departement: "06",
+      statut: "Titulaire",
+      typeContrat: "Contrat définitif",
+      ancienEchelon: "5",
+      ancienIndice: 481,
+    });
+  });
+
+  it("still reports grade and dateEffet as unmapped — this export has no column that unambiguously carries them", () => {
+    expect(unmappedFields).toEqual(expect.arrayContaining(["grade", "dateEffet"]));
+  });
+});

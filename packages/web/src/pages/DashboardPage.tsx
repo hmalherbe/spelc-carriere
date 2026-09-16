@@ -67,7 +67,7 @@ function baCell(t: TeacherListItem): { label: string; className: string } {
   if (t.baStatus === "hors_fenetre") return { label: `BA hors fenêtre d'éligibilité${dep}`, className: "badge badge-indetermine" };
   // Agrégés : la promotion BA se décide au niveau national, pas dans ce fichier départemental —
   // on ne peut donc jamais dire "promu"/"non promu" de manière fiable pour eux (voir teachers.ts).
-  if (t.baStatus === "national") return { label: `BA${dep}`, className: "badge badge-indetermine" };
+  if (t.baStatus === "national") return { label: `Proposé(e) au ministère à la BA${dep}`, className: "badge badge-indetermine" };
   // Pour tout autre grade, le marqueur "Pro" du rectorat tranche directement, sans estimation.
   if (t.baStatus === "promu") return { label: `Promu BA${dep}`, className: "badge badge-promu_estime" };
   return { label: `Éligible à la BA - non promu${dep}`, className: "badge badge-non_promu_estime" };
