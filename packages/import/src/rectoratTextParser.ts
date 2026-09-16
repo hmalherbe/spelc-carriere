@@ -60,13 +60,26 @@ export interface RectoratSectionSummary {
   nombrePromusAN: number | null;
 }
 
-export interface ParsedRectoratFile {
+/**
+ * One grade's worth of records within a file. A single rectorat export can combine several grade
+ * sub-categories (classe normale, hors classe, classe exceptionnelle — each its own numeric code,
+ * e.g. 4511/4512/4513 for AGREGE) concatenated one after another, each repeating its own
+ * "NNNN : ECR..." header wherever it starts — see parseRectoratFile for how sections are attributed
+ * to the correct block.
+ */
+export interface ParsedRectoratGradeBlock {
   gradeCode: string; // e.g. "4531"
   gradeLabel: string; // e.g. "ECR PROFESSEUR CERTIFIE CL. NORMALE"
-  periodeDebut: string | null; // ISO date
-  periodeFin: string | null; // ISO date
   records: ParsedTeacherRecord[];
   sections: RectoratSectionSummary[];
+}
+
+export interface ParsedRectoratFile {
+  periodeDebut: string | null; // ISO date
+  periodeFin: string | null; // ISO date
+  /** One entry per distinct grade code found in the file — almost always just one, but a combined
+   * "CN-HC-CE" export produces several. */
+  grades: ParsedRectoratGradeBlock[];
 }
 
 const DATE_RE = /(\d{2})\/(\d{2})\/(\d{4})/;
@@ -101,45 +114,84 @@ function toNumber(text: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const GRADE_HEADER_RE = /(\d{4})\s*:\s*(ECR[^\n]+)/g;
+const ECHELON_HEADER_RE = /ECHELON\s*:\s*(\d{2})/g;
+
 /**
- * Parses one file's worth of text (all pages concatenated) into records, grouped by the échelon
- * header that precedes each section — the rectorat export groups people by "échelon actuel", it's
- * not a per-row field.
+ * Parses one file's worth of text (all pages concatenated) into records, grouped first by grade
+ * block and then by the échelon header that precedes each section within it — the rectorat export
+ * groups people by "échelon actuel", it's not a per-row field.
+ *
+ * A single file can combine several grade sub-categories (see ParsedRectoratGradeBlock), each
+ * repeating its own "NNNN : ECR..." header at some point in the concatenated text. Both the grade
+ * headers and the échelon headers are located with their text position (matchAll, not split — split
+ * discards the position info needed to correlate the two), and each échelon section is attributed
+ * to whichever grade header most recently precedes it — i.e. the grade block it's physically nested
+ * under in the original document.
  */
 export function parseRectoratFile(rawText: string): ParsedRectoratFile {
-  const gradeMatch = /(\d{4})\s*:\s*(ECR[^\n]+)/.exec(rawText);
   const periodeMatch = /DU\s+(\d{2}\/\d{2}\/\d{4})[\s\S]*?AU\s+(\d{2}\/\d{2}\/\d{4})/.exec(rawText);
 
-  const records: ParsedTeacherRecord[] = [];
-  // Keyed by échelon rather than pushed per chunk: the same "ECHELON : NN" section can span
-  // several physical PDF pages (repeating the header on each), with the summary footer appearing
-  // only once, after the LAST chunk — so a later chunk's footer (if found) overwrites an earlier
-  // chunk's absence of one, and every chunk for the same échelon converges on one summary.
-  const sectionsByEchelon = new Map<string, RectoratSectionSummary>();
+  const gradeOccurrences = [...rawText.matchAll(GRADE_HEADER_RE)].map((m) => ({
+    index: m.index,
+    gradeCode: m[1],
+    gradeLabel: m[2].trim(),
+  }));
 
-  // Split the text on "ECHELON : NN" headers, keeping track of which échelon each following
-  // chunk of records belongs to.
-  const echelonSections = rawText.split(/ECHELON\s*:\s*(\d{2})/).slice(1);
-  for (let i = 0; i < echelonSections.length; i += 2) {
-    const echelon = echelonSections[i];
-    const sectionText = echelonSections[i + 1] ?? "";
-    records.push(...parseSectionRecords(sectionText, echelon));
+  const echelonHeaders = [...rawText.matchAll(ECHELON_HEADER_RE)].map((m) => ({
+    echelon: m[1],
+    bodyStart: m.index + m[0].length,
+  }));
 
+  // Blocks keyed by (gradeCode, gradeLabel), in first-seen order — so a grade block that spans
+  // several physical pages (each repeating its own header) still converges on one block, exactly
+  // like a single échelon section spanning several pages converges on one summary below.
+  const blockByKey = new Map<string, ParsedRectoratGradeBlock>();
+  const blockOrder: string[] = [];
+
+  for (let i = 0; i < echelonHeaders.length; i++) {
+    const { echelon, bodyStart } = echelonHeaders[i];
+    const bodyEnd = i + 1 < echelonHeaders.length ? echelonHeaders[i + 1].bodyStart : rawText.length;
+    const sectionText = rawText.slice(bodyStart, bodyEnd);
+
+    // The grade header most recently preceding this échelon section — i.e. the block it's nested
+    // under. Falls back to the very first grade header found if none precedes it (matches the
+    // pre-multi-grade behavior for a file whose grade header, unusually, comes after its data).
+    let owner = gradeOccurrences[0];
+    for (const g of gradeOccurrences) {
+      if (g.index <= bodyStart) owner = g;
+      else break;
+    }
+
+    const key = owner ? `${owner.gradeCode} ${owner.gradeLabel}` : "";
+    let block = blockByKey.get(key);
+    if (!block) {
+      block = { gradeCode: owner?.gradeCode ?? "", gradeLabel: owner?.gradeLabel ?? "", records: [], sections: [] };
+      blockByKey.set(key, block);
+      blockOrder.push(key);
+    }
+
+    block.records.push(...parseSectionRecords(sectionText, echelon));
+
+    // Keyed by échelon rather than pushed per chunk: the same "ECHELON : NN" section can span
+    // several physical PDF pages (repeating the header on each), with the summary footer appearing
+    // only once, after the LAST chunk — so a later chunk's footer (if found) overwrites an earlier
+    // chunk's absence of one, and every chunk for the same échelon converges on one summary.
     const promusMatch = PROMUS_FOOTER_RE.exec(sectionText);
+    const existingSection = block.sections.find((s) => s.echelon === echelon);
     if (promusMatch) {
-      sectionsByEchelon.set(echelon, { echelon, nombrePromusBA: Number(promusMatch[1]), nombrePromusAN: Number(promusMatch[2]) });
-    } else if (!sectionsByEchelon.has(echelon)) {
-      sectionsByEchelon.set(echelon, { echelon, nombrePromusBA: null, nombrePromusAN: null });
+      const summary = { echelon, nombrePromusBA: Number(promusMatch[1]), nombrePromusAN: Number(promusMatch[2]) };
+      if (existingSection) Object.assign(existingSection, summary);
+      else block.sections.push(summary);
+    } else if (!existingSection) {
+      block.sections.push({ echelon, nombrePromusBA: null, nombrePromusAN: null });
     }
   }
 
   return {
-    gradeCode: gradeMatch?.[1] ?? "",
-    gradeLabel: gradeMatch?.[2]?.trim() ?? "",
     periodeDebut: periodeMatch ? toIsoDate(periodeMatch[1]) : null,
     periodeFin: periodeMatch ? toIsoDate(periodeMatch[2]) : null,
-    records,
-    sections: Array.from(sectionsByEchelon.values()),
+    grades: blockOrder.map((key) => blockByKey.get(key)!),
   };
 }
 

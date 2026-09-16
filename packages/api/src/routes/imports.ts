@@ -67,149 +67,178 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   const text = isTxt ? req.file.buffer.toString("utf-8") : await extractPdfText(req.file.buffer);
   const parsed = parseRectoratFile(text);
 
-  const grade = RECTORAT_GRADE_CODE_MAP[parsed.gradeCode];
-  if (!grade) {
-    return res.status(422).json({
-      error: `Code grade rectorat "${parsed.gradeCode}" non reconnu — ajoutez-le à RECTORAT_GRADE_CODE_MAP avant de réimporter.`,
-    });
-  }
-  const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === grade)!;
-
-  if (gradeMapping.grille === "HC_AGR") {
-    for (const record of parsed.records) {
-      record.echelonActuel = HC_AGR_ECHELON_ALIASES[record.echelonActuel] ?? record.echelonActuel;
-    }
-    for (const section of parsed.sections) {
-      section.echelon = HC_AGR_ECHELON_ALIASES[section.echelon] ?? section.echelon;
-    }
+  if (parsed.grades.length === 0) {
+    return res.status(422).json({ error: "Aucun grade reconnu dans ce fichier." });
   }
 
-  const rectoratImport = await prisma.rectoratImport.create({
-    data: {
-      campagneId,
-      grade: `${parsed.gradeCode} : ${parsed.gradeLabel}`,
-      fileName: req.file.originalname,
-      importedBy: req.auth!.userId,
-      rowCount: parsed.records.length,
-    },
-  });
+  // Loaded once per import, not per row: an admin's edited indices / revalorised valeur du point
+  // (see routes/grilles.ts) must be reflected in newly computed promotions.
+  const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
 
   // Build a name -> teacherId lookup from every snapshot ever imported (any campagne), so a
-  // teacher re-appearing in a later campaign reuses their existing Teacher row instead of forking
-  // a duplicate identity. Exact match on normalized nom+prénom — deliberately NOT fuzzy here,
-  // unlike the adherent matching: within the rectorat's own data, the same person's name should be
-  // spelled consistently campaign to campaign (same source system), so a stricter bar is safer.
+  // teacher re-appearing in a later campaign — or in another grade block of THIS SAME file, for a
+  // combined "CN-HC-CE" export — reuses their existing Teacher row instead of forking a duplicate
+  // identity. Exact match on normalized nom+prénom — deliberately NOT fuzzy here, unlike the
+  // adherent matching: within the rectorat's own data, the same person's name should be spelled
+  // consistently campaign to campaign (same source system), so a stricter bar is safer. Shared
+  // across every grade block below and updated as new teachers get created along the way.
   const existingSnapshots = await prisma.teacherSnapshot.findMany({ select: { teacherId: true, nomUsage: true, prenom: true } });
   const teacherIdByName = new Map<string, string>();
   for (const s of existingSnapshots) {
     teacherIdByName.set(`${normalizeName(s.nomUsage)}|${normalizeName(s.prenom)}`, s.teacherId);
   }
 
-  // Re-importing a corrected file for a grade already loaded in this campagne must supersede the
-  // old fiches, not sit alongside them — otherwise every affected teacher would show up twice on
-  // the dashboard. Safe to do only after the name -> teacherId map above is built, so a teacher
-  // whose only snapshot was in this campagne still resolves to their existing Teacher row instead
-  // of forking a new one once their old snapshot is gone.
-  await prisma.teacherSnapshot.deleteMany({ where: { campagneId, grade } });
+  const results: {
+    gradeCode: string;
+    grade: string;
+    imported: number;
+    warnings: { nomUsage: string; prenom: string; warnings: string[] }[];
+    error?: string;
+  }[] = [];
 
-  // Loaded once per import, not per row: an admin's edited indices / revalorised valeur du point
-  // (see routes/grilles.ts) must be reflected in newly computed promotions.
-  const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
-
-  const nombrePromusBaBySection = new Map(parsed.sections.map((s) => [s.echelon, s.nombrePromusBA]));
-
-  const warnings: { nomUsage: string; prenom: string; warnings: string[] }[] = [];
-  let imported = 0;
-
-  for (const record of parsed.records) {
-    const key = `${normalizeName(record.nomUsage)}|${normalizeName(record.prenom)}`;
-    let teacherId = teacherIdByName.get(key);
-    if (!teacherId) {
-      const teacher = await prisma.teacher.create({ data: {} });
-      teacherId = teacher.id;
-      teacherIdByName.set(key, teacherId);
+  for (const gradeBlock of parsed.grades) {
+    const grade = RECTORAT_GRADE_CODE_MAP[gradeBlock.gradeCode];
+    if (!grade) {
+      results.push({
+        gradeCode: gradeBlock.gradeCode,
+        grade: gradeBlock.gradeLabel,
+        imported: 0,
+        warnings: [],
+        error: `Code grade rectorat "${gradeBlock.gradeCode}" non reconnu — ajoutez-le à RECTORAT_GRADE_CODE_MAP avant de réimporter.`,
+      });
+      continue;
     }
+    const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === grade)!;
 
-    await prisma.teacherSnapshot.create({
-      data: {
-        campagneId,
-        importId: rectoratImport.id,
-        teacherId,
-        nomUsage: record.nomUsage,
-        prenom: record.prenom,
-        grade,
-        dateNaissance: record.dateNaissance ? new Date(record.dateNaissance) : null,
-        rneEtablissement: record.rneEtablissement,
-        nomEtablissement: record.nomEtablissement,
-        typeEtablissement: record.typeEtablissement,
-        codePostal: record.codePostal,
-        ville: record.ville,
-        disciplineCode: record.disciplineCode,
-        disciplineLibelle: record.disciplineLibelle,
-        echelonActuel: record.echelonActuel,
-        dateAccesEchelon: record.dateAccesEchelon ? new Date(record.dateAccesEchelon) : new Date(campagne.periodeDebut),
-        avisEvaluation: record.avisEvaluation,
-        ancienneteGrade: record.ancienneteGrade,
-        ancienneteEchelon: record.ancienneteEchelon,
-        ageEncodedRectorat: record.ageEncodedRectorat,
-        typePromotion: record.typePromotion,
-        dureeRestante: record.dureeRestante,
-        dateProchainePromotionRectorat: record.dateProchainePromotionRectorat ? new Date(record.dateProchainePromotionRectorat) : null,
-        proTypePromotion: record.proTypePromotion,
-        proConfirmee: record.proConfirmee,
-        nombrePromusBaSection: nombrePromusBaBySection.get(record.echelonActuel) ?? null,
-      },
-    });
-
-    const recordWarnings = [...record.warnings];
-
-    if (record.dateAccesEchelon) {
-      try {
-        const promotion = computeEchelonPromotion({
-          grille: gradeMapping.grille as GrilleCode,
-          echelonDepart: record.echelonActuel,
-          dateDernierChangementEchelon: record.dateAccesEchelon,
-          grilles: liveGrilles,
-          valeurDuPoint: liveValeurDuPoint,
-        });
-        await prisma.computedPromotionState.upsert({
-          where: { teacherId_campagneId: { teacherId, campagneId } },
-          update: {
-            grilleCode: promotion.grille,
-            echelonDepart: String(promotion.echelonDepart),
-            echelonSuivant: String(promotion.echelonSuivant),
-            indiceActuel: promotion.indiceActuel,
-            futurIndice: promotion.futurIndice,
-            gainSalaireBrut: promotion.gainSalaireBrut,
-            gainSalaireNet: promotion.gainSalaireNet,
-            dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
-          },
-          create: {
-            teacherId,
-            campagneId,
-            grilleCode: promotion.grille,
-            echelonDepart: String(promotion.echelonDepart),
-            echelonSuivant: String(promotion.echelonSuivant),
-            indiceActuel: promotion.indiceActuel,
-            futurIndice: promotion.futurIndice,
-            gainSalaireBrut: promotion.gainSalaireBrut,
-            gainSalaireNet: promotion.gainSalaireNet,
-            dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
-          },
-        });
-      } catch (e) {
-        // Échelon introuvable dans la grille de ce grade (donnée aberrante, ou grade mal détecté
-        // pour cette fiche) — signale la fiche en avertissement plutôt que de faire échouer tout le
-        // fichier : les autres fiches, elles, sont valides et ne doivent pas être perdues avec elle.
-        const message = e instanceof Error ? e.message : String(e);
-        recordWarnings.push(`Calcul de la promotion impossible : ${message}`);
+    if (gradeMapping.grille === "HC_AGR") {
+      for (const record of gradeBlock.records) {
+        record.echelonActuel = HC_AGR_ECHELON_ALIASES[record.echelonActuel] ?? record.echelonActuel;
+      }
+      for (const section of gradeBlock.sections) {
+        section.echelon = HC_AGR_ECHELON_ALIASES[section.echelon] ?? section.echelon;
       }
     }
 
-    imported++;
-    if (recordWarnings.length > 0) {
-      warnings.push({ nomUsage: record.nomUsage, prenom: record.prenom, warnings: recordWarnings });
+    const rectoratImport = await prisma.rectoratImport.create({
+      data: {
+        campagneId,
+        grade: `${gradeBlock.gradeCode} : ${gradeBlock.gradeLabel}`,
+        fileName: req.file.originalname,
+        importedBy: req.auth!.userId,
+        rowCount: gradeBlock.records.length,
+      },
+    });
+
+    // Re-importing a corrected file for a grade already loaded in this campagne must supersede the
+    // old fiches, not sit alongside them — otherwise every affected teacher would show up twice on
+    // the dashboard. Safe to do only after the name -> teacherId map above is built, so a teacher
+    // whose only snapshot was in this campagne still resolves to their existing Teacher row instead
+    // of forking a new one once their old snapshot is gone.
+    await prisma.teacherSnapshot.deleteMany({ where: { campagneId, grade } });
+
+    const nombrePromusBaBySection = new Map(gradeBlock.sections.map((s) => [s.echelon, s.nombrePromusBA]));
+
+    const warnings: { nomUsage: string; prenom: string; warnings: string[] }[] = [];
+    let imported = 0;
+
+    for (const record of gradeBlock.records) {
+      const key = `${normalizeName(record.nomUsage)}|${normalizeName(record.prenom)}`;
+      let teacherId = teacherIdByName.get(key);
+      if (!teacherId) {
+        const teacher = await prisma.teacher.create({ data: {} });
+        teacherId = teacher.id;
+        teacherIdByName.set(key, teacherId);
+      }
+
+      // A teacher must never carry more than one snapshot in the same campagne: if this same
+      // person was already filed under a DIFFERENT grade in this campagne — whether from another
+      // block of this very file (a combined CN-HC-CE export) or from a past import that mis-
+      // detected their grade — that stale cross-grade snapshot must not coexist with this one.
+      await prisma.teacherSnapshot.deleteMany({ where: { campagneId, teacherId, NOT: { grade } } });
+
+      await prisma.teacherSnapshot.create({
+        data: {
+          campagneId,
+          importId: rectoratImport.id,
+          teacherId,
+          nomUsage: record.nomUsage,
+          prenom: record.prenom,
+          grade,
+          dateNaissance: record.dateNaissance ? new Date(record.dateNaissance) : null,
+          rneEtablissement: record.rneEtablissement,
+          nomEtablissement: record.nomEtablissement,
+          typeEtablissement: record.typeEtablissement,
+          codePostal: record.codePostal,
+          ville: record.ville,
+          disciplineCode: record.disciplineCode,
+          disciplineLibelle: record.disciplineLibelle,
+          echelonActuel: record.echelonActuel,
+          dateAccesEchelon: record.dateAccesEchelon ? new Date(record.dateAccesEchelon) : new Date(campagne.periodeDebut),
+          avisEvaluation: record.avisEvaluation,
+          ancienneteGrade: record.ancienneteGrade,
+          ancienneteEchelon: record.ancienneteEchelon,
+          ageEncodedRectorat: record.ageEncodedRectorat,
+          typePromotion: record.typePromotion,
+          dureeRestante: record.dureeRestante,
+          dateProchainePromotionRectorat: record.dateProchainePromotionRectorat ? new Date(record.dateProchainePromotionRectorat) : null,
+          proTypePromotion: record.proTypePromotion,
+          proConfirmee: record.proConfirmee,
+          nombrePromusBaSection: nombrePromusBaBySection.get(record.echelonActuel) ?? null,
+        },
+      });
+
+      const recordWarnings = [...record.warnings];
+
+      if (record.dateAccesEchelon) {
+        try {
+          const promotion = computeEchelonPromotion({
+            grille: gradeMapping.grille as GrilleCode,
+            echelonDepart: record.echelonActuel,
+            dateDernierChangementEchelon: record.dateAccesEchelon,
+            grilles: liveGrilles,
+            valeurDuPoint: liveValeurDuPoint,
+          });
+          await prisma.computedPromotionState.upsert({
+            where: { teacherId_campagneId: { teacherId, campagneId } },
+            update: {
+              grilleCode: promotion.grille,
+              echelonDepart: String(promotion.echelonDepart),
+              echelonSuivant: String(promotion.echelonSuivant),
+              indiceActuel: promotion.indiceActuel,
+              futurIndice: promotion.futurIndice,
+              gainSalaireBrut: promotion.gainSalaireBrut,
+              gainSalaireNet: promotion.gainSalaireNet,
+              dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+            },
+            create: {
+              teacherId,
+              campagneId,
+              grilleCode: promotion.grille,
+              echelonDepart: String(promotion.echelonDepart),
+              echelonSuivant: String(promotion.echelonSuivant),
+              indiceActuel: promotion.indiceActuel,
+              futurIndice: promotion.futurIndice,
+              gainSalaireBrut: promotion.gainSalaireBrut,
+              gainSalaireNet: promotion.gainSalaireNet,
+              dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+            },
+          });
+        } catch (e) {
+          // Échelon introuvable dans la grille de ce grade (donnée aberrante, ou grade mal détecté
+          // pour cette fiche) — signale la fiche en avertissement plutôt que de faire échouer tout le
+          // fichier : les autres fiches, elles, sont valides et ne doivent pas être perdues avec elle.
+          const message = e instanceof Error ? e.message : String(e);
+          recordWarnings.push(`Calcul de la promotion impossible : ${message}`);
+        }
+      }
+
+      imported++;
+      if (recordWarnings.length > 0) {
+        warnings.push({ nomUsage: record.nomUsage, prenom: record.prenom, warnings: recordWarnings });
+      }
     }
+
+    results.push({ gradeCode: gradeBlock.gradeCode, grade, imported, warnings });
   }
 
   // The BA seuils an admin sees on the "Seuils BA" page are auto-inferred from this campagne's own
@@ -217,7 +246,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   // data, without ever touching a row the admin has locked (see baSeuilCompute.ts).
   await recomputeBaSeuils(campagneId);
 
-  res.status(201).json({ importId: rectoratImport.id, grade, imported, warnings });
+  res.status(201).json({ results });
 }));
 
 // Manual fallback to the ADEL automation: same export a human would download by hand from ADEL

@@ -21,11 +21,13 @@ describe("extractPdfText + parseRectoratFile — real rectorat PDF (Agrégés Ho
 
     const parsed = parseRectoratFile(text);
 
-    expect(parsed.gradeCode).toBe("4511");
-    expect(parsed.records).toHaveLength(baremeLineCount);
-    expect(parsed.records.map((r) => r.nomUsage).sort()).toEqual(["BAUTIAS", "FORTUNA"]);
+    expect(parsed.grades).toHaveLength(1);
+    const grade = parsed.grades[0];
+    expect(grade.gradeCode).toBe("4511");
+    expect(grade.records).toHaveLength(baremeLineCount);
+    expect(grade.records.map((r) => r.nomUsage).sort()).toEqual(["BAUTIAS", "FORTUNA"]);
 
-    const bautias = parsed.records.find((r) => r.nomUsage === "BAUTIAS")!;
+    const bautias = grade.records.find((r) => r.nomUsage === "BAUTIAS")!;
     expect(bautias.warnings.length).toBeGreaterThan(0); // the real PDF's own encoding glitch
     expect(bautias.prenom).toBe("PATRICE"); // rest of the record still usable
   });

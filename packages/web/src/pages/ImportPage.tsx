@@ -281,27 +281,35 @@ export function ImportPage() {
               <div key={i} className={i > 0 ? "import-result-row" : undefined}>
                 <p>
                   <strong>{r.fileName}</strong>
-                  {r.result ? (
-                    <>
-                      {" "}
-                      — <strong>{r.result.imported}</strong> fiches importées, grade détecté : <strong>{r.result.grade}</strong>
-                    </>
-                  ) : (
-                    <span className="error-text"> — échec : {r.error}</span>
-                  )}
+                  {r.error && <span className="error-text"> — échec : {r.error}</span>}
                 </p>
-                {r.result && r.result.warnings.length > 0 && (
-                  <details>
-                    <summary>{r.result.warnings.length} avertissement(s)</summary>
-                    <ul>
-                      {r.result.warnings.map((w, j) => (
-                        <li key={j}>
-                          {w.nomUsage} {w.prenom} — {w.warnings.join("; ")}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
+                {r.result &&
+                  r.result.results.map((g, j) => (
+                    <div key={j} className={g.error ? undefined : "import-result-grade"}>
+                      {g.error ? (
+                        <p className="error-text"> — {g.error}</p>
+                      ) : (
+                        <>
+                          <p>
+                            {" "}
+                            — <strong>{g.imported}</strong> fiches importées, grade détecté : <strong>{g.grade}</strong>
+                          </p>
+                          {g.warnings.length > 0 && (
+                            <details>
+                              <summary>{g.warnings.length} avertissement(s)</summary>
+                              <ul>
+                                {g.warnings.map((w, k) => (
+                                  <li key={k}>
+                                    {w.nomUsage} {w.prenom} — {w.warnings.join("; ")}
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
               </div>
             ))}
           </div>

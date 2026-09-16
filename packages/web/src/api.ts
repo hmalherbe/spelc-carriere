@@ -145,11 +145,19 @@ export interface AdherentEligible {
   nonPresentDansRectorat: boolean;
 }
 
-export interface RectoratImportResult {
-  importId: string;
+/** One grade's worth of results from a rectorat import — a file usually holds just one grade, but a
+ * combined "CN-HC-CE" export detects and imports several, each reported separately here. */
+export interface RectoratGradeImportResult {
+  gradeCode: string;
   grade: string;
   imported: number;
   warnings: { nomUsage: string; prenom: string; warnings: string[] }[];
+  /** Set instead of `imported`/`warnings` being meaningful when this block's grade code isn't recognized. */
+  error?: string;
+}
+
+export interface RectoratImportResult {
+  results: RectoratGradeImportResult[];
 }
 
 export interface AdherentImportResult {
