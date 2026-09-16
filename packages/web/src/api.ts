@@ -84,6 +84,9 @@ export interface TeacherListItem {
   nom: string;
   prenom: string;
   grade: string;
+  /** Échelon actuel corrigé pour l'affichage : pour un candidat BA pas encore confirmé, c'est
+   * l'échelon de départ réel (6 ou 8), pas l'échelon d'arrivée tel que titré par le rectorat
+   * (07/09) — voir baEchelonDepart, qui donne la même valeur explicitement pour la colonne BA. */
   echelonActuel: string;
   dateAccesEchelon: string;
   ancienneteEchelon: number | null;
@@ -93,8 +96,9 @@ export interface TeacherListItem {
     | { status: "AUTO_CONFIRMED" | "PENDING_REVIEW" | "CONFIRMED" | "REJECTED"; adherentNom: string; adherentPrenom: string }
     | { status: "NON_ADHERENT" };
   seuilBa: { minBareme: number; locked: boolean; nombrePromusBa: number } | null;
-  /** L'échelon de départ (6 ou 8) que la règle BA décrit — distinct de `echelonActuel`, qui est
-   * l'échelon d'arrivée tel que titré par le rectorat (07/09 pour un cas BA). null = non applicable. */
+  /** L'échelon de départ (6 ou 8) que la règle BA décrit — la même valeur que dans echelonActuel
+   * ci-dessus quand le candidat n'est pas encore confirmé, fournie ici explicitement pour la
+   * colonne BA. null = non applicable. */
   baEchelonDepart: 6 | 8 | null;
   /** true = promotion BA confirmée par le rectorat (fait acquis) ; false = candidat encore en
    * lice (résultat estimé) ; null = non applicable (baEligible n'est pas true). */

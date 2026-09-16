@@ -1,8 +1,16 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth/middleware.js";
-import { estimateAgainstSeuil, isEligibleHorsClasse, isEligibleClasseExceptionnelle, GRADE_MAPPINGS } from "@spelc/domain";
+import {
+  estimateAgainstSeuil,
+  isEligibleHorsClasse,
+  isEligibleClasseExceptionnelle,
+  computeEchelonPromotion,
+  GRADE_MAPPINGS,
+  type GrilleCode,
+} from "@spelc/domain";
 import { parseZ2AGEA } from "@spelc/import";
+import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 
 export const teachersRouter = Router();
 
@@ -29,6 +37,7 @@ teachersRouter.get("/", async (req, res) => {
   });
 
   const seuils = campagneId ? await prisma.baSeuil.findMany({ where: { campagneId } }) : [];
+  const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
 
   const result = snapshots.map((snap) => {
     const state = snap.teacher.computedStates[0];
@@ -92,26 +101,61 @@ teachersRouter.get("/", async (req, res) => {
             : null
         : null;
 
+    // For an UNCONFIRMED candidate on a BA arrival page, `echelonActuel` ("07"/"09") and the
+    // computedState derived from it (echelonSuivant/gains/date, computed at import time from
+    // echelonActuel as if it were the départ échelon — see routes/imports.ts) are both one étape
+    // too far: the teacher hasn't actually arrived there yet. Recompute échelon/gain display for
+    // this case from the real départ (baEchelonDepart, 6 or 8) instead — a pure grille lookup, so
+    // safe regardless of anything still unverified about what `dateAccesEchelon` itself anchors.
+    // Once confirmed ("Pro BA.date"), echelonActuel is accurate and no correction is needed.
+    let echelonActuelAffiche = snap.echelonActuel;
+    let computedStateAffiche = state
+      ? {
+          grilleCode: state.grilleCode,
+          echelonSuivant: state.echelonSuivant,
+          indiceActuel: state.indiceActuel,
+          futurIndice: state.futurIndice,
+          gainSalaireBrut: state.gainSalaireBrut,
+          gainSalaireNet: state.gainSalaireNet,
+          dateProchainePromotion: state.dateProchainePromotion,
+        }
+      : null;
+
+    if (baEchelonDepart !== undefined && !snap.proConfirmee && gradeMapping && snap.dateAccesEchelon) {
+      try {
+        const promotion = computeEchelonPromotion({
+          grille: gradeMapping.grille as GrilleCode,
+          echelonDepart: String(baEchelonDepart),
+          dateDernierChangementEchelon: snap.dateAccesEchelon.toISOString().slice(0, 10),
+          grilles: liveGrilles,
+          valeurDuPoint: liveValeurDuPoint,
+        });
+        echelonActuelAffiche = String(baEchelonDepart);
+        computedStateAffiche = {
+          grilleCode: promotion.grille,
+          echelonSuivant: String(promotion.echelonSuivant),
+          indiceActuel: promotion.indiceActuel,
+          futurIndice: promotion.futurIndice,
+          gainSalaireBrut: promotion.gainSalaireBrut,
+          gainSalaireNet: promotion.gainSalaireNet,
+          dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+        };
+      } catch {
+        // Échelon introuvable dans la grille (donnée aberrante) — on garde l'affichage d'origine
+        // plutôt que de faire échouer toute la liste pour une fiche.
+      }
+    }
+
     return {
       teacherId: snap.teacherId,
       nom: snap.nomUsage,
       prenom: snap.prenom,
       grade: snap.grade,
-      echelonActuel: snap.echelonActuel,
+      echelonActuel: echelonActuelAffiche,
       dateAccesEchelon: snap.dateAccesEchelon,
       ancienneteEchelon: snap.ancienneteEchelon,
       avisEvaluation: snap.avisEvaluation,
-      computedState: state
-        ? {
-            grilleCode: state.grilleCode,
-            echelonSuivant: state.echelonSuivant,
-            indiceActuel: state.indiceActuel,
-            futurIndice: state.futurIndice,
-            gainSalaireBrut: state.gainSalaireBrut,
-            gainSalaireNet: state.gainSalaireNet,
-            dateProchainePromotion: state.dateProchainePromotion,
-          }
-        : null,
+      computedState: computedStateAffiche,
       matching: snap.teacher.matchCandidate
         ? {
             status: snap.teacher.matchCandidate.status,
@@ -122,10 +166,9 @@ teachersRouter.get("/", async (req, res) => {
       seuilBa: seuil
         ? { minBareme: seuil.minBareme, locked: seuil.locked, nombrePromusBa: seuil.nombrePromusBa }
         : null,
-      // The rendez-vous de carrière échelon the BA rule actually describes (6 or 8) — distinct
-      // from `echelonActuel` above, which is the rectorat's own arrival-échelon page label (07/09
-      // for a BA case). Surfaced explicitly so the "Éligibilité BA" column isn't read against the
-      // wrong échelon.
+      // The rendez-vous de carrière échelon the BA rule actually describes (6 or 8) — same value
+      // as `echelonActuel` above once corrected for an unconfirmed candidate, surfaced explicitly
+      // here for the "Éligibilité BA" column.
       baEchelonDepart: baEchelonDepart ?? null,
       // True only for a rectorat-CONFIRMED promotion ("Pro BA.date" — "Pro" = "Promu"), as opposed
       // to a candidate still awaiting the competitive selection: the former is a known fact, not
