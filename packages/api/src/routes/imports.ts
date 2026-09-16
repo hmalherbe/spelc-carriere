@@ -43,6 +43,15 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
   "4757": "PLP EXC",
 };
 
+// For agrégés hors-classe, the rectorat's own PDF keeps counting échelons numerically past 3
+// ("ECHELON : 04", "05", "06") where @spelc/domain's HC_AGR grille instead names those same three
+// positions "A1"/"A2"/"A3" (the label the union's own rules — and isEligibleClasseExceptionnelle —
+// use to talk about them). Verified against a real import: échelons 04/05/06 are the ONLY ones
+// that exist beyond échelon 3 in HC_AGR (a 6-rung grille total), so this 1:1 continued-numbering
+// correspondence is unambiguous. Translating here, at the boundary, keeps the "A1"/"A2"/"A3" label
+// as the single source of truth everywhere else in the app.
+const HC_AGR_ECHELON_ALIASES: Record<string, string> = { "04": "A1", "05": "A2", "06": "A3" };
+
 importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
   const { campagneId } = req.body as { campagneId?: string };
   if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
@@ -65,6 +74,15 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
     });
   }
   const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === grade)!;
+
+  if (gradeMapping.grille === "HC_AGR") {
+    for (const record of parsed.records) {
+      record.echelonActuel = HC_AGR_ECHELON_ALIASES[record.echelonActuel] ?? record.echelonActuel;
+    }
+    for (const section of parsed.sections) {
+      section.echelon = HC_AGR_ECHELON_ALIASES[section.echelon] ?? section.echelon;
+    }
+  }
 
   const rectoratImport = await prisma.rectoratImport.create({
     data: {
