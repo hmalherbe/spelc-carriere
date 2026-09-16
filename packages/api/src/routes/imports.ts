@@ -6,7 +6,7 @@ import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords } from "../adherentImport.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { recomputeBaSeuils } from "../baSeuilCompute.js";
-import { computeEchelonPromotion, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
+import { computeEchelonPromotion, deriveNumericEchelonAliases, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
 import {
   extractPdfText,
   parseRectoratFile,
@@ -42,15 +42,6 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
   "4755": "PLP HC",
   "4757": "PLP EXC",
 };
-
-// For agrégés hors-classe, the rectorat's own PDF keeps counting échelons numerically past 3
-// ("ECHELON : 04", "05", "06") where @spelc/domain's HC_AGR grille instead names those same three
-// positions "A1"/"A2"/"A3" (the label the union's own rules — and isEligibleClasseExceptionnelle —
-// use to talk about them). Verified against a real import: échelons 04/05/06 are the ONLY ones
-// that exist beyond échelon 3 in HC_AGR (a 6-rung grille total), so this 1:1 continued-numbering
-// correspondence is unambiguous. Translating here, at the boundary, keeps the "A1"/"A2"/"A3" label
-// as the single source of truth everywhere else in the app.
-const HC_AGR_ECHELON_ALIASES: Record<string, string> = { "04": "A1", "05": "A2", "06": "A3" };
 
 importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
   const { campagneId } = req.body as { campagneId?: string };
@@ -110,12 +101,20 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
     }
     const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === grade)!;
 
-    if (gradeMapping.grille === "HC_AGR") {
+    // For agrégés hors-classe/classe-exceptionnelle (HC_AGR, EXC_AGR, EXC_PROFS), the rectorat's
+    // own PDF keeps counting échelons numerically past the grille's own plain-numeric range, where
+    // @spelc/domain instead switches to letter codes ("A1"/"A2"/"A3"/"B1"/"B2"/"B3" — the label the
+    // union's own rules, e.g. isEligibleClasseExceptionnelle, use to talk about them). See
+    // deriveNumericEchelonAliases for how the continuation is derived (verified against real HC_AGR
+    // data). Translating here, at the boundary, keeps the letter codes as the single source of
+    // truth everywhere else in the app.
+    const echelonAliases = deriveNumericEchelonAliases(gradeMapping.grille as GrilleCode);
+    if (Object.keys(echelonAliases).length > 0) {
       for (const record of gradeBlock.records) {
-        record.echelonActuel = HC_AGR_ECHELON_ALIASES[record.echelonActuel] ?? record.echelonActuel;
+        record.echelonActuel = echelonAliases[record.echelonActuel] ?? record.echelonActuel;
       }
       for (const section of gradeBlock.sections) {
-        section.echelon = HC_AGR_ECHELON_ALIASES[section.echelon] ?? section.echelon;
+        section.echelon = echelonAliases[section.echelon] ?? section.echelon;
       }
     }
 

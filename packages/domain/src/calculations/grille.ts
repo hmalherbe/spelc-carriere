@@ -33,6 +33,39 @@ export function findEchelonRow(
 }
 
 /**
+ * For agrégés hors-classe and classe-exceptionnelle grilles (HC_AGR, EXC_AGR, EXC_PROFS), the
+ * grille's own labels switch from plain numbers to letter codes ("A1"/"A2"/"A3"/"B1"/"B2"/"B3" —
+ * the union's own naming, used e.g. by isEligibleClasseExceptionnelle) once the numeric échelons
+ * run out, while the rectorat's PDF export keeps counting numerically past that point. Verified
+ * against real HC_AGR data: échelons "04"/"05"/"06" in the rectorat file are exactly, and only,
+ * "A1"/"A2"/"A3" in that order — a continuation of the grille's own numbering, not an independent
+ * one — so this derives the same continuation for any grille shaped that way, instead of a
+ * hand-maintained table per grille: take the highest plain-numeric échelon in the grille, then
+ * keep counting for each letter-coded row IN THE GRILLE'S OWN LISTED ORDER (not by indice, which
+ * ties for grilles with parallel tracks converging back together — e.g. EXC_AGR's "A3" and "B1"
+ * share an indice — and not by following echelonSuivant links, which for the same reason can skip
+ * a parallel track entirely).
+ *
+ * Returns {} for a grille with no letter-coded échelons (nothing to alias).
+ */
+export function deriveNumericEchelonAliases(
+  grille: GrilleCode,
+  grilles: Record<GrilleCode, EchelonRow[]> = GRILLES,
+): Record<string, string> {
+  const rows = grilles[grille];
+  const numericEchelons = rows.map((r) => r.echelon).filter((e): e is number => typeof e === "number");
+  const letterEchelons = rows.map((r) => r.echelon).filter((e): e is string => typeof e === "string");
+  if (letterEchelons.length === 0) return {};
+
+  const maxNumeric = numericEchelons.length > 0 ? Math.max(...numericEchelons) : 0;
+  const aliases: Record<string, string> = {};
+  letterEchelons.forEach((code, i) => {
+    aliases[String(maxNumeric + 1 + i).padStart(2, "0")] = code;
+  });
+  return aliases;
+}
+
+/**
  * Gross monthly salary ("traitement brut mensuel") for a given indice.
  * Mirrors: TEXT(ROUND(indice * Valeur_du_point / 12, 0), "0000")
  *

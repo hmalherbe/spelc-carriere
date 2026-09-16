@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findEchelonRow, gainSalaireBrut, gainSalaireNet, traitementBrutMensuel } from "../src/calculations/grille.js";
+import { deriveNumericEchelonAliases, findEchelonRow, gainSalaireBrut, gainSalaireNet, traitementBrutMensuel } from "../src/calculations/grille.js";
 
 describe("grille indiciaire lookups (extracted from the workbook's Données sheet)", () => {
   it("finds the AGR échelon 5 row exactly as it appears in the workbook", () => {
@@ -34,5 +34,30 @@ describe("grille indiciaire lookups (extracted from the workbook's Données shee
   it("uses an overridden valeur du point when one is passed", () => {
     expect(traitementBrutMensuel(584, 60)).toBe(Math.round((584 * 60) / 12));
     expect(gainSalaireNet(584, 623, 60)).toBe(Math.round(((623 - 584) * 60 * 0.77) / 12));
+  });
+});
+
+describe("deriveNumericEchelonAliases", () => {
+  it("returns {} for a grille with no letter-coded échelons", () => {
+    expect(deriveNumericEchelonAliases("AGR")).toEqual({});
+  });
+
+  it("HC_AGR: continues numbering '04'/'05'/'06' into 'A1'/'A2'/'A3' — verified against real rectorat data", () => {
+    expect(deriveNumericEchelonAliases("HC_AGR")).toEqual({ "04": "A1", "05": "A2", "06": "A3" });
+  });
+
+  it("EXC_AGR: continues numbering from échelon 1 through all 6 letter-coded rows, including the parallel 'B1' track", () => {
+    expect(deriveNumericEchelonAliases("EXC_AGR")).toEqual({
+      "02": "A1",
+      "03": "A2",
+      "04": "A3",
+      "05": "B1",
+      "06": "B2",
+      "07": "B3",
+    });
+  });
+
+  it("EXC_PROFS: continues numbering from échelon 5 (its letter rows start at 'A2', skipping 'A1')", () => {
+    expect(deriveNumericEchelonAliases("EXC_PROFS")).toEqual({ "06": "A2", "07": "A3" });
   });
 });
