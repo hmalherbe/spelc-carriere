@@ -44,19 +44,22 @@ function formatEchelonLabel(echelon: string): string {
 }
 
 // La règle BA parle d'échelon 6 ou 8 (rendez-vous de carrière durant la 2e année du 6e échelon /
-// entre le 18e et le 30e mois du 8e) — un échelon de DÉPART. Une fois la promotion confirmée, la
-// colonne "Échelon" affiche l'échelon d'ARRIVÉE (7 ou 9), différent du départ : préciser "(départ
-// éch. X)" dans ce cas-là lit comme une contradiction avec la colonne Échelon plutôt qu'une
-// précision utile ("Promu BA (départ éch. 8)" à côté d'une colonne Échelon "9 → 10" a fait croire à
-// tort que l'un des deux échelons était faux). On ne l'affiche donc que quand la colonne Échelon
-// montre justement ce même échelon de départ (candidat pas encore arrivé) — les deux se confirment
-// alors l'un l'autre au lieu de se contredire.
+// entre le 18e et le 30e mois du 8e) — un échelon de DÉPART. "Promu BA" signifie que la bonification
+// (le passage accéléré vers l'échelon suivant) a été accordée, pas que l'enseignant a déjà atteint
+// cet échelon suivant : tant que l'échéance donnée par le rectorat lui-même (à côté du marqueur
+// "BA.") n'est pas passée, il est toujours À l'échelon de départ. La colonne "Échelon" reflète donc
+// toujours ce départ pour un candidat BA (voir routes/teachers.ts), jamais l'arrivée par
+// anticipation — d'où la cohérence garantie entre elle et "(départ éch. X)" ci-dessous.
 function baCell(t: TeacherListItem): { label: string; className: string } {
   // Gated on baStatus, PAS sur baEligible : un enseignant sans marqueur "BA." (suivi sur un autre
   // mécanisme AN/CL/RE ce tour-ci, ou hors-classe/classe-exceptionnelle) n'a simplement rien à voir
   // avec la BA — lui afficher "Non éligible" serait un faux signal sans rapport avec sa situation
   // réelle, même si son échelon/ancienneté ne serait de toute façon pas dans la fenêtre BA.
   if (t.baStatus === null) return { label: "—", className: "" };
+  // Garde-fou plutôt que condition attendue-à-être-fausse : la colonne Échelon montre toujours le
+  // départ pour un candidat BA désormais, sauf échec ponctuel du calcul de grille (voir
+  // routes/teachers.ts, cas try/catch) — auquel cas mieux vaut ne pas afficher un échelon de départ
+  // qui ne correspondrait plus à ce que montre la colonne Échelon.
   const atDepart = t.baEchelonDepart != null && Number(t.echelonActuel) === t.baEchelonDepart;
   const dep = atDepart ? ` (départ éch. ${t.baEchelonDepart})` : "";
   // Candidat BA (marqueur présent) mais hors de la fenêtre d'ancienneté officielle — anomalie à

@@ -110,10 +110,14 @@ teachersRouter.get("/", async (req, res) => {
             : "non_promu";
 
     // For échelon-display purposes: did this record actually ARRIVE at the new échelon this
-    // cycle? Agrégé BA candidates are always treated as not-yet-arrived, since the national
-    // decision can't be read from this file; every other record's own "Pro" marker (whether or
-    // not it's a BA record) already answers this directly.
-    const arrivedThisEchelon = isAgrege && isBaCandidate ? false : snap.proConfirmee;
+    // cycle? NO for every BA candidate, confirmed or not — "promu BA" means the accelerated
+    // timeline was GRANTED, not that the transition already happened: per the union's own rule,
+    // being a BA candidate at all means currently sitting AT the départ échelon (6 or 8) being
+    // evaluated for the "rendez-vous de carrière"; the "Pro" prefix only tells us whether that
+    // grant was confirmed, never that the arrival échelon (7/9) has already been reached (real
+    // case: "Promu BA" records whose own échéance date was still months away). Every other
+    // record's own "Pro" marker (AN/CL/RE) answers "arrived?" directly, as before.
+    const arrivedThisEchelon = isBaCandidate ? false : snap.proConfirmee;
     let echelonActuelAffiche = snap.echelonActuel;
     let computedStateAffiche = state
       ? {
@@ -147,7 +151,17 @@ teachersRouter.get("/", async (req, res) => {
           futurIndice: promotion.futurIndice,
           gainSalaireBrut: promotion.gainSalaireBrut,
           gainSalaireNet: promotion.gainSalaireNet,
-          dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+          // For a BA candidate, the rectorat's own file already states the échéance date next to
+          // the "BA."/"Pro BA." marker (dateProchainePromotionRectorat) — that's the real date,
+          // not something to re-derive from a generic duration-from-départ calculation. Prefer it
+          // whenever the file provided one; fall back to our own computed projection only if it
+          // didn't (should not normally happen for a genuine BA record).
+          dateProchainePromotion:
+            isBaCandidate && snap.dateProchainePromotionRectorat
+              ? snap.dateProchainePromotionRectorat
+              : promotion.dateProchainePromotion
+                ? new Date(promotion.dateProchainePromotion)
+                : null,
         };
       } catch {
         // Échelon introuvable dans la grille (donnée aberrante) — on garde l'affichage d'origine
