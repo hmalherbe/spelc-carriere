@@ -34,7 +34,11 @@ const HEADER_ALIASES: Record<keyof AdherentRecord, string[]> = {
   // "nom_naissance" : en-tête de l'export "adhérents" ADEL (colonnes à underscores), distinct de
   // l'ancien export "ADEL Etat Jasper" ("nom naissance", avec espace) — les deux formats coexistent.
   nomNaissance: ["nom naissance", "nom_naissance"],
-  grade: ["grade"],
+  // "echelle" (export adhérents ADEL) : confirmé par l'utilisateur — porte le grade statutaire
+  // ("AGREGE", "CERTIFIE HC", etc.), malgré le nom de colonne qui pourrait laisser penser à autre
+  // chose (à ne pas confondre avec le concept d'"échelle" CLASSE_NORMALE/HORS_CLASSE/CLASSE_EXC. du
+  // domaine — c'est ADEL qui nomme sa colonne ainsi, pas nous).
+  grade: ["grade", "echelle"],
   // "echelon" (export adhérents ADEL) en plus de "ancien echelon" (export Jasper) : les deux
   // désignent le même rôle ici — le dernier échelon connu d'ADEL, utilisé comme repère de repli
   // tant que le rectorat n'a pas fourni de donnée plus fraîche pour cette personne.
@@ -45,7 +49,9 @@ const HEADER_ALIASES: Record<keyof AdherentRecord, string[]> = {
   // "indice" (export adhérents ADEL) en plus de "ancien indice" (export Jasper) — même rôle de repli
   // que ancienEchelon ci-dessus.
   ancienIndice: ["ancien indice", "indice"],
-  dateEffet: ["date_effet", "date effet"],
+  // "promo" (export adhérents ADEL) : confirmé par l'utilisateur — porte la date du dernier
+  // changement d'échelon, malgré le nom de colonne (qui évoque plutôt une promotion en général).
+  dateEffet: ["date_effet", "date effet", "promo"],
   mailPersonnel: ["mel.", "mail perso", "mail personnel", "email"],
   mailAcademique: ["mail academique"],
   // "departement_rattachem" : en-tête (tronqué) de l'export adhérents ADEL pour ce même champ.

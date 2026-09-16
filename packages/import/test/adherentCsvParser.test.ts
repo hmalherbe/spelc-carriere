@@ -95,11 +95,19 @@ describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore 
   set("contrat", "Contrat définitif");
   set("echelon", "5");
   set("indice", "481");
+  // Confirmed by the union: despite their generic-sounding names, "echelle" carries the statutory
+  // grade ("AGREGE", "CERTIFIE HC"...) and "promo" the date of the last échelon change.
+  set("echelle", "CERTIFIE HC");
+  set("promo", "01/09/2023");
 
   const csv = [headerCols.join(","), row.join(",")].join("\n");
   const { records, unmappedFields } = parseAdherentCsv(csv);
 
-  it("maps nom/prenom/nomNaissance/spelc/departement/statut/typeContrat/ancienEchelon/ancienIndice/mailPersonnel from their underscore headers", () => {
+  it("maps every field this export actually has a column for, via its underscore/oddly-named headers", () => {
+    // civilite and mailAcademique genuinely have no corresponding column in this export (no "Civ."
+    // nor separate academic-email column) — everything else does, once mapped.
+    expect(unmappedFields).toEqual(expect.arrayContaining(["civilite", "mailAcademique"]));
+    expect(unmappedFields).not.toEqual(expect.arrayContaining(["grade", "dateEffet"]));
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({
       nom: "MARTIN",
@@ -112,10 +120,8 @@ describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore 
       typeContrat: "Contrat définitif",
       ancienEchelon: "5",
       ancienIndice: 481,
+      grade: "CERTIFIE HC",
+      dateEffet: "2023-09-01",
     });
-  });
-
-  it("still reports grade and dateEffet as unmapped — this export has no column that unambiguously carries them", () => {
-    expect(unmappedFields).toEqual(expect.arrayContaining(["grade", "dateEffet"]));
   });
 });
