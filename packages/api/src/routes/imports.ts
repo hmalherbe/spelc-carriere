@@ -34,8 +34,10 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
   "4534": "CERTIFIE EXC",
   "4511": "AGREGE HC",
   "4512": "AGREGE",
+  "4513": "AGREGE EXC",
   "4311": "PEPS",
   "4312": "PEPS HC",
+  "4314": "PEPS EXC",
   "4754": "PLP",
   "4755": "PLP HC",
   "4757": "PLP EXC",
@@ -141,44 +143,54 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
       },
     });
 
+    const recordWarnings = [...record.warnings];
+
     if (record.dateAccesEchelon) {
-      const promotion = computeEchelonPromotion({
-        grille: gradeMapping.grille as GrilleCode,
-        echelonDepart: record.echelonActuel,
-        dateDernierChangementEchelon: record.dateAccesEchelon,
-        grilles: liveGrilles,
-        valeurDuPoint: liveValeurDuPoint,
-      });
-      await prisma.computedPromotionState.upsert({
-        where: { teacherId_campagneId: { teacherId, campagneId } },
-        update: {
-          grilleCode: promotion.grille,
-          echelonDepart: String(promotion.echelonDepart),
-          echelonSuivant: String(promotion.echelonSuivant),
-          indiceActuel: promotion.indiceActuel,
-          futurIndice: promotion.futurIndice,
-          gainSalaireBrut: promotion.gainSalaireBrut,
-          gainSalaireNet: promotion.gainSalaireNet,
-          dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
-        },
-        create: {
-          teacherId,
-          campagneId,
-          grilleCode: promotion.grille,
-          echelonDepart: String(promotion.echelonDepart),
-          echelonSuivant: String(promotion.echelonSuivant),
-          indiceActuel: promotion.indiceActuel,
-          futurIndice: promotion.futurIndice,
-          gainSalaireBrut: promotion.gainSalaireBrut,
-          gainSalaireNet: promotion.gainSalaireNet,
-          dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
-        },
-      });
+      try {
+        const promotion = computeEchelonPromotion({
+          grille: gradeMapping.grille as GrilleCode,
+          echelonDepart: record.echelonActuel,
+          dateDernierChangementEchelon: record.dateAccesEchelon,
+          grilles: liveGrilles,
+          valeurDuPoint: liveValeurDuPoint,
+        });
+        await prisma.computedPromotionState.upsert({
+          where: { teacherId_campagneId: { teacherId, campagneId } },
+          update: {
+            grilleCode: promotion.grille,
+            echelonDepart: String(promotion.echelonDepart),
+            echelonSuivant: String(promotion.echelonSuivant),
+            indiceActuel: promotion.indiceActuel,
+            futurIndice: promotion.futurIndice,
+            gainSalaireBrut: promotion.gainSalaireBrut,
+            gainSalaireNet: promotion.gainSalaireNet,
+            dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+          },
+          create: {
+            teacherId,
+            campagneId,
+            grilleCode: promotion.grille,
+            echelonDepart: String(promotion.echelonDepart),
+            echelonSuivant: String(promotion.echelonSuivant),
+            indiceActuel: promotion.indiceActuel,
+            futurIndice: promotion.futurIndice,
+            gainSalaireBrut: promotion.gainSalaireBrut,
+            gainSalaireNet: promotion.gainSalaireNet,
+            dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+          },
+        });
+      } catch (e) {
+        // Échelon introuvable dans la grille de ce grade (donnée aberrante, ou grade mal détecté
+        // pour cette fiche) — signale la fiche en avertissement plutôt que de faire échouer tout le
+        // fichier : les autres fiches, elles, sont valides et ne doivent pas être perdues avec elle.
+        const message = e instanceof Error ? e.message : String(e);
+        recordWarnings.push(`Calcul de la promotion impossible : ${message}`);
+      }
     }
 
     imported++;
-    if (record.warnings.length > 0) {
-      warnings.push({ nomUsage: record.nomUsage, prenom: record.prenom, warnings: record.warnings });
+    if (recordWarnings.length > 0) {
+      warnings.push({ nomUsage: record.nomUsage, prenom: record.prenom, warnings: recordWarnings });
     }
   }
 
