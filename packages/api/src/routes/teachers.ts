@@ -122,6 +122,15 @@ teachersRouter.get("/", async (req, res) => {
       seuilBa: seuil
         ? { minBareme: seuil.minBareme, locked: seuil.locked, nombrePromusBa: seuil.nombrePromusBa }
         : null,
+      // The rendez-vous de carrière échelon the BA rule actually describes (6 or 8) — distinct
+      // from `echelonActuel` above, which is the rectorat's own arrival-échelon page label (07/09
+      // for a BA case). Surfaced explicitly so the "Éligibilité BA" column isn't read against the
+      // wrong échelon.
+      baEchelonDepart: baEchelonDepart ?? null,
+      // True only for a rectorat-CONFIRMED promotion ("Pro BA.date" — "Pro" = "Promu"), as opposed
+      // to a candidate still awaiting the competitive selection: the former is a known fact, not
+      // an estimate, and the UI must not label it "(estimé)".
+      baConfirmee: baEligible === true ? snap.proConfirmee : null,
       baEstimate,
       baEligible,
       horsClasseEligible,

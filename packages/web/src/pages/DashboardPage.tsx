@@ -35,12 +35,18 @@ function echelonSortValue(echelon: string): number {
   return Number.isFinite(n) ? n : 1000 + echelon.charCodeAt(0);
 }
 
+// La règle BA parle d'échelon 6 ou 8 (rendez-vous de carrière durant la 2e année du 6e échelon /
+// entre le 18e et le 30e mois du 8e) — un échelon de DÉPART, alors que la colonne "Échelon" du
+// tableau affiche l'échelon d'ARRIVÉE tel que titré par le rectorat (07/09 pour un cas BA). On le
+// précise ici explicitement pour ne pas laisser le lecteur rapprocher la BA du mauvais échelon.
 function baCell(t: TeacherListItem): { label: string; className: string } {
   if (t.baEligible === null) return { label: "—", className: "" };
-  if (!t.baEligible) return { label: "Non éligible", className: "badge badge-indetermine" };
-  if (t.baEstimate === "promu_estime") return { label: "Éligible — promu (estimé)", className: "badge badge-promu_estime" };
-  if (t.baEstimate === "non_promu_estime") return { label: "Éligible — non promu (estimé)", className: "badge badge-non_promu_estime" };
-  return { label: "Éligible", className: "badge badge-indetermine" };
+  const dep = t.baEchelonDepart != null ? ` (éch. ${t.baEchelonDepart})` : "";
+  if (!t.baEligible) return { label: `Non éligible${dep}`, className: "badge badge-indetermine" };
+  if (t.baConfirmee) return { label: `Promu confirmé${dep}`, className: "badge badge-promu_estime" };
+  if (t.baEstimate === "promu_estime") return { label: `Éligible${dep} — promu (estimé)`, className: "badge badge-promu_estime" };
+  if (t.baEstimate === "non_promu_estime") return { label: `Éligible${dep} — non promu (estimé)`, className: "badge badge-non_promu_estime" };
+  return { label: `Éligible${dep}`, className: "badge badge-indetermine" };
 }
 
 type SortKey = "nom" | "grade" | "echelon";

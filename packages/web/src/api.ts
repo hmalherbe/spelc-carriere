@@ -93,6 +93,12 @@ export interface TeacherListItem {
     | { status: "AUTO_CONFIRMED" | "PENDING_REVIEW" | "CONFIRMED" | "REJECTED"; adherentNom: string; adherentPrenom: string }
     | { status: "NON_ADHERENT" };
   seuilBa: { minBareme: number; locked: boolean; nombrePromusBa: number } | null;
+  /** L'échelon de départ (6 ou 8) que la règle BA décrit — distinct de `echelonActuel`, qui est
+   * l'échelon d'arrivée tel que titré par le rectorat (07/09 pour un cas BA). null = non applicable. */
+  baEchelonDepart: 6 | 8 | null;
+  /** true = promotion BA confirmée par le rectorat (fait acquis) ; false = candidat encore en
+   * lice (résultat estimé) ; null = non applicable (baEligible n'est pas true). */
+  baConfirmee: boolean | null;
   baEstimate: BaEstimate;
   /** null = not applicable (mauvais échelon, ou données d'ancienneté manquantes) — pas "non éligible". */
   baEligible: boolean | null;
