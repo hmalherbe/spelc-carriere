@@ -48,12 +48,20 @@ function formatEchelonLabel(echelon: string): string {
 // tableau affiche l'échelon d'ARRIVÉE tel que titré par le rectorat (07/09 pour un cas BA). On le
 // précise ici explicitement pour ne pas laisser le lecteur rapprocher la BA du mauvais échelon.
 function baCell(t: TeacherListItem): { label: string; className: string } {
-  if (t.baEligible === null) return { label: "—", className: "" };
-  const dep = t.baEchelonDepart != null ? ` (éch. ${t.baEchelonDepart})` : "";
-  if (!t.baEligible) return { label: `Non éligible${dep}`, className: "badge badge-indetermine" };
-  // baEligible seul (pas de marqueur "BA." ce cycle) : dans la fenêtre d'ancienneté, mais pas
-  // candidat BA — ex. suivi sur un autre mécanisme (AN/CL/RE) ce tour-ci.
-  if (t.baStatus === null) return { label: `Éligible${dep}`, className: "badge badge-indetermine" };
+  // Gated on baStatus, PAS sur baEligible : un enseignant sans marqueur "BA." (suivi sur un autre
+  // mécanisme AN/CL/RE ce tour-ci, ou hors-classe/classe-exceptionnelle) n'a simplement rien à voir
+  // avec la BA — lui afficher "Non éligible" serait un faux signal sans rapport avec sa situation
+  // réelle, même si son échelon/ancienneté ne serait de toute façon pas dans la fenêtre BA.
+  if (t.baStatus === null) return { label: "—", className: "" };
+  // "départ éch. X", pas juste "éch. X" : c'est l'échelon DEPUIS lequel la bonification s'applique
+  // (6 ou 8), pas l'échelon affiché dans la colonne Échelon — qui montre l'échelon actuel/d'arrivée
+  // (7 ou 9 une fois la promotion confirmée). Les deux peuvent légitimement diverger dans la même
+  // ligne (ex. "Promu BA (départ éch. 8)" à côté d'une colonne Échelon affichant "9 → 10" : elle
+  // est passée de 8 à 9 via la bonification, la colonne Échelon montre où elle en est maintenant).
+  const dep = t.baEchelonDepart != null ? ` (départ éch. ${t.baEchelonDepart})` : "";
+  // Candidat BA (marqueur présent) mais hors de la fenêtre d'ancienneté officielle — anomalie à
+  // vérifier (cas réel observé : un marqueur "BA." sur ce qui était en fait un cycle AN classique).
+  if (t.baStatus === "hors_fenetre") return { label: `BA hors fenêtre d'éligibilité${dep}`, className: "badge badge-indetermine" };
   // Agrégés : la promotion BA se décide au niveau national, pas dans ce fichier départemental —
   // on ne peut donc jamais dire "promu"/"non promu" de manière fiable pour eux (voir teachers.ts).
   if (t.baStatus === "national") return { label: `BA${dep}`, className: "badge badge-indetermine" };

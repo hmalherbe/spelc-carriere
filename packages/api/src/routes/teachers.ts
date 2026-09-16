@@ -91,13 +91,23 @@ teachersRouter.get("/", async (req, res) => {
     // pas promu.
     const isAgrege = snap.grade.startsWith("AGREGE");
 
-    const baStatus: "national" | "promu" | "non_promu" | null = !isBaCandidate
+    // Gated on isBaCandidate FIRST, before anything else: a record with no "BA" marker at all
+    // (e.g. on the AN/CL/RE track, or a hors-classe/classe-exceptionnelle record whose échelon
+    // string just happens to read "07"/"09") is simply not part of the BA process this cycle, and
+    // must report null (-> "—" client-side) rather than "non éligible" — the window computation
+    // below is meaningless noise for a record that was never a BA candidate to begin with. Only
+    // once we know it IS a BA candidate does the window (baEligible) matter: a "BA" marker outside
+    // the official window is a genuine anomaly worth flagging ("hors_fenetre" — the BELTRANDO/
+    // BETHERY case from a real file: a stray "BA" marker on what was actually a completed AN cycle).
+    const baStatus: "hors_fenetre" | "national" | "promu" | "non_promu" | null = !isBaCandidate
       ? null
-      : isAgrege
-        ? "national"
-        : snap.proConfirmee
-          ? "promu"
-          : "non_promu";
+      : baEligible !== true
+        ? "hors_fenetre"
+        : isAgrege
+          ? "national"
+          : snap.proConfirmee
+            ? "promu"
+            : "non_promu";
 
     // For échelon-display purposes: did this record actually ARRIVE at the new échelon this
     // cycle? Agrégé BA candidates are always treated as not-yet-arrived, since the national
@@ -169,9 +179,11 @@ teachersRouter.get("/", async (req, res) => {
       // as `echelonActuel` above once corrected for an unconfirmed candidate, surfaced explicitly
       // here for the "Éligibilité BA" column.
       baEchelonDepart: baEchelonDepart ?? null,
-      // "national" = agrégé BA candidate (proposition nationale, statut non déterminable ici) ;
-      // "promu" / "non_promu" = non-agrégé BA candidate, per the rectorat's own "Pro" marker ;
-      // null = not a BA candidate this cycle (no "BA" marker), regardless of éligibilité above.
+      // "hors_fenetre" = BA candidate, but ancienneté outside the official window (anomaly) ;
+      // "national" = agrégé BA candidate, in-window (proposition nationale, statut non
+      // déterminable ici) ; "promu" / "non_promu" = non-agrégé BA candidate, in-window, per the
+      // rectorat's own "Pro" marker ; null = not a BA candidate this cycle (no "BA" marker) —
+      // shown regardless of baEligible below, which is irrelevant noise for a non-candidate.
       baStatus,
       baEligible,
       horsClasseEligible,
