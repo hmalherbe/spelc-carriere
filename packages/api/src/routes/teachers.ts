@@ -5,6 +5,7 @@ import {
   estimateAgainstSeuil,
   isEligibleHorsClasse,
   isEligibleClasseExceptionnelle,
+  isEligibleBonificationAnciennete,
   computeEchelonPromotion,
   GRADE_MAPPINGS,
   type GrilleCode,
@@ -73,15 +74,27 @@ teachersRouter.get("/", async (req, res) => {
       ? isEligibleClasseExceptionnelle(snap.echelonActuel, gradeMapping.grille === "HC_AGR" ? "agrege" : "autre")
       : null;
 
-    // null = not applicable (not on an arrival page the BA mechanism can lead to). Otherwise, true
-    // whenever the rectorat's own "TRACK.date" marker names BA — whether or not actually granted
-    // (see baConfirmee below): a candidate not yet selected is still "éligible".
-    const baEligible = baEchelonDepart !== undefined ? snap.proTypePromotion === "BA" : null;
+    // Éligibilité per the union's own rule: échelon départ 6 or 8 AND ancienneté in the official
+    // window (12-24 months at échelon 6, 18-30 at échelon 8) — independent of any marker. A "BA"
+    // marker alone is NOT sufficient: verified on a real file where two records carried one with
+    // 3.00 years' ancienneté (a plain completed AN case, not a BA candidate at all). PROMOTION
+    // (baConfirmee below), separately, additionally requires that marker, among the éligibles.
+    // null = not applicable (not on an arrival page the BA mechanism can lead to, or ancienneté
+    // missing), not "non éligible".
+    const baEligible =
+      baEchelonDepart !== undefined && snap.ancienneteEchelon != null
+        ? isEligibleBonificationAnciennete(baEchelonDepart, snap.ancienneteEchelon)
+        : null;
+
+    // Whether this record is even a candidate for the BA mechanism at all — the rectorat's own
+    // "TRACK.date" marker naming BA — as opposed to éligibilité above (window-only, per the
+    // union's rule) or baConfirmee below (ranked outcome, restricted to éligible BA candidates).
+    const isBaCandidate = baEchelonDepart !== undefined && snap.proTypePromotion === "BA";
 
     // true = ranked among the actual winners; false = ranked, but not among them (a known fact,
-    // not a guess); null = couldn't rank this candidate's group (missing headcount or data) — falls
-    // back to the seuil-based estimate below.
-    const baConfirmee = baEligible === true ? (baRankable.has(snap.teacherId) ? baWinners.has(snap.teacherId) : null) : null;
+    // not a guess); null = couldn't rank this candidate's group (missing headcount or data, or
+    // simply not éligible/not BA-marked) — falls back to the seuil-based estimate below.
+    const baConfirmee = isBaCandidate ? (baRankable.has(snap.teacherId) ? baWinners.has(snap.teacherId) : null) : null;
 
     const baEstimate =
       baEligible === true && baEchelonDepart !== undefined
@@ -122,7 +135,7 @@ teachersRouter.get("/", async (req, res) => {
     // Recompute échelon/gain display from the real départ (baEchelonDepart, 6 or 8) instead — a
     // pure grille lookup, so safe regardless of anything still unverified about what
     // `dateAccesEchelon` itself anchors.
-    const arrivedThisEchelon = baEligible === true ? baConfirmee === true : snap.proConfirmee;
+    const arrivedThisEchelon = isBaCandidate ? baConfirmee === true : snap.proConfirmee;
     let echelonActuelAffiche = snap.echelonActuel;
     let computedStateAffiche = state
       ? {

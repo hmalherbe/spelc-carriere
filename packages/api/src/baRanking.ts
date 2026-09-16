@@ -1,4 +1,4 @@
-import { rankBACandidates, type BACandidateRanked } from "@spelc/domain";
+import { rankBACandidates, isEligibleBonificationAnciennete, type BACandidateRanked } from "@spelc/domain";
 import { parseZ2AGEA } from "@spelc/import";
 
 export interface BaRankableSnapshot {
@@ -33,6 +33,12 @@ export interface BaRankingResult {
  * real file, the two candidates actually granted the bonification carried no distinguishing prefix
  * at all — only their barème ranking set them apart from the rest of the section. Ranking the full
  * section against the section's own known headcount is the only reliable way to know who made it.
+ *
+ * Only ÉLIGIBLE candidates enter the ranking pool — per the union's own rule, a "BA" marker alone
+ * isn't enough: ancienneté must also fall in the official window (isEligibleBonificationAnciennete)
+ * — verified on a real file where two candidates carried a "BA" marker with 3.00 years' ancienneté
+ * (well past the 1.5-2.5 year window for échelon 8, and matching a plain completed-full-duration AN
+ * case instead), and would otherwise have been wrongly ranked as winners.
  */
 export function computeBaRanking(snapshots: BaRankableSnapshot[]): BaRankingResult {
   const winners = new Set<string>();
@@ -43,6 +49,7 @@ export function computeBaRanking(snapshots: BaRankableSnapshot[]): BaRankingResu
     if (s.proTypePromotion !== "BA") continue;
     const baEchelonDepart = s.echelonActuel === "07" ? 6 : s.echelonActuel === "09" ? 8 : undefined;
     if (baEchelonDepart === undefined) continue;
+    if (s.ancienneteEchelon == null || !isEligibleBonificationAnciennete(baEchelonDepart, s.ancienneteEchelon)) continue;
     const key = `${s.grade}|${baEchelonDepart}`;
     const arr = groups.get(key) ?? [];
     arr.push(s);

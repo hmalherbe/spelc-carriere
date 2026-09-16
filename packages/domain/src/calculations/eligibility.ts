@@ -17,13 +17,18 @@ import type { EchelonBA } from "./baThreshold.js";
  *   - échelon 6 -> 7 : "être dans la 2e année de cet échelon" -> ancienneté in [1, 2) years.
  *   - échelon 8 -> 9 : "entre 18 et 30 mois" -> ancienneté in [1.5, 2.5] years.
  *
- * NOT currently used to read BA status off an imported rectorat snapshot (see teachers.ts): the
- * rectorat's own "ECHELON : NN" export groups every record by the échelon it would ARRIVE at if
- * promoted this cycle, not the échelon it currently holds, so a snapshot's `echelonActuel`/
- * `ancienneteEchelon` don't line up with this window the way you'd expect — the rectorat's own
- * `typePromotion === "BA"` flag on the "07"/"09" arrival pages is the reliable signal there.
- * This function stays useful for estimating BA candidacy from other sources (e.g. adhérent data)
- * that don't carry that rectorat page structure.
+ * Used to read BA ÉLIGIBILITÉ off an imported rectorat snapshot (see teachers.ts): the rectorat's
+ * "ECHELON : NN" export groups every record by the échelon it would ARRIVE at if promoted this
+ * cycle (07/09 for a départ-6/8 BA case — see routes/teachers.ts), and `ancienneteEchelon`, taken
+ * at face value on that page, lines up correctly with this window — verified against real BA
+ * winners (1.44 years, squarely in [1, 2)) and against real false positives this window correctly
+ * excludes (3.00 years — someone who simply completed the full non-accelerated échelon duration,
+ * not a BA candidate, despite their file still carrying a stray "BA" marker).
+ *
+ * Éligibilité (this function) is deliberately separate from PROMOTION: per the union's own rule,
+ * éligibilité is échelon+ancienneté alone, while promotion additionally requires the rectorat file
+ * to actually mark "BA" for that record — see rankBACandidates in baThreshold.ts and
+ * computeBaRanking in the api package, which rank only the éligible+BA-marked pool.
  */
 export function isEligibleBonificationAnciennete(echelonDepart: EchelonBA, ancienneteEchelonAnnees: number): boolean {
   if (echelonDepart === 6) {
