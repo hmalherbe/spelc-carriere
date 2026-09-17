@@ -12,6 +12,7 @@ import { adherentsRouter } from "./routes/adherents.js";
 import { settingsRouter } from "./routes/settings.js";
 import { statsRouter } from "./routes/stats.js";
 import { elusRouter } from "./routes/elus.js";
+import { aiAssistantRouter } from "./routes/aiAssistant.js";
 
 export function createApp() {
   const app = express();
@@ -32,6 +33,7 @@ export function createApp() {
   app.use("/settings", settingsRouter);
   app.use("/stats", statsRouter);
   app.use("/elus", elusRouter);
+  app.use("/ai-assistant", aiAssistantRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: `Route inconnue: ${req.method} ${req.path}` });

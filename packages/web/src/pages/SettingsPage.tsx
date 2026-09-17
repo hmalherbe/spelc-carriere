@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type AdelSettings, type BrevoSettings, type MailingBranding, type SocialLink } from "../api.js";
+import { api, type AdelSettings, type BrevoSettings, type MailingBranding, type MistralSettings, type SocialLink } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 export function SettingsPage() {
@@ -116,7 +116,97 @@ export function SettingsPage() {
       <BrevoSettingsCard canEdit={canEdit} />
       <MailingBrandingCard canEdit={canEdit} />
       <SocialLinksCard canEdit={canEdit} />
+      <MistralSettingsCard canEdit={canEdit} />
     </div>
+  );
+}
+
+function MistralSettingsCard({ canEdit }: { canEdit: boolean }) {
+  const [settings, setSettings] = useState<MistralSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [model, setModel] = useState("mistral-large-latest");
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  function refresh() {
+    setLoading(true);
+    api
+      .mistralSettings()
+      .then((s) => {
+        setSettings(s);
+        setModel(s.model);
+        setApiKey("");
+      })
+      .catch((e) => setLoadError(String(e)))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSaveError(null);
+    setSaved(false);
+    try {
+      const updated = await api.updateMistralSettings({ model, ...(apiKey ? { apiKey } : {}) });
+      setSettings(updated);
+      setApiKey("");
+      setSaved(true);
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loadError) return <p className="error-text">{loadError}</p>;
+  if (loading || !settings) return <p>Chargement...</p>;
+
+  return (
+    <section className="card">
+      <h2>Assistant IA (Mistral)</h2>
+      <p className="hint">
+        Clé API utilisée par l'onglet « Assistant IA » pour interroger la base de données en langage naturel.
+        {settings.updatedAt && <> Dernière modification le {new Date(settings.updatedAt).toLocaleString("fr-FR")}.</>}
+      </p>
+
+      {!canEdit ? (
+        <p className="hint">
+          {settings.hasApiKey ? "Une clé API est configurée." : "Aucune clé API n'est configurée."} Seul un
+          administrateur peut modifier ces réglages.
+        </p>
+      ) : (
+        <form className="inline-form" onSubmit={submit}>
+          <label>
+            Clé API Mistral
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={settings.hasApiKey ? "(inchangée — laisser vide pour conserver)" : "..."}
+              autoComplete="off"
+            />
+          </label>
+          <label>
+            Modèle
+            <input required type="text" value={model} onChange={(e) => setModel(e.target.value)} />
+          </label>
+          <button type="submit" disabled={saving}>
+            {saving ? "Enregistrement..." : "Enregistrer"}
+          </button>
+          {saved && <span className="hint"> Enregistré.</span>}
+        </form>
+      )}
+      {saveError && <p className="error-text">{saveError}</p>}
+    </section>
   );
 }
 

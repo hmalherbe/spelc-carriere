@@ -200,6 +200,47 @@ settingsRouter.delete(
   }),
 );
 
+/** Never includes the API key itself — only whether one is set (`hasApiKey`) — same reasoning as /adel above. */
+settingsRouter.get(
+  "/mistral",
+  asyncHandler(async (_req, res) => {
+    const config = await prisma.mistralConfig.findUnique({ where: { id: SINGLETON_ID } });
+    res.json({
+      model: config?.model ?? "mistral-large-latest",
+      hasApiKey: !!config?.apiKeyEncrypted,
+      updatedAt: config?.updatedAt ?? null,
+    });
+  }),
+);
+
+const updateMistralSchema = z.object({
+  model: z.string().min(1),
+  // Omitted or blank = keep the existing encrypted key rather than clearing it, same as /adel's password.
+  apiKey: z.string().min(1).optional(),
+});
+
+settingsRouter.put(
+  "/mistral",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const parsed = updateMistralSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+    }
+    const { model, apiKey } = parsed.data;
+    const fields = { model, updatedById: req.auth!.userId };
+    const apiKeyField = apiKey ? { apiKeyEncrypted: encryptSecret(apiKey) } : {};
+
+    const config = await prisma.mistralConfig.upsert({
+      where: { id: SINGLETON_ID },
+      create: { id: SINGLETON_ID, ...fields, ...apiKeyField },
+      update: { ...fields, ...apiKeyField },
+    });
+
+    res.json({ model: config.model, hasApiKey: !!config.apiKeyEncrypted, updatedAt: config.updatedAt });
+  }),
+);
+
 /**
  * One or more social network links shown at the end of every mailing (see mailing/template.ts).
  * No per-row CRUD: the admin edits the whole list at once, so PUT replaces it wholesale — same

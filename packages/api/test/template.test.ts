@@ -112,6 +112,11 @@ describe("buildPromotionEmail", () => {
     expect(html).toContain("&lt;script&gt;");
   });
 
+  it("turns line breaks in the t1 text into <br>", () => {
+    const { html } = buildPromotionEmail({ ...BASE, t1Text: "Ligne 1\nLigne 2\nLigne 3" });
+    expect(html).toContain("Ligne 1<br>Ligne 2<br>Ligne 3");
+  });
+
   it("lists the recipient's own commission's élus, titulaires and suppléants, with their contact info", () => {
     const { html } = buildPromotionEmail({
       ...BASE,

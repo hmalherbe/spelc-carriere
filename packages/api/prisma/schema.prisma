@@ -429,3 +429,15 @@ model SocialLink {
   url   String
   ordre Int    @default(0)
 }
+
+// Credentials for the "Assistant IA" tab (routes/aiAssistant.ts): a natural-language question ->
+// Mistral turns it into a read-only SQL SELECT against a curated, non-sensitive subset of tables
+// -> the API executes it in a read-only transaction -> Mistral summarizes the result in French.
+// Same singleton-row pattern as AdelConfig/BrevoConfig above.
+model MistralConfig {
+  id              String   @id @default("singleton")
+  apiKeyEncrypted String? // AES-256-GCM via ../src/crypto.ts — never stored in plaintext, never returned to the client
+  model           String   @default("mistral-large-latest")
+  updatedAt       DateTime @updatedAt
+  updatedById     String? // free-text: User.id at time of edit, kept even if the user is later deleted
+}

@@ -15,6 +15,7 @@ import { MouvementPage } from "./pages/MouvementPage.js";
 import { SettingsPage } from "./pages/SettingsPage.js";
 import { StatsPage } from "./pages/StatsPage.js";
 import { ElusPage } from "./pages/ElusPage.js";
+import { AiAssistantPage } from "./pages/AiAssistantPage.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -48,6 +49,7 @@ export function App() {
         <Route path="reclassement" element={<ReclassementPage />} />
         <Route path="mouvement" element={<MouvementPage />} />
         <Route path="parametres" element={<SettingsPage />} />
+        <Route path="assistant-ia" element={<AiAssistantPage />} />
       </Route>
     </Routes>
   );

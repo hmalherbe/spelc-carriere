@@ -246,6 +246,20 @@ export interface BrevoSettings {
   updatedAt: string | null;
 }
 
+export interface MistralSettings {
+  model: string;
+  /** Never the API key itself — only whether one is currently configured. */
+  hasApiKey: boolean;
+  updatedAt: string | null;
+}
+
+export interface AiAssistantAnswer {
+  sql: string;
+  rowCount: number;
+  rows: Record<string, unknown>[];
+  summary: string;
+}
+
 export interface Elu {
   id: string;
   commission: "CCMA" | "CCMI";
@@ -435,4 +449,10 @@ export const api = {
   socialLinks: () => request<SocialLink[]>("/settings/social-links"),
   updateSocialLinks: (links: { label: string; url: string }[]) =>
     request<SocialLink[]>("/settings/social-links", { method: "PUT", body: JSON.stringify({ links }) }),
+  mistralSettings: () => request<MistralSettings>("/settings/mistral"),
+  updateMistralSettings: (data: { model: string; apiKey?: string }) =>
+    request<MistralSettings>("/settings/mistral", { method: "PUT", body: JSON.stringify(data) }),
+  aiAssistantSuggestions: () => request<{ questions: string[] }>("/ai-assistant/suggestions"),
+  askAiAssistant: (question: string) =>
+    request<AiAssistantAnswer>("/ai-assistant/ask", { method: "POST", body: JSON.stringify({ question }) }),
 };

@@ -73,7 +73,9 @@ function civilitePrefix(civilite: string | null): string {
 function buildHeader(logoDataUrl: string | null, t1Text: string | null): string {
   if (!logoDataUrl && !t1Text) return "";
   const logoCell = logoDataUrl ? `<img src="${logoDataUrl}" alt="" style="max-height: 60px; max-width: 220px;">` : "";
-  const t1Cell = t1Text ? escapeHtml(t1Text) : "";
+  // escapeHtml first (untrusted admin input), then turn line breaks into <br> — mail clients don't
+  // reliably honor CSS white-space: pre-line, but <br> works everywhere.
+  const t1Cell = t1Text ? escapeHtml(t1Text).replace(/\n/g, "<br>") : "";
   return `
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom: 20px;">
       <tr>
