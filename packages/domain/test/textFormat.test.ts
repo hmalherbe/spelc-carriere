@@ -29,14 +29,22 @@ describe("formatDureeEncodedText", () => {
 });
 
 describe("formatAnneesDecimalesText", () => {
-  it("formats a whole-year figure with no months/days", () => {
+  it("formats a whole-year figure with no decimal part", () => {
     expect(formatAnneesDecimalesText(2)).toBe("2 ans");
-    expect(formatAnneesDecimalesText(0)).toBe("0 jour");
+    expect(formatAnneesDecimalesText(0)).toBe("0 an");
   });
 
-  it("formats a fractional-year figure into years/months/days", () => {
-    expect(formatAnneesDecimalesText(1)).toBe("1 an");
-    expect(formatAnneesDecimalesText(2.5)).toBe("2 ans 6 mois");
+  it("keeps the raw decimal value with a French comma, matching the real sent mailing verbatim", () => {
+    // Verified against the actual 25 mars 2026 CCMA mailing PDF (Yann ADAM: "1,442 an" / "2,328 ans" seen elsewhere).
+    expect(formatAnneesDecimalesText(1.442)).toBe("1,442 an");
+    expect(formatAnneesDecimalesText(12.997)).toBe("12,997 ans");
+    expect(formatAnneesDecimalesText(1.5)).toBe("1,5 an");
+  });
+
+  it("pluralizes 'ans' from 2 up, 'an' below 2", () => {
+    expect(formatAnneesDecimalesText(1.999)).toBe("1,999 an");
+    expect(formatAnneesDecimalesText(2)).toBe("2 ans");
+    expect(formatAnneesDecimalesText(2.001)).toBe("2,001 ans");
   });
 
   it("returns null for null/undefined input", () => {

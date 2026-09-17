@@ -22,16 +22,18 @@ export function formatDureeEncodedText(raw: string | null | undefined): string |
 
 /**
  * Formats a decimal-year ancienneté figure (e.g. 2.706, as stored in TeacherSnapshot.ancienneteGrade
- * / ancienneteEchelon) into the same French "X an(s) Y mois Z jour(s)" prose, using the same
- * 360-day banking year the rest of the promotion engine uses (see calculations/anciennete.ts) so
- * the two stay consistent with each other.
+ * / ancienneteEchelon) the same way the union's own mail-merged CCMA letters do: the raw decimal
+ * value with a French comma ("2,706 ans"), NOT a years/months/days breakdown — confirmed against
+ * the real sent mailing (e.g. "1,442 an", "12,997 ans"), which ruled out an earlier Y/M/D version
+ * of this function.
+ *
+ * Singular "an" below 2, plural "ans" from 2 up. The real letters are themselves inconsistent in
+ * the 1-2 range (the same 1,442 value shows up as both "an" and "ans" across different letters —
+ * apparently two spreadsheet columns with slightly different rounding) — this picks the more common
+ * of the two rather than trying to reproduce that inconsistency.
  */
 export function formatAnneesDecimalesText(years: number | null | undefined): string | null {
   if (years == null) return null;
-  const totalDays = Math.round(years * 360);
-  const y = Math.floor(totalDays / 360);
-  const afterYears = totalDays % 360;
-  const mo = Math.floor(afterYears / 30);
-  const d = afterYears % 30;
-  return formatYmdText(y, mo, d);
+  const formattedValue = String(years).replace(".", ",");
+  return `${formattedValue} an${years >= 2 ? "s" : ""}`;
 }
