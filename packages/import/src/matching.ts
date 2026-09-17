@@ -52,12 +52,21 @@ export interface MatchCandidateTeacher {
   teacherId: string;
   nom: string;
   prenom: string;
+  grade: string | null;
 }
 
 export interface MatchCandidateAdherent {
   adherentId: string;
   nom: string;
   prenom: string;
+  grade: string | null;
+}
+
+/** Same normalization `nameSimilarity` already applies to nom/prénom (case/accent/whitespace),
+ * reused here so "Certifié" (as ADEL happens to spell it) and "CERTIFIE" (our internal grade
+ * label) compare equal. */
+function normalizeGrade(grade: string): string {
+  return stripDiacritics(grade).toUpperCase().trim();
 }
 
 export interface MatchResult {
@@ -81,6 +90,13 @@ const AUTO_CONFIRM_THRESHOLD = 0.92;
  * since prénoms vary more in spelling/usage (nicknames, accents) without indicating a different
  * person.
  *
+ * Grade is a hard filter, not part of the similarity score: two people with a similar-looking name
+ * but different grades (AGREGE vs CERTIFIE, say) are never the same person, so that pair is never
+ * even considered, no matter how close the names are — this is what actually caused a wrong
+ * teacher to be suggested for a genuinely present adherent. When either side's grade is unknown
+ * (null), the pair is skipped too rather than guessed: a match nobody can vouch for on grade is
+ * worse than "no match yet".
+ *
  * Assignment is global, not per-adherent: a teacher can only ever end up matched to one adherent
  * (MatchCandidate.teacherId is unique in the DB), so if two adherents' best guess both point at the
  * same free teacher, the higher-confidence pair wins that teacher and the other adherent gets no
@@ -91,6 +107,8 @@ export function matchAdherents(adherents: MatchCandidateAdherent[], teachers: Ma
   const pairs: { adherentId: string; teacherId: string; score: number }[] = [];
   for (const adherent of adherents) {
     for (const teacher of teachers) {
+      if (!adherent.grade || !teacher.grade) continue;
+      if (normalizeGrade(adherent.grade) !== normalizeGrade(teacher.grade)) continue;
       const nomScore = nameSimilarity(adherent.nom, teacher.nom);
       const prenomScore = nameSimilarity(adherent.prenom, teacher.prenom);
       const score = nomScore * 0.6 + prenomScore * 0.4;

@@ -32,7 +32,7 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
       ...(adherentIds ? { id: { in: adherentIds } } : {}),
       OR: [{ matchCandidate: null }, { matchCandidate: { status: "PENDING_REVIEW", teacherId: null } }],
     },
-    select: { id: true, nom: true, prenom: true },
+    select: { id: true, nom: true, prenom: true, grade: true },
   });
 
   if (toRetry.length === 0) return { autoConfirmed: 0, pendingReview: 0 };
@@ -50,13 +50,13 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
   const allTeacherSnapshots = await prisma.teacherSnapshot.findMany({
     distinct: ["teacherId"],
     orderBy: { dateAccesEchelon: "desc" },
-    select: { teacherId: true, nomUsage: true, prenom: true },
+    select: { teacherId: true, nomUsage: true, prenom: true, grade: true },
   });
   const availableTeachers = allTeacherSnapshots.filter((t) => !claimedTeacherIds.has(t.teacherId));
 
   const matchResults = matchAdherents(
-    toRetry.map((a) => ({ adherentId: a.id, nom: a.nom, prenom: a.prenom })),
-    availableTeachers.map((t) => ({ teacherId: t.teacherId, nom: t.nomUsage, prenom: t.prenom })),
+    toRetry.map((a) => ({ adherentId: a.id, nom: a.nom, prenom: a.prenom, grade: a.grade })),
+    availableTeachers.map((t) => ({ teacherId: t.teacherId, nom: t.nomUsage, prenom: t.prenom, grade: t.grade })),
   );
 
   let autoConfirmed = 0;
