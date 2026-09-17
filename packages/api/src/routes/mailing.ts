@@ -4,8 +4,40 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { buildPromotionEmail } from "../mailing/template.js";
-import { loadBrevoConfig, sendBrevoEmail, BrevoConfigError } from "../mailing/brevo.js";
+import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
 import { normalizeName } from "@spelc/import";
+import { decryptSecret } from "../crypto.js";
+
+const SINGLETON_ID = "singleton";
+
+/**
+ * The Paramètres screen (routes/settings.ts) lets an admin set/rotate the API key without
+ * touching the server's .env — the DB row wins field-by-field, falling back to BREVO_API_KEY /
+ * BREVO_SENDER_EMAIL / BREVO_SENDER_NAME so an existing deployment configured only via .env keeps
+ * working unchanged (same pattern as routes/adel.ts's loadAdelConfig).
+ */
+async function loadBrevoConfigFromDb(): Promise<{
+  config: BrevoConfig;
+  testMode: boolean;
+  testEmail: string | null;
+  testMaxSends: number | null;
+}> {
+  const dbConfig = await prisma.brevoConfig.findUnique({ where: { id: SINGLETON_ID } });
+  const apiKey = dbConfig?.apiKeyEncrypted ? decryptSecret(dbConfig.apiKeyEncrypted) : process.env.BREVO_API_KEY;
+  const senderEmail = dbConfig?.senderEmail || process.env.BREVO_SENDER_EMAIL;
+  const senderName = dbConfig?.senderName || process.env.BREVO_SENDER_NAME || "Spelc";
+  if (!apiKey || !senderEmail) {
+    throw new BrevoConfigError(
+      "Envoi de mailing non configuré : renseignez la clé API Brevo dans l'onglet Paramètres (ou les variables BREVO_API_KEY/BREVO_SENDER_EMAIL) avant d'envoyer.",
+    );
+  }
+  return {
+    config: { apiKey, senderEmail, senderName },
+    testMode: dbConfig?.testMode ?? false,
+    testEmail: dbConfig?.testEmail ?? null,
+    testMaxSends: dbConfig?.testMaxSends ?? null,
+  };
+}
 
 export const mailingRouter = Router();
 mailingRouter.use(requireAuth);
@@ -214,23 +246,33 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
 
-  let brevoConfig;
+  let brevoConfig: BrevoConfig;
+  let testMode: boolean;
+  let testEmail: string | null;
+  let testMaxSends: number | null;
   try {
-    brevoConfig = loadBrevoConfig();
+    ({ config: brevoConfig, testMode, testEmail, testMaxSends } = await loadBrevoConfigFromDb());
   } catch (e) {
     if (e instanceof BrevoConfigError) return res.status(400).json({ error: e.message });
     throw e;
   }
+  if (testMode && !testEmail) {
+    return res.status(400).json({ error: "Mode test activé mais aucune adresse de test n'est configurée dans Paramètres." });
+  }
 
   const all = await eligibleRecipients(campagneId);
-  const targets = teacherIds
+  let targets = teacherIds
     ? all.filter((r) => teacherIds.includes(r.teacherId))
     : all.filter((r) => r.lastStatus !== "SENT");
+  if (testMode && testMaxSends != null) targets = targets.slice(0, testMaxSends);
 
   const results: { teacherId: string; nom: string; prenom: string; email: string | null; status: "SENT" | "FAILED"; error?: string }[] = [];
 
   for (const recipient of targets) {
-    if (!recipient.email) {
+    // In test mode every send is redirected to testEmail (validated non-null above), so a
+    // recipient with no real address on file becomes sendable too — useful for a full dry run.
+    const effectiveEmail = testMode ? testEmail : recipient.email;
+    if (!effectiveEmail) {
       results.push({ teacherId: recipient.teacherId, nom: recipient.nom, prenom: recipient.prenom, email: null, status: "FAILED", error: "Aucune adresse e-mail connue pour cet adhérent" });
       await prisma.mailingLog.upsert({
         where: { campagneId_teacherId: { campagneId, teacherId: recipient.teacherId } },
@@ -254,31 +296,41 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
       dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
       anneeScolaire: campagne.anneeScolaire,
     });
+    const effectiveSubject = testMode
+      ? `[TEST — destinataire réel : ${recipient.nom} ${recipient.prenom} <${recipient.email ?? "aucune adresse"}>] ${subject}`
+      : subject;
 
     try {
       const { messageId } = await sendBrevoEmail(brevoConfig, {
-        to: { email: recipient.email, name: `${recipient.prenom} ${recipient.nom}` },
-        subject,
+        to: { email: effectiveEmail, name: testMode ? `${recipient.prenom} ${recipient.nom} (test)` : `${recipient.prenom} ${recipient.nom}` },
+        subject: effectiveSubject,
         html,
       });
-      await prisma.mailingLog.upsert({
-        where: { campagneId_teacherId: { campagneId, teacherId: recipient.teacherId } },
-        create: { campagneId, teacherId: recipient.teacherId, adherentId: recipient.adherentId, email: recipient.email, status: "SENT", brevoMessageId: messageId, sentById: req.auth!.userId },
-        update: { status: "SENT", error: null, brevoMessageId: messageId, sentById: req.auth!.userId, sentAt: new Date() },
-      });
-      results.push({ teacherId: recipient.teacherId, nom: recipient.nom, prenom: recipient.prenom, email: recipient.email, status: "SENT" });
+      // A test send is never recorded in MailingLog — it must never be mistaken later for the
+      // real campaign to this teacher having already gone out (see the /send filter above, which
+      // skips anyone with lastStatus === "SENT").
+      if (!testMode) {
+        await prisma.mailingLog.upsert({
+          where: { campagneId_teacherId: { campagneId, teacherId: recipient.teacherId } },
+          create: { campagneId, teacherId: recipient.teacherId, adherentId: recipient.adherentId, email: effectiveEmail, status: "SENT", brevoMessageId: messageId, sentById: req.auth!.userId },
+          update: { status: "SENT", error: null, brevoMessageId: messageId, sentById: req.auth!.userId, sentAt: new Date() },
+        });
+      }
+      results.push({ teacherId: recipient.teacherId, nom: recipient.nom, prenom: recipient.prenom, email: effectiveEmail, status: "SENT" });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      await prisma.mailingLog.upsert({
-        where: { campagneId_teacherId: { campagneId, teacherId: recipient.teacherId } },
-        create: { campagneId, teacherId: recipient.teacherId, adherentId: recipient.adherentId, email: recipient.email, status: "FAILED", error: message, sentById: req.auth!.userId },
-        update: { status: "FAILED", error: message, sentById: req.auth!.userId, sentAt: new Date() },
-      });
-      results.push({ teacherId: recipient.teacherId, nom: recipient.nom, prenom: recipient.prenom, email: recipient.email, status: "FAILED", error: message });
+      if (!testMode) {
+        await prisma.mailingLog.upsert({
+          where: { campagneId_teacherId: { campagneId, teacherId: recipient.teacherId } },
+          create: { campagneId, teacherId: recipient.teacherId, adherentId: recipient.adherentId, email: effectiveEmail, status: "FAILED", error: message, sentById: req.auth!.userId },
+          update: { status: "FAILED", error: message, sentById: req.auth!.userId, sentAt: new Date() },
+        });
+      }
+      results.push({ teacherId: recipient.teacherId, nom: recipient.nom, prenom: recipient.prenom, email: effectiveEmail, status: "FAILED", error: message });
     }
   }
 
   const sent = results.filter((r) => r.status === "SENT").length;
   const failed = results.filter((r) => r.status === "FAILED").length;
-  res.status(201).json({ sent, failed, results });
+  res.status(201).json({ sent, failed, results, testMode });
 }));

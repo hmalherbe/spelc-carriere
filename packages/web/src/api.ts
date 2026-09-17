@@ -234,6 +234,19 @@ export interface MailingSendResult {
   sent: number;
   failed: number;
   results: { teacherId: string; nom: string; prenom: string; email: string | null; status: "SENT" | "FAILED"; error?: string }[];
+  /** true when this send was redirected to the test address (Paramètres) rather than real recipients. */
+  testMode: boolean;
+}
+
+export interface BrevoSettings {
+  senderEmail: string | null;
+  senderName: string;
+  /** Never the API key itself — only whether one is currently configured. */
+  hasApiKey: boolean;
+  testMode: boolean;
+  testEmail: string | null;
+  testMaxSends: number | null;
+  updatedAt: string | null;
 }
 
 export interface MailingLogEntry {
@@ -340,4 +353,13 @@ export const api = {
   adelSettings: () => request<AdelSettings>("/settings/adel"),
   updateAdelSettings: (data: { loginUrl: string; username: string; password?: string; spelcName: string }) =>
     request<AdelSettings>("/settings/adel", { method: "PUT", body: JSON.stringify(data) }),
+  brevoSettings: () => request<BrevoSettings>("/settings/brevo"),
+  updateBrevoSettings: (data: {
+    senderEmail: string;
+    senderName: string;
+    apiKey?: string;
+    testMode: boolean;
+    testEmail?: string;
+    testMaxSends?: number;
+  }) => request<BrevoSettings>("/settings/brevo", { method: "PUT", body: JSON.stringify(data) }),
 };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Campagne, type MailingPreview, type MailingRecipient, type MailingSendResult } from "../api.js";
+import { api, type BrevoSettings, type Campagne, type MailingPreview, type MailingRecipient, type MailingSendResult } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 function euros(n: number): string {
@@ -28,6 +28,7 @@ export function MailingPage() {
   const [emailDraft, setEmailDraft] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [brevoSettings, setBrevoSettings] = useState<BrevoSettings | null>(null);
 
   useEffect(() => {
     api.campagnes().then((c) => {
@@ -35,6 +36,7 @@ export function MailingPage() {
       if (c.length > 0) setCampagneId(c[0].id);
       else setLoading(false);
     });
+    api.brevoSettings().then(setBrevoSettings).catch(() => undefined);
   }, []);
 
   function refresh(id: string) {
@@ -93,7 +95,12 @@ export function MailingPage() {
   async function send() {
     if (!campagneId || selected.size === 0) return;
     const count = selected.size;
-    if (!window.confirm(`Envoyer un e-mail à ${count} adhérent(s) via Brevo ? Cette action envoie de vrais e-mails et ne peut pas être annulée.`)) {
+    const confirmMessage = brevoSettings?.testMode
+      ? `Mode test actif : les ${count} e-mail(s) partiront tous vers ${brevoSettings.testEmail} au lieu des vrais destinataires` +
+        (brevoSettings.testMaxSends != null ? ` (limité à ${brevoSettings.testMaxSends} envoi(s))` : "") +
+        ". Continuer ?"
+      : `Envoyer un e-mail à ${count} adhérent(s) via Brevo ? Cette action envoie de vrais e-mails et ne peut pas être annulée.`;
+    if (!window.confirm(confirmMessage)) {
       return;
     }
     setSending(true);
@@ -135,6 +142,14 @@ export function MailingPage() {
 
       {error && <p className="error-text">{error}</p>}
 
+      {brevoSettings?.testMode && (
+        <p className="import-result">
+          <strong>Mode test actif</strong> — tout envoi redirige vers {brevoSettings.testEmail}
+          {brevoSettings.testMaxSends != null && <> (limité à {brevoSettings.testMaxSends} e-mail(s) par envoi)</>}, sans
+          jamais atteindre les vrais destinataires. À désactiver dans Paramètres pour une vraie campagne.
+        </p>
+      )}
+
       {canSend && (
         <div className="toolbar">
           <span className="hint">{selected.size} sélectionné(s)</span>
@@ -148,6 +163,7 @@ export function MailingPage() {
         <div className="import-result">
           <p>
             <strong>{sendResult.sent}</strong> envoyé(s), <strong>{sendResult.failed}</strong> échec(s).
+            {sendResult.testMode && " (mode test — aucun vrai destinataire atteint, rien n'a été marqué comme envoyé)"}
           </p>
           {sendResult.failed > 0 && (
             <details>

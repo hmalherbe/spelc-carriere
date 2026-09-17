@@ -360,10 +360,10 @@ model AdelSyncLog {
 
 // ---------------------------------------------------------------------------
 // App settings — admin-editable via the "Paramètres" screen, so a credential change (e.g. the
-// ADEL password rotating) doesn't require touching the server's .env and redeploying. A single
-// row (id fixed to "singleton") rather than a generic key/value table: there's exactly one thing
-// to configure today, and a real table keeps each field's shape — and the password's encryption —
-// explicit instead of stringly-typed.
+// ADEL password rotating, or the Brevo API key) doesn't require touching the server's .env and
+// redeploying. One singleton row per integration (id fixed to "singleton") rather than a generic
+// key/value table: a real table keeps each field's shape — and any secret's encryption — explicit
+// instead of stringly-typed.
 // ---------------------------------------------------------------------------
 
 model AdelConfig {
@@ -374,4 +374,21 @@ model AdelConfig {
   spelcName         String   @default("azur")
   updatedAt         DateTime @updatedAt
   updatedById       String? // free-text: User.id at time of edit, kept even if the user is later deleted
+}
+
+model BrevoConfig {
+  id              String   @id @default("singleton")
+  apiKeyEncrypted String? // AES-256-GCM via ../src/crypto.ts — never stored in plaintext, never returned to the client
+  senderEmail     String?
+  senderName      String   @default("Spelc")
+  // Test mode: while true, every /mailing/send redirects every recipient's e-mail to testEmail
+  // instead of their real address (adhérent or académique), capped to testMaxSends recipients —
+  // a safe way to try a real campaign end-to-end without reaching real teachers. Sends made this
+  // way are never written to MailingLog, so they can't be mistaken later for the real campaign
+  // having already gone out (see routes/mailing.ts).
+  testMode        Boolean  @default(false)
+  testEmail       String?
+  testMaxSends    Int?
+  updatedAt       DateTime @updatedAt
+  updatedById     String? // free-text: User.id at time of edit, kept even if the user is later deleted
 }

@@ -416,6 +416,17 @@ main {
   margin-top: 12px;
 }
 
+.checkbox-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  max-width: 320px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+}
+
 .import-result {
   margin-top: 14px;
   padding: 12px 14px;
