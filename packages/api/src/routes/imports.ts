@@ -3,7 +3,7 @@ import multer from "multer";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
-import { importAdherentRecords } from "../adherentImport.js";
+import { importAdherentRecords, matchUnresolvedAdherents } from "../adherentImport.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { recomputeBaSeuils } from "../baSeuilCompute.js";
 import { computeEchelonPromotion, deriveNumericEchelonAliases, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
@@ -244,6 +244,11 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   // imported BA promotions — recomputed after every rectorat import so they reflect the latest
   // data, without ever touching a row the admin has locked (see baSeuilCompute.ts).
   await recomputeBaSeuils(campagneId);
+
+  // A rectorat import is exactly what can resolve an adhérent whose matching attempt previously
+  // found "Aucune correspondance trouvée" simply because their teacher hadn't been imported yet —
+  // retry every adhérent still stuck that way now that this file added (potentially) new teachers.
+  await matchUnresolvedAdherents();
 
   res.status(201).json({ results });
 }));
