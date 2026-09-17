@@ -252,6 +252,30 @@ export interface BrevoSettings {
   updatedAt: string | null;
 }
 
+interface GenreBreakdown {
+  hommes: { n: number; pct: number };
+  femmes: { n: number; pct: number };
+  indetermine: { n: number; pct: number };
+}
+
+export interface CampagneStats {
+  ba: {
+    promus: number;
+    nonPromus: number;
+    /** promus + nonPromus — agrégés ("national", décision ministérielle) et anomalies
+     * ("hors_fenetre") en sont exclus, faute d'un vrai appel promu/non-promu pour eux. */
+    promouvables: number;
+    pctPromus: number;
+    national: number;
+    horsFenetre: number;
+    genre: GenreBreakdown;
+  };
+  tousLesPromus: {
+    total: number;
+    genre: GenreBreakdown;
+  };
+}
+
 export interface MailingLogEntry {
   id: string;
   teacherId: string;
@@ -309,6 +333,7 @@ export const api = {
   createCampagne: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }) =>
     request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
+  stats: (campagneId: string) => request<CampagneStats>(`/stats?campagneId=${campagneId}`),
   pendingMatches: (campagneId?: string) =>
     request<MatchCandidate[]>(`/matches?status=PENDING_REVIEW${campagneId ? `&campagneId=${campagneId}` : ""}`),
   adherentsEligibles: (campagneId: string) => request<AdherentEligible[]>(`/adherents/eligibles?campagneId=${campagneId}`),

@@ -1,15 +1,9 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth/middleware.js";
-import {
-  isEligibleHorsClasse,
-  isEligibleClasseExceptionnelle,
-  isEligibleBonificationAnciennete,
-  computeEchelonPromotion,
-  GRADE_MAPPINGS,
-  type GrilleCode,
-} from "@spelc/domain";
+import { isEligibleHorsClasse, isEligibleClasseExceptionnelle, computeEchelonPromotion, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
+import { computeBaStatus } from "../baStatus.js";
 
 export const teachersRouter = Router();
 
@@ -41,17 +35,14 @@ teachersRouter.get("/", async (req, res) => {
   const result = snapshots.map((snap) => {
     const state = snap.teacher.computedStates[0];
 
-    // The rectorat's "ECHELON : NN" page groups every record by the échelon it would ARRIVE at
-    // if promoted this cycle, not the échelon it currently holds (confirmed against real files:
-    // the page-footer "B A / A N" promouvables counts are per arrival page, and a "BA." marker —
-    // the rectorat's own flag for "this promotion is a bonification d'ancienneté" — only ever
-    // shows up there). BA only exists for the 6->7 and 8->9 transitions, so BA candidates
-    // départ-échelon 6 are filed on the "07" page and départ-échelon 8 on the "09" page — never
-    // on "06"/"08" themselves, which is why cross-checking an ancienneté window on those pages
-    // used to find nobody eligible.
-    const baEchelonDepart: 6 | 8 | undefined = snap.echelonActuel === "07" ? 6 : snap.echelonActuel === "09" ? 8 : undefined;
-    const seuil =
-      baEchelonDepart !== undefined ? seuils.find((s) => s.grade === snap.grade && s.echelonDepart === baEchelonDepart) : undefined;
+    // BA candidacy/status/arrival — extracted to baStatus.ts (long rationale kept there) so
+    // routes/stats.ts can aggregate over the exact same rule without re-deriving it.
+    const { baEchelonDepart, baEligible, isBaCandidate, baStatus, arrivedThisEchelon } = computeBaStatus(snap);
+
+    // The rectorat's "ECHELON : NN" page groups every record by the échelon it would ARRIVE at if
+    // promoted this cycle, not the échelon it currently holds — BA candidates départ-échelon 6 are
+    // filed on the "07" page and départ-échelon 8 on the "09" page (see baStatus.ts).
+    const seuil = baEchelonDepart !== null ? seuils.find((s) => s.grade === snap.grade && s.echelonDepart === baEchelonDepart) : undefined;
 
     const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === snap.grade);
 
@@ -65,59 +56,6 @@ teachersRouter.get("/", async (req, res) => {
       ? isEligibleClasseExceptionnelle(snap.echelonActuel, gradeMapping.grille === "HC_AGR" ? "agrege" : "autre")
       : null;
 
-    // Éligibilité per the union's own rule: échelon départ 6 or 8 AND ancienneté in the official
-    // window (12-24 months at échelon 6, 18-30 at échelon 8) — independent of any marker. A "BA"
-    // marker alone is NOT sufficient: verified on a real file where two records carried one with
-    // 3.00 years' ancienneté (a plain completed AN case, not a BA candidate at all). PROMOTION
-    // (baStatus below), separately, additionally requires that marker, among the éligibles.
-    // null = not applicable (not on an arrival page the BA mechanism can lead to, or ancienneté
-    // missing), not "non éligible".
-    const baEligible =
-      baEchelonDepart !== undefined && snap.ancienneteEchelon != null
-        ? isEligibleBonificationAnciennete(baEchelonDepart, snap.ancienneteEchelon)
-        : null;
-
-    // Whether this record is even a candidate for the BA mechanism at all — the rectorat's own
-    // "TRACK.date" marker naming BA — as opposed to éligibilité above (window-only, per the
-    // union's rule).
-    const isBaCandidate = baEchelonDepart !== undefined && snap.proTypePromotion === "BA";
-
-    // Agrégés' BA promotion is decided at the national level (proposition), not locally by this
-    // département's own rectorat file — that's exactly why its "Pro"/no-"Pro" marker isn't a
-    // reliable promoted/not-promoted signal for them specifically (verified: real agrégé BA
-    // winners carried no "Pro" prefix at all). So for agrégés we only ever report the candidacy
-    // itself, never a promoted/non-promu call. For every other grade the promotion IS decided
-    // locally, so the "Pro" prefix is authoritative: "Pro BA." = promu, bare "BA." = éligible but
-    // pas promu.
-    const isAgrege = snap.grade.startsWith("AGREGE");
-
-    // Gated on isBaCandidate FIRST, before anything else: a record with no "BA" marker at all
-    // (e.g. on the AN/CL/RE track, or a hors-classe/classe-exceptionnelle record whose échelon
-    // string just happens to read "07"/"09") is simply not part of the BA process this cycle, and
-    // must report null (-> "—" client-side) rather than "non éligible" — the window computation
-    // below is meaningless noise for a record that was never a BA candidate to begin with. Only
-    // once we know it IS a BA candidate does the window (baEligible) matter: a "BA" marker outside
-    // the official window is a genuine anomaly worth flagging ("hors_fenetre" — the BELTRANDO/
-    // BETHERY case from a real file: a stray "BA" marker on what was actually a completed AN cycle).
-    const baStatus: "hors_fenetre" | "national" | "promu" | "non_promu" | null = !isBaCandidate
-      ? null
-      : baEligible !== true
-        ? "hors_fenetre"
-        : isAgrege
-          ? "national"
-          : snap.proConfirmee
-            ? "promu"
-            : "non_promu";
-
-    // For échelon-display purposes: did this record actually ARRIVE at the new échelon this
-    // cycle? NO for every BA candidate, confirmed or not — "promu BA" means the accelerated
-    // timeline was GRANTED, not that the transition already happened: per the union's own rule,
-    // being a BA candidate at all means currently sitting AT the départ échelon (6 or 8) being
-    // evaluated for the "rendez-vous de carrière"; the "Pro" prefix only tells us whether that
-    // grant was confirmed, never that the arrival échelon (7/9) has already been reached (real
-    // case: "Promu BA" records whose own échéance date was still months away). Every other
-    // record's own "Pro" marker (AN/CL/RE) answers "arrived?" directly, as before.
-    const arrivedThisEchelon = isBaCandidate ? false : snap.proConfirmee;
     let echelonActuelAffiche = snap.echelonActuel;
     let computedStateAffiche = state
       ? {
@@ -131,7 +69,7 @@ teachersRouter.get("/", async (req, res) => {
         }
       : null;
 
-    if (baEchelonDepart !== undefined && !arrivedThisEchelon && gradeMapping && snap.dateAccesEchelon) {
+    if (baEchelonDepart !== null && !arrivedThisEchelon && gradeMapping && snap.dateAccesEchelon) {
       try {
         const promotion = computeEchelonPromotion({
           grille: gradeMapping.grille as GrilleCode,

@@ -4,7 +4,17 @@ import { useAuth } from "../AuthContext.js";
 // Level 3 of the tree, in practice: everything already built under "Suivi de la carrière >
 // Avancement" (échelon CCMA/CCMI). Kept as a flat list of paths so both the "Avancement" dropdown
 // entry and the contextual sub-nav below know when they're in this section.
-const AVANCEMENT_PATHS = ["/", "/revue", "/adherents-eligibles", "/seuils-ba", "/import", "/mailing", "/regles", "/grilles"];
+const AVANCEMENT_PATHS = [
+  "/",
+  "/revue",
+  "/adherents-eligibles",
+  "/seuils-ba",
+  "/import",
+  "/mailing",
+  "/regles",
+  "/grilles",
+  "/statistiques",
+];
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -52,6 +62,7 @@ export function Layout() {
           <NavLink to="/mailing">Mailing</NavLink>
           <NavLink to="/regles">Règles de gestion</NavLink>
           <NavLink to="/grilles">Grilles indiciaires</NavLink>
+          <NavLink to="/statistiques">Statistiques</NavLink>
         </nav>
       )}
       <main>

@@ -408,6 +408,37 @@ main {
   margin-bottom: 8px;
 }
 
+.card h3 {
+  font-size: 0.9rem;
+  margin: 18px 0 8px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.stat-tile {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.stat-tile .stat-value {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.stat-tile .stat-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 .inline-form {
   display: flex;
   flex-wrap: wrap;
