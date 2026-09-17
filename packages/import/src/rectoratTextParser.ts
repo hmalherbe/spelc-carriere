@@ -23,7 +23,12 @@ export interface ParsedTeacherRecord {
   ville: string | null;
   disciplineCode: string | null;
   disciplineLibelle: string | null;
-  echelonActuel: string; // from the section header, e.g. "07"
+  // From the section header ("PROJET D'AVANCEMENT ECHELON : NN", e.g. "07") — despite the field
+  // name, that value is the échelon this section's candidates are being projected INTO (their
+  // arrival), not their current one. The caller (routes/imports.ts) corrects this to the teacher's
+  // real départ échelon via deriveEchelonActuelFromProjection before this ever reaches computation
+  // or storage — confirmed against a real sent mailing, see that function's doc comment.
+  echelonActuel: string;
   dateAccesEchelon: string | null; // ISO date
   avisEvaluation: number | null; // 0-4
   ancienneteGrade: number | null; // "Z1AGRA"

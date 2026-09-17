@@ -5,7 +5,13 @@ import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords, matchUnresolvedAdherents } from "../adherentImport.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
-import { computeEchelonPromotion, deriveNumericEchelonAliases, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
+import {
+  computeEchelonPromotion,
+  deriveEchelonActuelFromProjection,
+  deriveNumericEchelonAliases,
+  GRADE_MAPPINGS,
+  type GrilleCode,
+} from "@spelc/domain";
 import {
   extractPdfText,
   parseRectoratFile,
@@ -163,6 +169,14 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
       // detected their grade — that stale cross-grade snapshot must not coexist with this one.
       await prisma.teacherSnapshot.deleteMany({ where: { campagneId, teacherId, NOT: { grade } } });
 
+      // nombrePromusBaSection is keyed by the section's own header value (the projection/target
+      // échelon — see deriveEchelonActuelFromProjection below), so this lookup must happen BEFORE
+      // record.echelonActuel is corrected to the teacher's true départ échelon a few lines down.
+      const nombrePromusBaSection = nombrePromusBaBySection.get(record.echelonActuel) ?? null;
+      record.echelonActuel = String(
+        deriveEchelonActuelFromProjection(gradeMapping.grille as GrilleCode, record.echelonActuel, liveGrilles),
+      );
+
       await prisma.teacherSnapshot.create({
         data: {
           campagneId,
@@ -190,7 +204,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
           dateProchainePromotionRectorat: record.dateProchainePromotionRectorat ? new Date(record.dateProchainePromotionRectorat) : null,
           proTypePromotion: record.proTypePromotion,
           proConfirmee: record.proConfirmee,
-          nombrePromusBaSection: nombrePromusBaBySection.get(record.echelonActuel) ?? null,
+          nombrePromusBaSection,
           rowIndex,
         },
       });

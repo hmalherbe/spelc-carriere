@@ -81,6 +81,10 @@ function p(html: string): string {
  * (voir formatDureeEncodedText et son commentaire : confirmé sur un cas réel, MOLENAT Marion). */
 function buildReportAncienneteBlock(ctx: CcmaModelContext): string {
   if (ctx.typePromotion !== "RE") return "";
+  // "00a00m00j" is a real, common value (no report at all) — formatDureeEncodedText renders it as
+  // "0 jour" rather than null, but the real letter omits the whole sentence when there's nothing to
+  // report, so that literal-zero case must be filtered out here rather than trusted as truthy.
+  if (ctx.dureeRestanteEncoded === "00a00m00j") return "";
   const report = formatDureeEncodedText(ctx.dureeRestanteEncoded);
   if (!report) return "";
   const dateDerniere = formatDateFr(ctx.dateAccesEchelonActuel);

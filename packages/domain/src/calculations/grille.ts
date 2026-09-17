@@ -66,6 +66,40 @@ export function deriveNumericEchelonAliases(
 }
 
 /**
+ * Derives the échelon a teacher actually held (their departure point) from the value the rectorat
+ * PDF export prints in its section header — "PROJET D'AVANCEMENT ECHELON : NN". That value is the
+ * échelon the section's candidates are being projected INTO (their arrival), never their current
+ * one — confirmed against the real 25 mars 2026 CCMA mailing: a section headed "05" contained a
+ * teacher whose actual sent letter read "vous étiez à l'échelon 4 ... passage à l'échelon 5". The
+ * parser and importer previously stored that header value directly as `echelonActuel`, silently
+ * shifting every computed échelon, date and gain by one step for as long as the app has existed.
+ *
+ * Finds the grille row whose `echelonSuivant` equals `projectionEchelon` and returns that row's own
+ * échelon — walking one step backward through the grille's actual sequence, rather than a naive
+ * "-1", so it also works across the plain-numeric -> letter-code boundary (HC/EXC grilles, where
+ * échelon 3 -> "A1" for instance). Throws if no such row exists (an unreachable projection échelon
+ * is a data/mapping bug, not something to silently misreport).
+ *
+ * Known limitation: a few classe-exceptionnelle grilles (EXC_AGR, EXC_PROFS, EXC_PEGC) still carry
+ * two parallel pre-2017-reform "vivier" rows that converge on the same échelonSuivant (e.g. both
+ * "A3" and "B1" lead to "B2" in EXC_AGR) — ambiguous from the projection value alone, this returns
+ * whichever of the two comes first in the grille's own row order. The "vivier 2" track (B1/B2/B3)
+ * predates the current PPCR rules, so this shouldn't affect a teacher on a current-cycle export.
+ */
+export function deriveEchelonActuelFromProjection(
+  grille: GrilleCode,
+  projectionEchelon: EchelonCode,
+  grilles: Record<GrilleCode, EchelonRow[]> = GRILLES,
+): EchelonCode {
+  const target = normalizeEchelonKey(projectionEchelon);
+  const predecessor = grilles[grille].find((r) => normalizeEchelonKey(r.echelonSuivant) === target);
+  if (!predecessor) {
+    throw new Error(`Aucun échelon de la grille ${grille} n'a pour échelon suivant "${projectionEchelon}"`);
+  }
+  return predecessor.echelon;
+}
+
+/**
  * Gross monthly salary ("traitement brut mensuel") for a given indice.
  * Mirrors: TEXT(ROUND(indice * Valeur_du_point / 12, 0), "0000")
  *

@@ -76,6 +76,11 @@ describe("buildCcmaModelEmail", () => {
     expect(buildCcmaModelEmail(BASE).html).not.toContain("report d'ancienneté");
   });
 
+  it("omits the report d'ancienneté paragraph when typePromotion is RE but the duration is literally zero (real case)", () => {
+    const html = buildCcmaModelEmail({ ...BASE, typePromotion: "RE", dureeRestanteEncoded: "00a00m00j" }).html;
+    expect(html).not.toContain("report d'ancienneté");
+  });
+
   it("shows the accelerated future-promotion variant when landing on a BA window (échelon 6 or 8)", () => {
     const { html } = buildCcmaModelEmail({
       ...BASE,

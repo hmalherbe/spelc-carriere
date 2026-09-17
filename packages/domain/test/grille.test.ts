@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { deriveNumericEchelonAliases, findEchelonRow, gainSalaireBrut, gainSalaireNet, traitementBrutMensuel } from "../src/calculations/grille.js";
+import {
+  deriveEchelonActuelFromProjection,
+  deriveNumericEchelonAliases,
+  findEchelonRow,
+  gainSalaireBrut,
+  gainSalaireNet,
+  traitementBrutMensuel,
+} from "../src/calculations/grille.js";
 
 describe("grille indiciaire lookups (extracted from the workbook's Données sheet)", () => {
   it("finds the AGR échelon 5 row exactly as it appears in the workbook", () => {
@@ -59,5 +66,41 @@ describe("deriveNumericEchelonAliases", () => {
 
   it("EXC_PROFS: continues numbering from échelon 5 (its letter rows start at 'A2', skipping 'A1')", () => {
     expect(deriveNumericEchelonAliases("EXC_PROFS")).toEqual({ "06": "A2", "07": "A3" });
+  });
+});
+
+describe("deriveEchelonActuelFromProjection", () => {
+  // Confirmed against the real, actually-sent 25 mars 2026 CCMA mailing PDF (568 letters) cross-
+  // referenced against the matching rectorat export by name AND by the record's own "Pro
+  // AN.DD/MM/YYYY" confirmation date (so these are the exact same person/event, not a coincidence):
+  //   Elise MORIN (AGR)     — PDF section "PROJET D'AVANCEMENT ECHELON : 05" — real letter: échelon 4 -> 5
+  //   Isabel LLEWELLYN (AGR)— section "06" — real letter: échelon 5 -> 6
+  //   Yann ADAM (AGR)       — section "07" — real letter: échelon 6 -> 7
+  //   Raphaël YACOUB (PROFS)— section "02" — real letter: échelon 1 -> 2
+  it("derives the real départ échelon from the section's projection value (plain numeric grilles)", () => {
+    expect(deriveEchelonActuelFromProjection("AGR", "05")).toBe(4);
+    expect(deriveEchelonActuelFromProjection("AGR", "06")).toBe(5);
+    expect(deriveEchelonActuelFromProjection("AGR", "07")).toBe(6);
+    expect(deriveEchelonActuelFromProjection("PROFS", "02")).toBe(1);
+  });
+
+  it("works across the plain-numeric -> letter-code boundary (HC_AGR: projection 'A1' means départ was échelon 3)", () => {
+    expect(deriveEchelonActuelFromProjection("HC_AGR", "A1")).toBe(3);
+    expect(deriveEchelonActuelFromProjection("HC_AGR", "A2")).toBe("A1");
+  });
+
+  it("resolves a ceiling échelon's own ambiguous self-referencing row correctly (AGR 11's row also has echelonSuivant=11)", () => {
+    // Must return 10 (the real predecessor), not 11 (the ceiling row referencing itself) — this is
+    // the duplicate-echelonSuivant case every grille with a "MAX" ceiling row has.
+    expect(deriveEchelonActuelFromProjection("AGR", "11")).toBe(10);
+  });
+
+  it("throws for a projection échelon nothing in the grille leads to", () => {
+    expect(() => deriveEchelonActuelFromProjection("AGR", "99")).toThrow();
+  });
+
+  it("accepts an overridden grilles table (e.g. edited indices from the database)", () => {
+    const overridden = { AGR: [{ echelon: 5, echelonSuivant: 6, indice: 999, duree: 2.5 }] };
+    expect(deriveEchelonActuelFromProjection("AGR", "6", overridden as never)).toBe(5);
   });
 });

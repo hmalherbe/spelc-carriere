@@ -4,12 +4,8 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { buildPromotionEmail, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
-import {
-  buildCcmaModelEmail,
-  CcmaModelUnavailableError,
-  type BonificationState,
-  type CcmaModelContext,
-} from "../mailing/ccmaModelTemplate.js";
+import { buildCcmaModelEmail, CcmaModelUnavailableError, type CcmaModelContext } from "../mailing/ccmaModelTemplate.js";
+import { deriveBonification } from "../mailing/bonification.js";
 import { loadDernierPromuBaByGroup, type DernierPromuBa } from "../mailing/dernierPromuBa.js";
 import { loadBaCandidateCountByGroup } from "../mailing/baCandidateStats.js";
 import { computeFuturePromotion } from "../mailing/futurePromotion.js";
@@ -70,16 +66,6 @@ async function loadBrevoConfigFromDb(): Promise<{
     testEmail: dbConfig?.testEmail ?? null,
     testMaxSends: dbConfig?.testMaxSends ?? null,
   };
-}
-
-/**
- * Derives the CCMA model letter's 3-state "Bonification" field from the raw rectorat markers —
- * see ccmaModelTemplate.ts's CcmaModelContext doc comment for what each state means. A teacher
- * whose typePromotion isn't "BA" was never a bonification candidate this cycle at all.
- */
-function deriveBonification(snap: { typePromotion: string | null; proTypePromotion: string | null; proConfirmee: boolean }): BonificationState {
-  if (snap.typePromotion !== "BA") return "ANCIENNETE";
-  return snap.proTypePromotion === "BA" && snap.proConfirmee ? "BONIFICATION" : "NON_PROMU";
 }
 
 type EligibleRecipient = Awaited<ReturnType<typeof eligibleRecipients>>[number];
@@ -151,12 +137,14 @@ function buildCcmaModelContext(
     typePromotion: recipient.typePromotion,
     dureeRestanteEncoded: recipient.dureeRestante,
     bonification,
-    // Only meaningful for an actual BA candidate this cycle (typePromotion === "BA") — the
-    // rectorat's "Pro TYPE.date" marker fires for AN/CL confirmations too (see MOLENAT Marion, a
-    // "RE." report-d'ancienneté record confirmed "Pro AN." — her dateProchainePromotionRectorat is
-    // set but has nothing to do with a bonification d'ancienneté).
+    // Only meaningful when this cycle was actually BA-related (bonification !== "ANCIENNETE",
+    // computed above via the same rule as deriveBonification — checking typePromotion alone here
+    // missed real BONIFICATION cases where the base marker says "AN" but proTypePromotion is the
+    // pending/confirmed "BA" decision). The rectorat's "Pro TYPE.date" marker fires for plain AN/CL
+    // confirmations too (see MOLENAT Marion, a "RE." report-d'ancienneté record confirmed "Pro AN."
+    // — her dateProchainePromotionRectorat is set but has nothing to do with a bonification).
     dateEligibiliteBA:
-      recipient.typePromotion === "BA" && recipient.dateProchainePromotionRectorat
+      bonification !== "ANCIENNETE" && recipient.dateProchainePromotionRectorat
         ? recipient.dateProchainePromotionRectorat.toISOString()
         : null,
     pourcentagePromusBa,
