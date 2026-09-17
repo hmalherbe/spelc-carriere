@@ -143,6 +143,52 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
   res.json({ to: recipient.email, ...email });
 }));
 
+const updateEmailSchema = z.object({ email: z.string().trim().email() });
+
+/**
+ * Manually sets the address used for a teacher who has none on file yet (or corrects a wrong one).
+ * Writes to whichever source eligibleRecipients() itself reads for that person, so the change is
+ * visible immediately: Adherent.mailPersonnel for an adhérent, AcademicEmail (matched by nom+prénom,
+ * same normalizeName key as the lookup) for a non-adhérent — creating that row if none existed yet.
+ */
+mailingRouter.put("/:teacherId/email", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
+  const parsed = updateEmailSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Adresse e-mail invalide", details: parsed.error.flatten() });
+  }
+  const { email } = parsed.data;
+
+  const teacher = await prisma.teacher.findUnique({
+    where: { id: req.params.teacherId },
+    include: {
+      matchCandidate: { include: { adherent: true } },
+      snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" } },
+    },
+  });
+  if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
+
+  const candidate = teacher.matchCandidate;
+  const isAdherent = candidate != null && (candidate.status === "AUTO_CONFIRMED" || candidate.status === "CONFIRMED");
+
+  if (isAdherent) {
+    await prisma.adherent.update({ where: { id: candidate!.adherentId }, data: { mailPersonnel: email } });
+  } else {
+    const snap = teacher.snapshots[0];
+    if (!snap) return res.status(404).json({ error: "Aucune fiche connue pour cet enseignant" });
+    // Same normalizeName-based lookup key as eligibleRecipients() above — a plain SQL equality or
+    // ILIKE wouldn't match through the accent/case differences that key is built to tolerate.
+    const existing = await prisma.academicEmail.findMany();
+    const match = existing.find((a) => normalizeName(a.nom) === normalizeName(snap.nomUsage) && normalizeName(a.prenom) === normalizeName(snap.prenom));
+    if (match) {
+      await prisma.academicEmail.update({ where: { id: match.id }, data: { email } });
+    } else {
+      await prisma.academicEmail.create({ data: { nom: snap.nomUsage, prenom: snap.prenom, email } });
+    }
+  }
+
+  res.json({ email });
+}));
+
 mailingRouter.get("/log", asyncHandler(async (req, res) => {
   const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
   if (!campagneId) return res.status(400).json({ error: "campagneId requis" });

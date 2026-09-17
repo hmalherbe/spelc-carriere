@@ -327,6 +327,8 @@ export const api = {
   mailingLog: (campagneId: string) => request<MailingLogEntry[]>(`/mailing/log?campagneId=${campagneId}`),
   mailingSend: (campagneId: string, teacherIds?: string[]) =>
     request<MailingSendResult>("/mailing/send", { method: "POST", body: JSON.stringify({ campagneId, teacherIds }) }),
+  updateMailingEmail: (teacherId: string, email: string) =>
+    request<{ email: string }>(`/mailing/${teacherId}/email`, { method: "PUT", body: JSON.stringify({ email }) }),
   grilles: () => request<GrillesData>("/grilles"),
   updateEchelonIndice: (grilleCode: string, echelon: string, indice: number) =>
     request<EchelonRowApi>(`/grilles/${encodeURIComponent(grilleCode)}/rows/${encodeURIComponent(echelon)}`, {

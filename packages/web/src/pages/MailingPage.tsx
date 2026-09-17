@@ -24,6 +24,10 @@ export function MailingPage() {
   const [preview, setPreview] = useState<{ teacherId: string; data: MailingPreview } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<MailingSendResult | null>(null);
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   useEffect(() => {
     api.campagnes().then((c) => {
@@ -63,6 +67,27 @@ export function MailingPage() {
     if (!campagneId) return;
     const data = await api.mailingPreview(campagneId, teacherId);
     setPreview({ teacherId, data });
+  }
+
+  function startEditEmail(r: MailingRecipient) {
+    setEditingEmailId(r.teacherId);
+    setEmailDraft(r.email ?? "");
+    setEmailError(null);
+  }
+
+  async function saveEmail(teacherId: string) {
+    if (!campagneId) return;
+    setSavingEmail(true);
+    setEmailError(null);
+    try {
+      await api.updateMailingEmail(teacherId, emailDraft);
+      setEditingEmailId(null);
+      refresh(campagneId);
+    } catch (e) {
+      setEmailError(String(e));
+    } finally {
+      setSavingEmail(false);
+    }
   }
 
   async function send() {
@@ -181,7 +206,35 @@ export function MailingPage() {
                   {r.echelonDepart} → {r.echelonSuivant}
                 </td>
                 <td className={r.gainSalaireNet > 0 ? "gain-positive" : ""}>{euros(r.gainSalaireNet)}</td>
-                <td>{r.email ?? <span className="error-text">aucune adresse</span>}</td>
+                <td>
+                  {editingEmailId === r.teacherId ? (
+                    <div className="row-actions">
+                      <input
+                        type="email"
+                        value={emailDraft}
+                        onChange={(e) => setEmailDraft(e.target.value)}
+                        placeholder="adresse@exemple.fr"
+                        autoFocus
+                      />
+                      <button type="button" onClick={() => saveEmail(r.teacherId)} disabled={savingEmail}>
+                        {savingEmail ? "..." : "Enregistrer"}
+                      </button>
+                      <button type="button" className="secondary" onClick={() => setEditingEmailId(null)} disabled={savingEmail}>
+                        Annuler
+                      </button>
+                      {emailError && <span className="error-text">{emailError}</span>}
+                    </div>
+                  ) : (
+                    <div className="row-actions">
+                      {r.email ?? <span className="error-text">aucune adresse</span>}
+                      {canSend && (
+                        <button type="button" className="secondary" onClick={() => startEditEmail(r)}>
+                          {r.email ? "Modifier" : "Ajouter"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </td>
                 <td>
                   {r.lastStatus ? (
                     <span className={`badge ${r.lastStatus === "SENT" ? "badge-auto_confirmed" : "badge-non_promu_estime"}`}>
