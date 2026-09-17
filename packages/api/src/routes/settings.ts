@@ -1,14 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
+import multer from "multer";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { encryptSecret } from "../crypto.js";
+import { loadMailingBranding } from "../mailingBranding.js";
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
 
 const SINGLETON_ID = "singleton";
+const uploadLogo = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
 /**
  * Never includes the password itself — only whether one is set (`hasPassword`) — so it can't leak
@@ -132,5 +135,103 @@ settingsRouter.put(
       testMaxSends: config.testMaxSends,
       updatedAt: config.updatedAt,
     });
+  }),
+);
+
+/**
+ * The logo + "t1" text shown at the top of every CCMA/CCMI mailing (see mailing/template.ts).
+ * logoDataUrl is the actual image bytes, inlined — see mailingBranding.ts for why.
+ */
+settingsRouter.get(
+  "/mailing-branding",
+  asyncHandler(async (_req, res) => {
+    const branding = await loadMailingBranding();
+    res.json(branding);
+  }),
+);
+
+const updateT1Schema = z.object({ t1Text: z.string().max(500).optional().or(z.literal("")) });
+
+settingsRouter.put(
+  "/mailing-branding",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const parsed = updateT1Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+    }
+    await prisma.mailingBranding.upsert({
+      where: { id: SINGLETON_ID },
+      create: { id: SINGLETON_ID, t1Text: parsed.data.t1Text || null, updatedById: req.auth!.userId },
+      update: { t1Text: parsed.data.t1Text || null, updatedById: req.auth!.userId },
+    });
+    res.json(await loadMailingBranding());
+  }),
+);
+
+settingsRouter.post(
+  "/mailing-branding/logo",
+  requireRole("ADMIN"),
+  uploadLogo.single("file"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "Fichier requis (champ 'file')" });
+    if (!req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ error: "Le fichier doit être une image (PNG, JPEG, SVG...)" });
+    }
+    await prisma.mailingBranding.upsert({
+      where: { id: SINGLETON_ID },
+      create: { id: SINGLETON_ID, logoData: req.file.buffer, logoContentType: req.file.mimetype, updatedById: req.auth!.userId },
+      update: { logoData: req.file.buffer, logoContentType: req.file.mimetype, updatedById: req.auth!.userId },
+    });
+    res.json(await loadMailingBranding());
+  }),
+);
+
+settingsRouter.delete(
+  "/mailing-branding/logo",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    await prisma.mailingBranding.upsert({
+      where: { id: SINGLETON_ID },
+      create: { id: SINGLETON_ID, updatedById: req.auth!.userId },
+      update: { logoData: null, logoContentType: null, updatedById: req.auth!.userId },
+    });
+    res.json(await loadMailingBranding());
+  }),
+);
+
+/**
+ * One or more social network links shown at the end of every mailing (see mailing/template.ts).
+ * No per-row CRUD: the admin edits the whole list at once, so PUT replaces it wholesale — same
+ * pattern as the "Emails académiques" import.
+ */
+settingsRouter.get(
+  "/social-links",
+  asyncHandler(async (_req, res) => {
+    const links = await prisma.socialLink.findMany({ orderBy: { ordre: "asc" } });
+    res.json(links);
+  }),
+);
+
+const socialLinksSchema = z.object({
+  links: z.array(z.object({ label: z.string().min(1), url: z.string().url() })).max(20),
+});
+
+settingsRouter.put(
+  "/social-links",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const parsed = socialLinksSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+    }
+    await prisma.$transaction([
+      prisma.socialLink.deleteMany({}),
+      prisma.socialLink.createMany({
+        data: parsed.data.links.map((l, i) => ({ label: l.label, url: l.url, ordre: i })),
+      }),
+    ]);
+    const links = await prisma.socialLink.findMany({ orderBy: { ordre: "asc" } });
+    res.json(links);
   }),
 );

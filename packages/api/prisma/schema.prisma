@@ -371,3 +371,54 @@ model BrevoConfig {
   updatedAt       DateTime @updatedAt
   updatedById     String? // free-text: User.id at time of edit, kept even if the user is later deleted
 }
+
+// ---------------------------------------------------------------------------
+// Mailing content — the union's élus (CCMA/CCMI) and branding, automatically composed into every
+// promotion-notification e-mail (see mailing/template.ts) rather than typed by hand each campaign.
+// ---------------------------------------------------------------------------
+
+enum EluRole {
+  TITULAIRE
+  SUPPLEANT
+}
+
+// Same commission split as AdelSyncType (CCMA = second degré, CCMI = premier degré) — reused
+// rather than a near-duplicate enum, since the values mean the same thing here.
+model Elu {
+  id         String       @id @default(cuid())
+  commission AdelSyncType
+  role       EluRole
+  prenom     String
+  nom        String
+  telephone  String?
+  email      String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([commission])
+}
+
+// Singleton (id fixed to "singleton", same pattern as AdelConfig/BrevoConfig above): the logo and
+// "t1" text shown at the top of every CCMA/CCMI mailing (see mailing/template.ts). The logo is
+// stored as bytes in Postgres and inlined as a data: URI in the sent e-mail's HTML, rather than
+// served from a URL — a recipient's mail client fetches images anonymously, so a URL would need to
+// be public and reachable from outside the deployment; inlining sidesteps that entirely and also
+// means the Paramètres page previews the exact same bytes that get sent.
+model MailingBranding {
+  id              String   @id @default("singleton")
+  t1Text          String?
+  logoData        Bytes?
+  logoContentType String?
+  updatedAt       DateTime @updatedAt
+  updatedById     String? // free-text: User.id at time of edit, kept even if the user is later deleted
+}
+
+// One or more social network links shown at the end of every mailing (see mailing/template.ts).
+// No singleton row here — an admin can have any number of them — so Paramètres replaces the whole
+// list wholesale on save (same pattern as AcademicEmail's import), rather than a per-row CRUD.
+model SocialLink {
+  id    String @id @default(cuid())
+  label String
+  url   String
+  ordre Int    @default(0)
+}

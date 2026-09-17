@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type AdelSettings, type BrevoSettings } from "../api.js";
+import { api, type AdelSettings, type BrevoSettings, type MailingBranding, type SocialLink } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 export function SettingsPage() {
@@ -114,6 +114,8 @@ export function SettingsPage() {
       </section>
 
       <BrevoSettingsCard canEdit={canEdit} />
+      <MailingBrandingCard canEdit={canEdit} />
+      <SocialLinksCard canEdit={canEdit} />
     </div>
   );
 }
@@ -246,6 +248,233 @@ function BrevoSettingsCard({ canEdit }: { canEdit: boolean }) {
             {saving ? "Enregistrement..." : "Enregistrer"}
           </button>
           {saved && <span className="hint"> Enregistré.</span>}
+        </form>
+      )}
+      {saveError && <p className="error-text">{saveError}</p>}
+    </section>
+  );
+}
+
+function MailingBrandingCard({ canEdit }: { canEdit: boolean }) {
+  const [branding, setBranding] = useState<MailingBranding | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [t1Text, setT1Text] = useState("");
+  const [savingText, setSavingText] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  function refresh() {
+    setLoading(true);
+    api
+      .mailingBranding()
+      .then((b) => {
+        setBranding(b);
+        setT1Text(b.t1Text ?? "");
+      })
+      .catch((e) => setLoadError(String(e)))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  async function submitText(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingText(true);
+    setSaveError(null);
+    setSaved(false);
+    try {
+      setBranding(await api.updateMailingBrandingText(t1Text));
+      setSaved(true);
+    } catch (err) {
+      setSaveError(String(err));
+    } finally {
+      setSavingText(false);
+    }
+  }
+
+  async function onLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    setSaveError(null);
+    try {
+      setBranding(await api.uploadMailingLogo(file));
+    } catch (err) {
+      setSaveError(String(err));
+    } finally {
+      setUploadingLogo(false);
+      e.target.value = "";
+    }
+  }
+
+  async function removeLogo() {
+    if (!window.confirm("Supprimer le logo des mailings ?")) return;
+    setSaveError(null);
+    try {
+      setBranding(await api.deleteMailingLogo());
+    } catch (err) {
+      setSaveError(String(err));
+    }
+  }
+
+  if (loadError) return <p className="error-text">{loadError}</p>;
+  if (loading || !branding) return <p>Chargement...</p>;
+
+  return (
+    <section className="card">
+      <h2>Image de marque des mailings</h2>
+      <p className="hint">
+        Logo affiché en haut à gauche et texte « t1 » affiché en haut à droite de chaque mailing CCMA/CCMI envoyé aux
+        enseignants.
+      </p>
+
+      {!canEdit ? (
+        <p className="hint">Seul un administrateur peut modifier ces réglages.</p>
+      ) : (
+        <>
+          <div className="row-actions" style={{ marginTop: 12 }}>
+            {branding.logoDataUrl ? (
+              <img src={branding.logoDataUrl} alt="Logo actuel" style={{ maxHeight: 60, maxWidth: 220 }} />
+            ) : (
+              <span className="hint">Aucun logo configuré</span>
+            )}
+            <label className="secondary" style={{ cursor: "pointer", padding: "8px 14px", borderRadius: 6 }}>
+              {uploadingLogo ? "Envoi..." : branding.logoDataUrl ? "Remplacer le logo" : "Ajouter un logo"}
+              <input type="file" accept="image/*" onChange={onLogoChange} disabled={uploadingLogo} style={{ display: "none" }} />
+            </label>
+            {branding.logoDataUrl && (
+              <button type="button" className="secondary" onClick={removeLogo}>
+                Supprimer le logo
+              </button>
+            )}
+          </div>
+
+          <form className="inline-form" onSubmit={submitText}>
+            <label>
+              Texte « t1 » (haut à droite)
+              <input type="text" value={t1Text} onChange={(e) => setT1Text(e.target.value)} maxLength={500} />
+            </label>
+            <button type="submit" disabled={savingText}>
+              {savingText ? "Enregistrement..." : "Enregistrer"}
+            </button>
+            {saved && <span className="hint"> Enregistré.</span>}
+          </form>
+        </>
+      )}
+      {saveError && <p className="error-text">{saveError}</p>}
+    </section>
+  );
+}
+
+function SocialLinksCard({ canEdit }: { canEdit: boolean }) {
+  const [links, setLinks] = useState<SocialLink[]>([]);
+  const [draft, setDraft] = useState<{ label: string; url: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  function refresh() {
+    setLoading(true);
+    api
+      .socialLinks()
+      .then((l) => {
+        setLinks(l);
+        setDraft(l.map((x) => ({ label: x.label, url: x.url })));
+      })
+      .catch((e) => setLoadError(String(e)))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  function updateRow(i: number, field: "label" | "url", value: string) {
+    setDraft((d) => d.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+  }
+
+  function addRow() {
+    setDraft((d) => [...d, { label: "", url: "" }]);
+  }
+
+  function removeRow(i: number) {
+    setDraft((d) => d.filter((_, idx) => idx !== i));
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSaveError(null);
+    setSaved(false);
+    try {
+      const cleaned = draft.filter((r) => r.label.trim() && r.url.trim());
+      const updated = await api.updateSocialLinks(cleaned);
+      setLinks(updated);
+      setDraft(updated.map((x) => ({ label: x.label, url: x.url })));
+      setSaved(true);
+    } catch (err) {
+      setSaveError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loadError) return <p className="error-text">{loadError}</p>;
+  if (loading) return <p>Chargement...</p>;
+
+  return (
+    <section className="card">
+      <h2>Réseaux sociaux</h2>
+      <p className="hint">
+        Liens affichés à la fin de chaque mailing envoyé aux enseignants (après le lien de désabonnement, pour les
+        non-adhérents).
+      </p>
+
+      {!canEdit ? (
+        links.length === 0 ? (
+          <p className="hint">Aucun réseau social configuré.</p>
+        ) : (
+          <ul>
+            {links.map((l) => (
+              <li key={l.id}>
+                {l.label} — {l.url}
+              </li>
+            ))}
+          </ul>
+        )
+      ) : (
+        <form onSubmit={save}>
+          {draft.map((row, i) => (
+            <div className="inline-form" key={i}>
+              <label>
+                Nom
+                <input type="text" value={row.label} onChange={(e) => updateRow(i, "label", e.target.value)} placeholder="Facebook" />
+              </label>
+              <label>
+                URL
+                <input type="url" value={row.url} onChange={(e) => updateRow(i, "url", e.target.value)} placeholder="https://..." />
+              </label>
+              <button type="button" className="secondary" onClick={() => removeRow(i)}>
+                Retirer
+              </button>
+            </div>
+          ))}
+          <div className="row-actions" style={{ marginTop: 12 }}>
+            <button type="button" className="secondary" onClick={addRow}>
+              Ajouter un réseau
+            </button>
+            <button type="submit" disabled={saving}>
+              {saving ? "Enregistrement..." : "Enregistrer"}
+            </button>
+            {saved && <span className="hint"> Enregistré.</span>}
+          </div>
         </form>
       )}
       {saveError && <p className="error-text">{saveError}</p>}

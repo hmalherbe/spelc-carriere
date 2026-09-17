@@ -3,12 +3,44 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
-import { buildPromotionEmail } from "../mailing/template.js";
+import { buildPromotionEmail, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
+import { GRADE_MAPPINGS } from "@spelc/domain";
 import { decryptSecret } from "../crypto.js";
+import { loadMailingBranding } from "../mailingBranding.js";
 
 const SINGLETON_ID = "singleton";
+
+/** CCMA = second degré, CCMI = premier degré, per the recipient's grade — null when the grade
+ * isn't recognized (see GRADE_MAPPINGS in @spelc/domain). Decides which élus list a recipient's
+ * mailing footer shows (see routes/elus.ts and mailing/template.ts). */
+function commissionForGrade(grade: string): "CCMA" | "CCMI" | null {
+  const mapping = GRADE_MAPPINGS.find((g) => g.grade === grade);
+  if (!mapping) return null;
+  return mapping.degre === 2 ? "CCMA" : "CCMI";
+}
+
+const ELU_ROLE_ORDER: Record<"TITULAIRE" | "SUPPLEANT", number> = { TITULAIRE: 0, SUPPLEANT: 1 };
+
+/** Every élu, grouped by commission and sorted titulaires-then-suppléants — fetched once per
+ * request (send/preview cover many recipients but this content is campaign-wide, not per-person). */
+async function loadElusByCommission(): Promise<Record<"CCMA" | "CCMI", MailingElu[]>> {
+  const all = await prisma.elu.findMany();
+  const byCommission: Record<"CCMA" | "CCMI", MailingElu[]> = { CCMA: [], CCMI: [] };
+  for (const e of all) {
+    byCommission[e.commission].push({ role: e.role, prenom: e.prenom, nom: e.nom, telephone: e.telephone, email: e.email });
+  }
+  for (const commission of ["CCMA", "CCMI"] as const) {
+    byCommission[commission].sort((a, b) => ELU_ROLE_ORDER[a.role] - ELU_ROLE_ORDER[b.role] || a.nom.localeCompare(b.nom));
+  }
+  return byCommission;
+}
+
+async function loadSocialLinks(): Promise<MailingSocialLink[]> {
+  const links = await prisma.socialLink.findMany({ orderBy: { ordre: "asc" } });
+  return links.map((l) => ({ label: l.label, url: l.url }));
+}
 
 /**
  * The Paramètres screen (routes/settings.ts) lets an admin set/rotate the API key without
@@ -86,6 +118,9 @@ async function eligibleRecipients(campagneId: string) {
      * than coming from Adherent.civilite — callers must display it as an estimation, not a fact. */
     civiliteEstimee: boolean;
     grade: string;
+    /** CCMA (second degré) or CCMI (premier degré) per grade — decides which élus list shows in
+     * this recipient's mailing footer (see commissionForGrade above). */
+    commission: "CCMA" | "CCMI" | null;
     echelonDepart: string;
     echelonSuivant: string;
     indiceActuel: number;
@@ -132,6 +167,7 @@ async function eligibleRecipients(campagneId: string) {
       civilite,
       civiliteEstimee,
       grade: snap.grade,
+      commission: commissionForGrade(snap.grade),
       echelonDepart: state.echelonDepart,
       echelonSuivant: state.echelonSuivant,
       indiceActuel: state.indiceActuel,
@@ -166,6 +202,12 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
   const recipient = (await eligibleRecipients(campagneId)).find((r) => r.teacherId === teacherId);
   if (!recipient) return res.status(404).json({ error: "Destinataire introuvable ou non éligible pour cette campagne" });
 
+  const [branding, elusByCommission, socialLinks] = await Promise.all([
+    loadMailingBranding(),
+    loadElusByCommission(),
+    loadSocialLinks(),
+  ]);
+
   const email = buildPromotionEmail({
     civilite: recipient.civilite,
     prenom: recipient.prenom,
@@ -179,6 +221,12 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
     gainSalaireNet: recipient.gainSalaireNet,
     dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
     anneeScolaire: campagne.anneeScolaire,
+    isAdherent: recipient.isAdherent,
+    commission: recipient.commission,
+    elus: recipient.commission ? elusByCommission[recipient.commission] : [],
+    t1Text: branding.t1Text,
+    logoDataUrl: branding.logoDataUrl,
+    socialLinks,
   });
   res.json({ to: recipient.email, ...email });
 }));
@@ -274,6 +322,12 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
     : all.filter((r) => r.lastStatus !== "SENT");
   if (testMode && testMaxSends != null) targets = targets.slice(0, testMaxSends);
 
+  const [branding, elusByCommission, socialLinks] = await Promise.all([
+    loadMailingBranding(),
+    loadElusByCommission(),
+    loadSocialLinks(),
+  ]);
+
   const results: { teacherId: string; nom: string; prenom: string; email: string | null; status: "SENT" | "FAILED"; error?: string }[] = [];
 
   for (const recipient of targets) {
@@ -303,6 +357,12 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
       gainSalaireNet: recipient.gainSalaireNet,
       dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
       anneeScolaire: campagne.anneeScolaire,
+      isAdherent: recipient.isAdherent,
+      commission: recipient.commission,
+      elus: recipient.commission ? elusByCommission[recipient.commission] : [],
+      t1Text: branding.t1Text,
+      logoDataUrl: branding.logoDataUrl,
+      socialLinks,
     });
     const effectiveSubject = testMode
       ? `[TEST — destinataire réel : ${recipient.nom} ${recipient.prenom} <${recipient.email ?? "aucune adresse"}>] ${subject}`

@@ -138,7 +138,10 @@ export function MailingPage() {
         confirmé) est notifié à son adresse personnelle ; un non-adhérent, à son adresse académique si elle est connue
         (import "Emails académiques" de la page Import) — sinon aucun envoi n'est possible pour lui. La civilité d'un
         adhérent est celle déclarée dans l'import Spelc ; celle d'un non-adhérent est estimée à partir de son prénom
-        (marquée "estimé") et peut être absente si le prénom est ambigu ou inconnu. L'envoi se fait via Brevo.
+        (marquée "estimé") et peut être absente si le prénom est ambigu ou inconnu. Le logo et le texte "t1" de
+        Paramètres apparaissent en haut de chaque mailing ; les élus de la commission du destinataire (page Élus
+        CCMA/CCMI), un lien de désabonnement pour les non-adhérents et les réseaux sociaux de Paramètres apparaissent
+        en bas. L'envoi se fait via Brevo.
       </p>
 
       {error && <p className="error-text">{error}</p>}
@@ -196,6 +199,7 @@ export function MailingPage() {
               <th>Nom</th>
               <th>Prénom</th>
               <th>Adhérent</th>
+              <th>Commission</th>
               <th>Grade</th>
               <th>Échelon</th>
               <th>Gain net</th>
@@ -223,6 +227,7 @@ export function MailingPage() {
                     {r.isAdherent ? "Adhérent" : "Non adhérent"}
                   </span>
                 </td>
+                <td>{r.commission ?? <span className="hint">—</span>}</td>
                 <td>{r.grade}</td>
                 <td>
                   {r.echelonDepart} → {r.echelonSuivant}

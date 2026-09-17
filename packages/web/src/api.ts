@@ -204,6 +204,9 @@ export interface MailingRecipient {
    * it as an estimation, never as a fact. */
   civiliteEstimee: boolean;
   grade: string;
+  /** CCMA (second degré) ou CCMI (premier degré) selon le grade — détermine la liste d'élus
+   * insérée automatiquement en bas du mailing de ce destinataire. */
+  commission: "CCMA" | "CCMI" | null;
   echelonDepart: string;
   echelonSuivant: string;
   indiceActuel: number;
@@ -240,6 +243,37 @@ export interface BrevoSettings {
   testEmail: string | null;
   testMaxSends: number | null;
   updatedAt: string | null;
+}
+
+export interface Elu {
+  id: string;
+  commission: "CCMA" | "CCMI";
+  role: "TITULAIRE" | "SUPPLEANT";
+  prenom: string;
+  nom: string;
+  telephone: string | null;
+  email: string | null;
+}
+
+export interface EluInput {
+  commission: "CCMA" | "CCMI";
+  role: "TITULAIRE" | "SUPPLEANT";
+  prenom: string;
+  nom: string;
+  telephone?: string;
+  email?: string;
+}
+
+export interface MailingBranding {
+  t1Text: string | null;
+  logoDataUrl: string | null;
+}
+
+export interface SocialLink {
+  id: string;
+  label: string;
+  url: string;
+  ordre: number;
 }
 
 interface GenreBreakdown {
@@ -382,4 +416,20 @@ export const api = {
     testEmail?: string;
     testMaxSends?: number;
   }) => request<BrevoSettings>("/settings/brevo", { method: "PUT", body: JSON.stringify(data) }),
+  elus: (commission?: "CCMA" | "CCMI") => request<Elu[]>(`/elus${commission ? `?commission=${commission}` : ""}`),
+  createElu: (data: EluInput) => request<Elu>("/elus", { method: "POST", body: JSON.stringify(data) }),
+  updateElu: (id: string, data: Partial<EluInput>) => request<Elu>(`/elus/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteElu: (id: string) => request<void>(`/elus/${id}`, { method: "DELETE" }),
+  mailingBranding: () => request<MailingBranding>("/settings/mailing-branding"),
+  updateMailingBrandingText: (t1Text: string) =>
+    request<MailingBranding>("/settings/mailing-branding", { method: "PUT", body: JSON.stringify({ t1Text }) }),
+  uploadMailingLogo: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return upload<MailingBranding>("/settings/mailing-branding/logo", form);
+  },
+  deleteMailingLogo: () => request<MailingBranding>("/settings/mailing-branding/logo", { method: "DELETE" }),
+  socialLinks: () => request<SocialLink[]>("/settings/social-links"),
+  updateSocialLinks: (links: { label: string; url: string }[]) =>
+    request<SocialLink[]>("/settings/social-links", { method: "PUT", body: JSON.stringify({ links }) }),
 };
