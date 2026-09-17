@@ -23,6 +23,17 @@ function rectoratFilesOnly(files: File[]): File[] {
   return files.filter((f) => /\.(pdf|txt)$/i.test(f.name));
 }
 
+/** "2024-2025" -> période du 01/09/2024 au 31/08/2025 — la convention scolaire standard, qu'il n'y
+ * a donc pas de raison de faire ressaisir à la main à chaque campagne. null si l'année scolaire ne
+ * suit pas le format attendu (deux années à 4 chiffres séparées d'un tiret) : l'admin garde alors
+ * la main pour la corriger lui-même plutôt que de se voir imposer une date fausse. */
+function derivePeriodeFromAnneeScolaire(anneeScolaire: string): { periodeDebut: string; periodeFin: string } | null {
+  const m = /^(\d{4})-(\d{4})$/.exec(anneeScolaire.trim());
+  if (!m) return null;
+  const [, anneeDebut, anneeFin] = m;
+  return { periodeDebut: `${anneeDebut}-09-01`, periodeFin: `${anneeFin}-08-31` };
+}
+
 export function ImportPage() {
   const { user } = useAuth();
   const canImport = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
@@ -46,7 +57,6 @@ export function ImportPage() {
   const [rectoratBusy, setRectoratBusy] = useState(false);
   const [rectoratResults, setRectoratResults] = useState<{ fileName: string; result?: RectoratImportResult; error?: string }[]>([]);
 
-  const [adelType, setAdelType] = useState<AdelSyncType>("CCMA");
   const [adelLast, setAdelLast] = useState<AdelSyncLogEntry | null>(null);
   const [adelBusy, setAdelBusy] = useState(false);
   const [adelResult, setAdelResult] = useState<AdelSyncResult | null>(null);
@@ -66,9 +76,13 @@ export function ImportPage() {
     api.adelLastSync(type).then(setAdelLast).catch(() => setAdelLast(null));
   }
 
+  // Quelle synchronisation ADEL regarder (1er ou 2nd degré) suit désormais la commission de la
+  // campagne sélectionnée — plus de sélecteur séparé qu'on pourrait laisser en désaccord avec elle.
   useEffect(() => {
-    refreshAdelLast(adelType);
-  }, [adelType]);
+    if (selectedCampagne?.type) refreshAdelLast(selectedCampagne.type);
+    else setAdelLast(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCampagne?.type]);
 
   function refreshCampagnes(selectId?: string) {
     api.campagnes().then((c) => {
@@ -133,13 +147,14 @@ export function ImportPage() {
   }
 
   async function syncAdel() {
+    if (!selectedCampagne?.type) return;
     setAdelBusy(true);
     setAdelError(null);
     setAdelResult(null);
     try {
-      const result = await api.adelSync(adelType);
+      const result = await api.adelSync(selectedCampagne.type);
       setAdelResult(result);
-      refreshAdelLast(adelType);
+      refreshAdelLast(selectedCampagne.type);
     } catch (e) {
       setAdelError(String(e));
     } finally {
@@ -201,35 +216,29 @@ export function ImportPage() {
           ) : (
             <span className="hint">Aucune campagne — créez-en une pour commencer.</span>
           )}
-          {selectedCampagne && (
-            <label>
-              Commission de cette campagne
-              <select
-                value={selectedCampagne.type ?? ""}
-                onChange={(e) => changeCampagneType(e.target.value as "CCMA" | "CCMI")}
-                disabled={savingCampagneType}
-              >
-                {!selectedCampagne.type && <option value="">— à définir —</option>}
-                <option value="CCMA">CCMA (second degré)</option>
-                <option value="CCMI">CCMI (premier degré)</option>
-              </select>
-            </label>
-          )}
-          <label>
-            Type de synchronisation ADEL
-            <select value={adelType} onChange={(e) => setAdelType(e.target.value as AdelSyncType)} disabled={adelBusy}>
-              <option value="CCMA">CCMA (second degré)</option>
-              <option value="CCMI">CCMI (premier degré)</option>
-            </select>
-          </label>
           <button type="button" className="secondary" onClick={() => setShowNewCampagne((v) => !v)}>
             {showNewCampagne ? "Annuler" : "Nouvelle campagne"}
           </button>
         </div>
-        <p className="hint">
-          La commission (CCMA ou CCMI) détermine quels élus (page Élus CCMA/CCMI) apparaissent dans les mailings
-          envoyés pour cette campagne.
-        </p>
+
+        {selectedCampagne && !selectedCampagne.type && (
+          <p className="hint error-text">
+            Cette campagne a été créée avant l'ajout de la commission CCMA/CCMI et n'en a pas —{" "}
+            <select
+              value=""
+              onChange={(e) => changeCampagneType(e.target.value as "CCMA" | "CCMI")}
+              disabled={savingCampagneType}
+              style={{ display: "inline-block", width: "auto" }}
+            >
+              <option value="" disabled>
+                définir maintenant...
+              </option>
+              <option value="CCMA">CCMA (second degré)</option>
+              <option value="CCMI">CCMI (premier degré)</option>
+            </select>{" "}
+            — sinon ni ses élus ni sa synchronisation ADEL ne fonctionneront.
+          </p>
+        )}
 
         {showNewCampagne && (
           <form className="inline-form" onSubmit={createCampagne}>
@@ -246,7 +255,11 @@ export function ImportPage() {
                 required
                 placeholder="2024-2025"
                 value={newCampagne.anneeScolaire}
-                onChange={(e) => setNewCampagne((s) => ({ ...s, anneeScolaire: e.target.value }))}
+                onChange={(e) => {
+                  const anneeScolaire = e.target.value;
+                  const derived = derivePeriodeFromAnneeScolaire(anneeScolaire);
+                  setNewCampagne((s) => ({ ...s, anneeScolaire, ...(derived ?? {}) }));
+                }}
               />
             </label>
             <label>
@@ -370,13 +383,17 @@ export function ImportPage() {
           Récupère automatiquement l'export des adhérents Spelc directement depuis ADEL (connexion, filtre "azur", export
           Excel) — plus besoin d'exporter puis d'uploader un fichier à la main. Chaque adhérent est automatiquement
           rapproché des enseignants déjà importés (correspondance exacte ou approximative de nom/prénom) — les cas ambigus
-          vont dans la file de révision.
+          vont dans la file de révision. Le fichier récupéré (1er ou 2nd degré) suit la commission de la campagne
+          sélectionnée ci-dessus.
         </p>
         <div className="inline-form">
-          <button type="button" onClick={syncAdel} disabled={adelBusy}>
+          <button type="button" onClick={syncAdel} disabled={adelBusy || !selectedCampagne?.type}>
             {adelBusy ? "Synchronisation en cours (peut prendre plusieurs minutes)..." : "Mettre à jour depuis ADEL"}
           </button>
         </div>
+        {!selectedCampagne?.type && (
+          <p className="hint">Sélectionnez une campagne dont la commission (CCMA/CCMI) est définie pour synchroniser.</p>
+        )}
         <p className="hint">
           {adelLast ? (
             adelLast.status === "SUCCESS" ? (
@@ -385,7 +402,7 @@ export function ImportPage() {
               <span className="error-text">Dernière tentative en échec le {formatSyncDate(adelLast.syncedAt)}</span>
             )
           ) : (
-            "Jamais synchronisé pour ce type de campagne."
+            selectedCampagne?.type && "Jamais synchronisé pour cette commission."
           )}
         </p>
         {adelError && <p className="error-text">{adelError}</p>}
