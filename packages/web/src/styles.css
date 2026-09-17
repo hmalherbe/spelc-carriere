@@ -534,13 +534,6 @@ main {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
-.rule-highlight {
-  background: #fff4e5;
-  border-left: 3px solid #d97706;
-  border-radius: 0 6px 6px 0;
-  padding: 10px 14px;
-}
-
 .rule-list {
   padding-left: 22px;
 }

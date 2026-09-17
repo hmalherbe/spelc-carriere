@@ -31,20 +31,11 @@ export function RulesPage() {
           </li>
         </ul>
         <p>
-          Être dans la fenêtre ne garantit pas la bonification : le rectorat ne publie pas son seuil de sélection parmi
-          les enseignants éligibles. L'estimation est déduite empiriquement chaque campagne, par (grade, échelon départ),
-          à partir des enseignants réellement promus cette année-là — une cascade à 4 niveaux :
-        </p>
-        <ol className="rule-list">
-          <li>barème minimum parmi les promus ;</li>
-          <li>parmi ceux à barème égal, ancienneté de grade minimum ;</li>
-          <li>parmi ceux-là, ancienneté d'échelon minimum ;</li>
-          <li>parmi ceux-là, âge minimum.</li>
-        </ol>
-        <p className="rule-highlight">
-          C'est une <strong>inférence statistique</strong> sur les résultats de l'année, pas la règle officielle du
-          rectorat — d'où la décision de la rendre verrouillable/corrigeable par un admin (page « Seuils BA ») plutôt
-          que de la présenter comme une certitude.
+          Être dans la fenêtre ne garantit pas la bonification. Le statut promu / non promu est donné directement par
+          le marqueur du rectorat lui-même — <strong>« Pro BA. »</strong> = promu, <strong>« BA. »</strong> seul =
+          éligible mais pas promu — jamais estimé. Exception : pour les <strong>agrégés</strong>, la bonification se
+          décide au niveau national (proposition ministérielle), donc ce fichier départemental ne permet pas de dire
+          promu / non promu, seulement la candidature.
         </p>
       </section>
 
