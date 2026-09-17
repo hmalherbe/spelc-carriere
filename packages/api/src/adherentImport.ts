@@ -57,7 +57,14 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
     const candidate = a.matchCandidate;
     if (!candidate || !candidate.teacherId) return true; // never attempted, or attempted and found nothing
     const suggestedGrade = candidate.teacher?.snapshots[0]?.grade;
-    if (!a.grade || !suggestedGrade) return false; // can't tell either way — leave the existing suggestion as-is
+    // The suggested teacher has no snapshot at all anymore — e.g. a corrected rectorat re-import
+    // wholesale-replaced their (campagne, grade)'s fiches and the new file no longer lists them.
+    // That's never a real suggestion to leave sitting in the queue (real case: ATAYAN Lianna,
+    // shown "Aucune correspondance trouvée" — teacherId null-checks pass — while still carrying a
+    // stale confidence/teacherId from before that teacher's only snapshot was deleted, leaving
+    // "Confirmer" wrongly enabled) — always worth retrying, unlike a genuine grade mismatch below.
+    if (!suggestedGrade) return true;
+    if (!a.grade) return false; // adherent's own grade unknown — can't judge, leave the existing suggestion as-is
     return normalizeGrade(a.grade) !== normalizeGrade(suggestedGrade); // stale cross-grade suggestion
   });
 

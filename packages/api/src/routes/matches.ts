@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { computeAdherentEligibility } from "../adherentEligibility.js";
+import { matchUnresolvedAdherents } from "../adherentImport.js";
 
 export const matchesRouter = Router();
 
@@ -33,6 +34,18 @@ matchesRouter.get("/", async (req, res) => {
 
   const filtered = candidates.filter((c) => computeAdherentEligibility(c.adherent, campagne).eligible);
   res.json(filtered);
+});
+
+/**
+ * Manually re-runs matchUnresolvedAdherents() for every stuck/stale candidate in the DB, without
+ * waiting for the next rectorat import (the only other trigger for it). Exists because a stale
+ * suggestion made before a matching-rule tightened (e.g. the grade hard-filter) otherwise sits in
+ * the queue until someone imports a new rectorat file — which can be weeks away — even though the
+ * fix to clear it is already deployed.
+ */
+matchesRouter.post("/rescan", requireRole("ADMIN", "GESTIONNAIRE"), async (_req, res) => {
+  const result = await matchUnresolvedAdherents();
+  res.json(result);
 });
 
 matchesRouter.post("/:id/confirm", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {

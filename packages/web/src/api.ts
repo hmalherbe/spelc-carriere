@@ -299,6 +299,7 @@ export const api = {
   confirmMatch: (id: string, teacherId?: string) =>
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),
   rejectMatch: (id: string) => request(`/matches/${id}/reject`, { method: "POST" }),
+  rescanMatches: () => request<{ autoConfirmed: number; pendingReview: number }>(`/matches/rescan`, { method: "POST" }),
   baSeuils: (campagneId: string) => request<BaSeuil[]>(`/ba-seuils?campagneId=${campagneId}`),
   updateBaSeuil: (id: string, data: Partial<Pick<BaSeuil, "minBareme" | "minAncienneteGrade" | "minAncienneteEchelon" | "minAge" | "locked">>) =>
     request<BaSeuil>(`/ba-seuils/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

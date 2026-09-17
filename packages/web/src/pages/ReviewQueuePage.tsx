@@ -8,6 +8,7 @@ export function ReviewQueuePage() {
   const [campagneId, setCampagneId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<MatchCandidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rescanning, setRescanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canReview = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
@@ -44,6 +45,19 @@ export function ReviewQueuePage() {
     refresh(campagneId);
   }
 
+  async function rescan() {
+    if (!campagneId) return;
+    setRescanning(true);
+    try {
+      await api.rescanMatches();
+      refresh(campagneId);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setRescanning(false);
+    }
+  }
+
   if (error) return <p className="error-text">{error}</p>;
 
   return (
@@ -59,11 +73,17 @@ export function ReviewQueuePage() {
             ))}
           </select>
         )}
+        {canReview && (
+          <button className="secondary" onClick={rescan} disabled={rescanning}>
+            {rescanning ? "Recalcul..." : "Recalculer les rapprochements"}
+          </button>
+        )}
       </div>
       <p className="hint">
         Limité aux adhérents éligibles à la CCMA/CCMI pour cette campagne (prochaine promotion d'échelon prévue dans sa
         période). Une fois confirmé ou rejeté ici, un lien reste permanent — seuls les nouveaux cas ambigus reviennent
-        dans cette file lors des prochains imports.
+        dans cette file lors des prochains imports. Le bouton « Recalculer les rapprochements » relance
+        immédiatement cette recherche pour tous les cas en attente, sans attendre le prochain import.
       </p>
       {loading ? (
         <p>Chargement...</p>
@@ -82,6 +102,12 @@ export function ReviewQueuePage() {
           <tbody>
             {candidates.map((c) => {
               const suggestion = c.teacher?.snapshots[0];
+              // "Rien à confirmer" covers two different states that must both disable Confirmer:
+              // no teacherId at all (never matched), or a teacherId whose teacher has since lost
+              // every snapshot (a corrected rectorat re-import wholesale-replaced their fiches and
+              // the new file no longer lists them) — that teacherId is stale, not a real
+              // suggestion, even though it's still technically set on this row.
+              const nothingToConfirm = !c.teacherId || !suggestion;
               return (
                 <tr key={c.id}>
                   <td>
@@ -96,6 +122,8 @@ export function ReviewQueuePage() {
                         <br />
                         <span className="hint">{suggestion.grade}</span>
                       </>
+                    ) : c.teacherId ? (
+                      <em>Enseignant introuvable (fiche supprimée depuis la suggestion)</em>
                     ) : (
                       <em>Aucune correspondance trouvée</em>
                     )}
@@ -104,7 +132,7 @@ export function ReviewQueuePage() {
                   <td>
                     {canReview ? (
                       <div className="row-actions">
-                        <button disabled={!c.teacherId} onClick={() => confirm(c.id, c.teacherId)}>
+                        <button disabled={nothingToConfirm} onClick={() => confirm(c.id, c.teacherId)}>
                           Confirmer
                         </button>
                         <button className="secondary" onClick={() => reject(c.id)}>
