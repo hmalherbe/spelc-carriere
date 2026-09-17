@@ -6,20 +6,10 @@ import { asyncHandler } from "../asyncHandler.js";
 import { buildPromotionEmail, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
-import { GRADE_MAPPINGS } from "@spelc/domain";
 import { decryptSecret } from "../crypto.js";
 import { loadMailingBranding } from "../mailingBranding.js";
 
 const SINGLETON_ID = "singleton";
-
-/** CCMA = second degré, CCMI = premier degré, per the recipient's grade — null when the grade
- * isn't recognized (see GRADE_MAPPINGS in @spelc/domain). Decides which élus list a recipient's
- * mailing footer shows (see routes/elus.ts and mailing/template.ts). */
-function commissionForGrade(grade: string): "CCMA" | "CCMI" | null {
-  const mapping = GRADE_MAPPINGS.find((g) => g.grade === grade);
-  if (!mapping) return null;
-  return mapping.degre === 2 ? "CCMA" : "CCMI";
-}
 
 const ELU_ROLE_ORDER: Record<"TITULAIRE" | "SUPPLEANT", number> = { TITULAIRE: 0, SUPPLEANT: 1 };
 
@@ -118,9 +108,6 @@ async function eligibleRecipients(campagneId: string) {
      * than coming from Adherent.civilite — callers must display it as an estimation, not a fact. */
     civiliteEstimee: boolean;
     grade: string;
-    /** CCMA (second degré) or CCMI (premier degré) per grade — decides which élus list shows in
-     * this recipient's mailing footer (see commissionForGrade above). */
-    commission: "CCMA" | "CCMI" | null;
     echelonDepart: string;
     echelonSuivant: string;
     indiceActuel: number;
@@ -167,7 +154,6 @@ async function eligibleRecipients(campagneId: string) {
       civilite,
       civiliteEstimee,
       grade: snap.grade,
-      commission: commissionForGrade(snap.grade),
       echelonDepart: state.echelonDepart,
       echelonSuivant: state.echelonSuivant,
       indiceActuel: state.indiceActuel,
@@ -222,8 +208,8 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
     dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
     anneeScolaire: campagne.anneeScolaire,
     isAdherent: recipient.isAdherent,
-    commission: recipient.commission,
-    elus: recipient.commission ? elusByCommission[recipient.commission] : [],
+    commission: campagne.type,
+    elus: campagne.type ? elusByCommission[campagne.type] : [],
     t1Text: branding.t1Text,
     logoDataUrl: branding.logoDataUrl,
     socialLinks,
@@ -358,8 +344,8 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
       dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
       anneeScolaire: campagne.anneeScolaire,
       isAdherent: recipient.isAdherent,
-      commission: recipient.commission,
-      elus: recipient.commission ? elusByCommission[recipient.commission] : [],
+      commission: campagne.type,
+      elus: campagne.type ? elusByCommission[campagne.type] : [],
       t1Text: branding.t1Text,
       logoDataUrl: branding.logoDataUrl,
       socialLinks,

@@ -30,8 +30,17 @@ export function ImportPage() {
   const [campagnes, setCampagnes] = useState<Campagne[]>([]);
   const [campagneId, setCampagneId] = useState<string | null>(null);
   const [showNewCampagne, setShowNewCampagne] = useState(false);
-  const [newCampagne, setNewCampagne] = useState({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso() });
+  const [newCampagne, setNewCampagne] = useState<{ anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string; type: "CCMA" | "CCMI" }>({
+    anneeScolaire: "",
+    periodeDebut: "",
+    periodeFin: "",
+    dateCcma: todayIso(),
+    type: "CCMA",
+  });
   const [campagneError, setCampagneError] = useState<string | null>(null);
+  const [savingCampagneType, setSavingCampagneType] = useState(false);
+
+  const selectedCampagne = campagnes.find((c) => c.id === campagneId) ?? null;
 
   const [rectoratFiles, setRectoratFiles] = useState<File[]>([]);
   const [rectoratBusy, setRectoratBusy] = useState(false);
@@ -80,10 +89,24 @@ export function ImportPage() {
     try {
       const created = await api.createCampagne(newCampagne);
       setShowNewCampagne(false);
-      setNewCampagne({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso() });
+      setNewCampagne({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso(), type: "CCMA" });
       refreshCampagnes(created.id);
     } catch (e) {
       setCampagneError(String(e));
+    }
+  }
+
+  async function changeCampagneType(type: "CCMA" | "CCMI") {
+    if (!campagneId) return;
+    setSavingCampagneType(true);
+    setCampagneError(null);
+    try {
+      await api.updateCampagneType(campagneId, type);
+      refreshCampagnes(campagneId);
+    } catch (e) {
+      setCampagneError(String(e));
+    } finally {
+      setSavingCampagneType(false);
     }
   }
 
@@ -171,15 +194,29 @@ export function ImportPage() {
             <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
               {campagnes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  Campagne {c.anneeScolaire} ({c._count.teacherSnapshots} enseignants)
+                  {c.type ?? "?"} {c.anneeScolaire} ({c._count.teacherSnapshots} enseignants)
                 </option>
               ))}
             </select>
           ) : (
             <span className="hint">Aucune campagne — créez-en une pour commencer.</span>
           )}
+          {selectedCampagne && (
+            <label>
+              Commission de cette campagne
+              <select
+                value={selectedCampagne.type ?? ""}
+                onChange={(e) => changeCampagneType(e.target.value as "CCMA" | "CCMI")}
+                disabled={savingCampagneType}
+              >
+                {!selectedCampagne.type && <option value="">— à définir —</option>}
+                <option value="CCMA">CCMA (second degré)</option>
+                <option value="CCMI">CCMI (premier degré)</option>
+              </select>
+            </label>
+          )}
           <label>
-            Type de campagne
+            Type de synchronisation ADEL
             <select value={adelType} onChange={(e) => setAdelType(e.target.value as AdelSyncType)} disabled={adelBusy}>
               <option value="CCMA">CCMA (second degré)</option>
               <option value="CCMI">CCMI (premier degré)</option>
@@ -189,9 +226,20 @@ export function ImportPage() {
             {showNewCampagne ? "Annuler" : "Nouvelle campagne"}
           </button>
         </div>
+        <p className="hint">
+          La commission (CCMA ou CCMI) détermine quels élus (page Élus CCMA/CCMI) apparaissent dans les mailings
+          envoyés pour cette campagne.
+        </p>
 
         {showNewCampagne && (
           <form className="inline-form" onSubmit={createCampagne}>
+            <label>
+              Commission
+              <select value={newCampagne.type} onChange={(e) => setNewCampagne((s) => ({ ...s, type: e.target.value as "CCMA" | "CCMI" }))}>
+                <option value="CCMA">CCMA (second degré)</option>
+                <option value="CCMI">CCMI (premier degré)</option>
+              </select>
+            </label>
             <label>
               Année scolaire
               <input

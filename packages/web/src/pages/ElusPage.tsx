@@ -101,20 +101,21 @@ export function ElusPage() {
         </select>
       </div>
       <p className="hint">
-        Élus et suppléants affichés automatiquement en bas de chaque mailing de notification, selon la commission du
-        destinataire (déduite de son grade).
+        Élus et suppléants affichés automatiquement en bas de chaque mailing de notification, selon la commission de
+        la campagne (CCMA ou CCMI, définie sur la page Import) — indépendamment du grade des destinataires.
       </p>
 
       {error && <p className="error-text">{error}</p>}
 
       {canEdit && (
         <form className="inline-form" onSubmit={submitNew}>
-          <label>
-            Rôle
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as EluInput["role"] })}>
-              <option value="TITULAIRE">Titulaire</option>
-              <option value="SUPPLEANT">Suppléant(e)</option>
-            </select>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={form.role === "SUPPLEANT"}
+              onChange={(e) => setForm({ ...form, role: e.target.checked ? "SUPPLEANT" : "TITULAIRE" })}
+            />
+            Suppléant(e) (décoché = élu titulaire)
           </label>
           <label>
             Prénom
@@ -159,10 +160,14 @@ export function ElusPage() {
               editingId === elu.id && editForm ? (
                 <tr key={elu.id}>
                   <td>
-                    <select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as EluInput["role"] })}>
-                      <option value="TITULAIRE">Titulaire</option>
-                      <option value="SUPPLEANT">Suppléant(e)</option>
-                    </select>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={editForm.role === "SUPPLEANT"}
+                        onChange={(e) => setEditForm({ ...editForm, role: e.target.checked ? "SUPPLEANT" : "TITULAIRE" })}
+                      />
+                      Suppléant(e)
+                    </label>
                   </td>
                   <td>
                     <input type="text" value={editForm.prenom} onChange={(e) => setEditForm({ ...editForm, prenom: e.target.value })} />

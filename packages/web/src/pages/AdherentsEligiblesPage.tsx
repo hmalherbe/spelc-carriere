@@ -56,7 +56,7 @@ export function AdherentsEligiblesPage() {
           <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
             {campagnes.map((c) => (
               <option key={c.id} value={c.id}>
-                Campagne {c.anneeScolaire}
+                {c.type ?? "?"} {c.anneeScolaire}
               </option>
             ))}
           </select>

@@ -77,12 +77,19 @@ model GradeMapping {
 // ---------------------------------------------------------------------------
 
 model Campagne {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   anneeScolaire String // e.g. "2024-2025"
   periodeDebut  DateTime
   periodeFin    DateTime
   dateCcma      DateTime // reference date used for "date de régularisation financière" calculations
-  createdAt     DateTime @default(now())
+  // CCMA (second degré) or CCMI (premier degré) — per product decision each campagne is entirely
+  // one or the other (a distinct administrative process), never mixed. Drives which commission's
+  // élus (see Elu) are inserted in every mailing sent for this campagne (routes/mailing.ts) —
+  // campagne-wide, not derived per recipient from their own grade. Nullable only because existing
+  // campagnes created before this field existed have no value yet; the create-campagne form
+  // requires it for every new one (see routes/campagnes.ts).
+  type          AdelSyncType?
+  createdAt     DateTime      @default(now())
 
   imports          RectoratImport[]
   teacherSnapshots TeacherSnapshot[]

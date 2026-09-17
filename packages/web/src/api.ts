@@ -64,6 +64,10 @@ export interface Campagne {
   periodeDebut: string;
   periodeFin: string;
   dateCcma: string;
+  /** CCMA (second degré) ou CCMI (premier degré) — chaque campagne est entièrement l'une ou
+   * l'autre, jamais mélangée ; détermine les élus insérés dans les mailings de cette campagne
+   * (page Élus CCMA/CCMI). null seulement pour une campagne créée avant l'ajout de ce champ. */
+  type: "CCMA" | "CCMI" | null;
   _count: { teacherSnapshots: number; imports: number };
 }
 
@@ -204,9 +208,6 @@ export interface MailingRecipient {
    * it as an estimation, never as a fact. */
   civiliteEstimee: boolean;
   grade: string;
-  /** CCMA (second degré) ou CCMI (premier degré) selon le grade — détermine la liste d'élus
-   * insérée automatiquement en bas du mailing de ce destinataire. */
-  commission: "CCMA" | "CCMI" | null;
   echelonDepart: string;
   echelonSuivant: string;
   indiceActuel: number;
@@ -358,8 +359,10 @@ export const api = {
     }),
   me: () => request<CurrentUser>("/auth/me"),
   campagnes: () => request<Campagne[]>("/campagnes"),
-  createCampagne: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }) =>
+  createCampagne: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string; type: "CCMA" | "CCMI" }) =>
     request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
+  updateCampagneType: (id: string, type: "CCMA" | "CCMI") =>
+    request<Campagne>(`/campagnes/${id}`, { method: "PATCH", body: JSON.stringify({ type }) }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
   stats: (campagneId: string, grade?: string) =>
     request<CampagneStats>(`/stats?campagneId=${campagneId}${grade ? `&grade=${encodeURIComponent(grade)}` : ""}`),
