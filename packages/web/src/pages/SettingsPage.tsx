@@ -355,9 +355,15 @@ function MailingBrandingCard({ canEdit }: { canEdit: boolean }) {
           </div>
 
           <form className="inline-form" onSubmit={submitText}>
-            <label>
+            <label style={{ flex: "1 1 100%" }}>
               Texte « t1 » (haut à droite)
-              <input type="text" value={t1Text} onChange={(e) => setT1Text(e.target.value)} maxLength={500} />
+              <textarea
+                value={t1Text}
+                onChange={(e) => setT1Text(e.target.value)}
+                maxLength={500}
+                rows={4}
+                style={{ width: "100%", minHeight: 90, resize: "vertical", fontFamily: "inherit" }}
+              />
             </label>
             <button type="submit" disabled={savingText}>
               {savingText ? "Enregistrement..." : "Enregistrer"}
