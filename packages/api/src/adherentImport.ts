@@ -100,6 +100,21 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
     availableTeachers.map((t) => ({ teacherId: t.teacherId, nom: t.nomUsage, prenom: t.prenom, grade: t.grade })),
   );
 
+  // matchAdherents() never proposes the same teacher twice WITHIN matchResults (see its own
+  // greedy claiming), but two adherents in this batch can still need to swap teachers — adherent A
+  // moving off a stale teacherId that adherent B's result now needs. Upserting sequentially hits a
+  // transient unique-constraint conflict on `teacherId` the moment B's write lands before A's old
+  // row has been cleared, even though the FINAL state (after every row settles) is perfectly valid.
+  // Real case: a large re-import surfaced enough stale cross-grade suggestions at once (see the
+  // ATAYAN Lianna / stale-suggestion comment above) that two of them happened to need each other's
+  // teacher, crashing every retry attempt on the same pair. Clearing every retried row's teacherId
+  // first — a bulk update, not upserts, so it can't itself collide with anything — means no row in
+  // the batch can still be "holding" a teacherId by the time the per-row upserts below run.
+  await prisma.matchCandidate.updateMany({
+    where: { adherentId: { in: [...retryIds] }, teacherId: { not: null } },
+    data: { teacherId: null },
+  });
+
   let autoConfirmed = 0;
   let pendingReview = 0;
   for (const m of matchResults) {
