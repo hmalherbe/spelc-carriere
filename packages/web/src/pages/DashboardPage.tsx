@@ -73,7 +73,7 @@ function baCell(t: TeacherListItem): { label: string; className: string } {
   return { label: `Éligible à la BA - non promu${dep}`, className: "badge badge-non_promu_estime" };
 }
 
-type SortKey = "nom" | "grade" | "echelon";
+type SortKey = "fichier" | "nom" | "grade" | "echelon";
 type AdherentFilter = "all" | "adherent" | "non_adherent";
 type BaFilter = "all" | "eligible" | "non_eligible";
 
@@ -90,7 +90,7 @@ export function DashboardPage() {
   const [echelonFilter, setEchelonFilter] = useState<string>("all");
   const [ancienneteMin, setAncienneteMin] = useState<string>("");
   const [ancienneteMax, setAncienneteMax] = useState<string>("");
-  const [sortKey, setSortKey] = useState<SortKey>("nom");
+  const [sortKey, setSortKey] = useState<SortKey>("fichier");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
@@ -138,7 +138,12 @@ export function DashboardPage() {
 
     const sorted = [...filtered].sort((a, b) => {
       let cmp: number;
-      if (sortKey === "nom") {
+      if (sortKey === "fichier") {
+        // Chaque grade provient de son propre fichier rectorat — regrouper par grade puis
+        // reproduire l'ordre d'apparition dans ce fichier (fileOrder) est ce qui se rapproche le
+        // plus d'un "ordre du fichier" unique quand plusieurs grades sont chargés dans la campagne.
+        cmp = a.grade.localeCompare(b.grade) || a.fileOrder - b.fileOrder;
+      } else if (sortKey === "nom") {
         cmp = a.nom.localeCompare(b.nom) || a.prenom.localeCompare(b.prenom);
       } else if (sortKey === "grade") {
         // "trier sur grade puis échelon" — grade first, échelon as the tie-break within it.
@@ -183,7 +188,8 @@ export function DashboardPage() {
       {selectedCampagne && (
         <p className="hint">
           Période du {formatDate(selectedCampagne.periodeDebut)} au {formatDate(selectedCampagne.periodeFin)} — date CCMA :{" "}
-          {formatDate(selectedCampagne.dateCcma)}.
+          {formatDate(selectedCampagne.dateCcma)}. Par défaut, la liste est triée par grade puis dans le même ordre
+          que le fichier du rectorat correspondant — cliquez sur un en-tête de colonne pour trier autrement.
         </p>
       )}
 
@@ -234,6 +240,16 @@ export function DashboardPage() {
           Anc. échelon max (années)
           <input type="number" step="0.1" min="0" value={ancienneteMax} onChange={(e) => setAncienneteMax(e.target.value)} />
         </label>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => {
+            setSortKey("fichier");
+            setSortDir("asc");
+          }}
+        >
+          Trier comme le fichier rectorat
+        </button>
       </div>
 
       {loading ? (

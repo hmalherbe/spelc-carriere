@@ -149,7 +149,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
     const warnings: { nomUsage: string; prenom: string; warnings: string[] }[] = [];
     let imported = 0;
 
-    for (const record of gradeBlock.records) {
+    for (const [rowIndex, record] of gradeBlock.records.entries()) {
       const key = `${normalizeName(record.nomUsage)}|${normalizeName(record.prenom)}|${grade}`;
       let teacherId = teacherIdByName.get(key);
       if (!teacherId) {
@@ -192,6 +192,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
           proTypePromotion: record.proTypePromotion,
           proConfirmee: record.proConfirmee,
           nombrePromusBaSection: nombrePromusBaBySection.get(record.echelonActuel) ?? null,
+          rowIndex,
         },
       });
 

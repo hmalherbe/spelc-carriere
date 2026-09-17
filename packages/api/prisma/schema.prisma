@@ -164,6 +164,13 @@ model TeacherSnapshot {
   // the bonification this cycle. Same value repeated across every record in the section
   // (denormalized for simplicity); null when the footer wasn't found/parseable.
   nombrePromusBaSection           Int?
+  // 0-based position this record held within its own rectorat file (gradeBlock.records order in
+  // routes/imports.ts) — lets the teacher list be sorted the same way the rectorat's own export
+  // presents them, instead of only alphabetically. Meaningful only within one grade's own snapshots
+  // (each grade comes from its own separate file/RectoratImport) — see routes/teachers.ts and
+  // DashboardPage.tsx's "fichier" sort, which groups by grade first, then by this field. Existing
+  // rows imported before this field existed default to 0 and need a re-import to get a real order.
+  rowIndex                        Int      @default(0)
 
   @@index([campagneId, teacherId])
 }

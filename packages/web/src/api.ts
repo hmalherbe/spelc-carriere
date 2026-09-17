@@ -81,6 +81,10 @@ export interface TeacherListItem {
   teacherId: string;
   nom: string;
   prenom: string;
+  /** Position occupée par cette fiche dans le fichier du rectorat d'origine — n'a de sens qu'au
+   * sein d'un même grade (chaque grade vient de son propre fichier). Voir le tri "fichier" de
+   * DashboardPage.tsx, qui groupe par grade puis trie sur cette valeur. */
+  fileOrder: number;
   grade: string;
   /** Échelon actuel corrigé pour l'affichage : pour un candidat BA pas encore confirmé, c'est
    * l'échelon de départ réel (6 ou 8), pas l'échelon d'arrivée tel que titré par le rectorat

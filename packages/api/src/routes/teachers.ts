@@ -111,6 +111,10 @@ teachersRouter.get("/", async (req, res) => {
       teacherId: snap.teacherId,
       nom: snap.nomUsage,
       prenom: snap.prenom,
+      // Position this record held within its own rectorat file (see schema.prisma's rowIndex) —
+      // meaningful only within a single grade (each grade is its own separate file), which is why
+      // the "fichier" sort in DashboardPage.tsx groups by grade first, then by this field.
+      fileOrder: snap.rowIndex,
       grade: snap.grade,
       echelonActuel: echelonActuelAffiche,
       dateAccesEchelon: snap.dateAccesEchelon,
