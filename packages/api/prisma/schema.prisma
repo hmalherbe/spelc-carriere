@@ -30,7 +30,6 @@ model User {
   passwordHash    String
   createdAt       DateTime         @default(now())
   reviewedMatches MatchCandidate[] @relation("ReviewedBy")
-  lockedSeuils    BaSeuil[]        @relation("LockedBy")
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +86,6 @@ model Campagne {
 
   imports          RectoratImport[]
   teacherSnapshots TeacherSnapshot[]
-  baSeuils         BaSeuil[]
   mailingLogs      MailingLog[]
 }
 
@@ -136,13 +134,13 @@ model TeacherSnapshot {
   dateAccesEchelon               DateTime
   avisEvaluation                 Int? // 0-4, only populated for grades/échelons with a rendez-vous de carrière
   // "Z1AGRA" / "Z1ANEC" in the raw rectorat export's barème block — ancienneté (in years) in the
-  // current grade and in the current échelon, respectively. Feed directly into the BA threshold
-  // cascade (see BaSeuil / computeBASeuils in @spelc/domain).
+  // current grade and in the current échelon, respectively. ancienneteEchelon drives the BA
+  // eligibility window (isEligibleBonificationAnciennete in @spelc/domain, via baStatus.ts).
   ancienneteGrade                Float?
   ancienneteEchelon              Float?
   // "Z2AGEA" in the raw rectorat export's barème block — the teacher's age at the campaign's
   // reference date, packed as "AAMMJJ" (years/months/days), kept verbatim; see parseZ2AGEA in
-  // @spelc/import to decode. Feeds the BA threshold's age tie-break (see baSeuilCompute.ts).
+  // @spelc/import to decode. Kept for audit/reference — not currently used downstream.
   ageEncodedRectorat              String?
   typePromotion                  String? // AN / CL / BA / RE, as printed in the rectorat export
   dureeRestante                  String? // "XXaYYmZZj" raw text, kept verbatim for audit/debugging
@@ -150,19 +148,18 @@ model TeacherSnapshot {
   // The "TRACK.date" marker (e.g. "BA.18/07/2025" or "Pro BA.18/07/2025") — distinct from
   // typePromotion/dureeRestante above. Drives baEligible in routes/teachers.ts ("BA" = candidate
   // for the bonification d'ancienneté this cycle, whether granted or not).
-  // NOTE: the "Pro " prefix ("Promu") reliably marks a CONFIRMED promotion for AN/CL/RE (automatic
-  // mechanisms — verified against many real records), but NOT for BA specifically: on a real file,
-  // the two candidates actually granted BA carried no "Pro" prefix at all, only their barème
-  // ranking set them apart from the rest of the section. So proConfirmee is trustworthy for
-  // AN/CL/RE, but BA confirmation is instead derived by ranking every BA candidate in a section
-  // against nombrePromusBaSection below (see rankBACandidates in @spelc/domain, used from
-  // routes/teachers.ts) — not from this flag.
+  // The "Pro " prefix ("Promu") is the rectorat's own definitive confirmation, trusted directly
+  // for every mechanism including BA (proConfirmee -> baStatus "promu"/"non_promu" in
+  // baStatus.ts) — per product decision, "Pro BA." on a record is final, not an estimate to
+  // second-guess against other candidates' barème/ancienneté (an earlier ranking-based estimation
+  // approach was removed once this was confirmed reliable on real files).
   proTypePromotion               String? // AN / CL / BA
   proConfirmee                   Boolean @default(false)
   // The échelon section's own "NOMBRE DE PROMUS" (BA column) from the rectorat file — the exact
   // count of how many BA candidates in this (grade, échelon actuel) group were actually granted
   // the bonification this cycle. Same value repeated across every record in the section
-  // (denormalized for simplicity); null when the footer wasn't found/parseable.
+  // (denormalized for simplicity); null when the footer wasn't found/parseable. Kept for
+  // audit/reference — not currently used downstream.
   nombrePromusBaSection           Int?
   // 0-based position this record held within its own rectorat file (gradeBlock.records order in
   // routes/imports.ts) — lets the teacher list be sorted the same way the rectorat's own export
@@ -278,31 +275,6 @@ model ComputedPromotionState {
   baEstimate             String? // "promu_estime" | "non_promu_estime" | "indetermine", null if not échelon 6/8
 
   @@unique([teacherId, campagneId])
-}
-
-// ---------------------------------------------------------------------------
-// "BA" (bonification d'ancienneté) selection threshold — auto-inferred each campaign from
-// confirmed results at échelon 6/8, but an ADMIN can lock/override it (per product decision)
-// once the rectorat's official cutoff is known, so the estimate stops drifting.
-// ---------------------------------------------------------------------------
-
-model BaSeuil {
-  id                   String   @id @default(cuid())
-  campagne             Campagne @relation(fields: [campagneId], references: [id])
-  campagneId           String
-  grade                String
-  echelonDepart        Int // 6 or 8
-  nombrePromusBa       Int
-  minBareme            Int
-  minAncienneteGrade   Float
-  minAncienneteEchelon Float
-  minAge               Int
-  locked               Boolean  @default(false)
-  lockedBy             User?    @relation("LockedBy", fields: [lockedById], references: [id])
-  lockedById           String?
-  updatedAt            DateTime @updatedAt
-
-  @@unique([campagneId, grade, echelonDepart])
 }
 
 // ---------------------------------------------------------------------------

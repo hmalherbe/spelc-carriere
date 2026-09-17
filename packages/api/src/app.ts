@@ -4,7 +4,6 @@ import { authRouter } from "./routes/auth.js";
 import { campagnesRouter } from "./routes/campagnes.js";
 import { teachersRouter } from "./routes/teachers.js";
 import { matchesRouter } from "./routes/matches.js";
-import { baSeuilsRouter } from "./routes/baSeuils.js";
 import { importsRouter } from "./routes/imports.js";
 import { mailingRouter } from "./routes/mailing.js";
 import { adelRouter } from "./routes/adel.js";
@@ -24,7 +23,6 @@ export function createApp() {
   app.use("/campagnes", campagnesRouter);
   app.use("/teachers", teachersRouter);
   app.use("/matches", matchesRouter);
-  app.use("/ba-seuils", baSeuilsRouter);
   app.use("/imports", importsRouter);
   app.use("/mailing", mailingRouter);
   app.use("/adel", adelRouter);

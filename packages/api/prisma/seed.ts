@@ -1,14 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import {
-  GRILLES,
-  GRADE_MAPPINGS,
-  VALEUR_DU_POINT,
-  computeEchelonPromotion,
-  computeBASeuils,
-  type GrilleCode,
-  type PromuBA,
-} from "@spelc/domain";
+import { GRILLES, GRADE_MAPPINGS, VALEUR_DU_POINT, computeEchelonPromotion, type GrilleCode } from "@spelc/domain";
 
 const prisma = new PrismaClient();
 
@@ -189,30 +181,6 @@ async function seedDemoCampagne() {
         gainSalaireBrut: promotion.gainSalaireBrut,
         gainSalaireNet: promotion.gainSalaireNet,
         dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
-      },
-    });
-  }
-
-  // BA threshold demo: two teachers "promoted" at échelon 6 this campaign -> infer a seuil, then
-  // show it applied (as an estimate) to the third échelon-6 teacher who hasn't been resolved yet.
-  const promusBA: PromuBA[] = [
-    { grade: "CERTIFIE", echelonDepart: 6, barreme: 4, ancienneteGrade: 2.5, ancienneteEchelon: 2.0, age: 400101 },
-    { grade: "CERTIFIE", echelonDepart: 6, barreme: 3, ancienneteGrade: 3.0, ancienneteEchelon: 2.5, age: 380601 },
-  ];
-  const seuils = computeBASeuils(promusBA);
-  for (const s of seuils) {
-    await prisma.baSeuil.upsert({
-      where: { campagneId_grade_echelonDepart: { campagneId: campagne.id, grade: s.grade, echelonDepart: s.echelonDepart } },
-      update: {},
-      create: {
-        campagneId: campagne.id,
-        grade: s.grade,
-        echelonDepart: s.echelonDepart,
-        nombrePromusBa: s.nombrePromusBA,
-        minBareme: s.minBarreme,
-        minAncienneteGrade: s.minAncienneteGrade,
-        minAncienneteEchelon: s.minAncienneteEchelon,
-        minAge: s.minAge,
       },
     });
   }

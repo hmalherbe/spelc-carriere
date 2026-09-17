@@ -1,19 +1,25 @@
 import type { EchelonCode } from "../data/grilles.js";
-import type { EchelonBA } from "./baThreshold.js";
+
+/**
+ * Only échelons 6 and 8 carry a possible "bonification d'ancienneté" (accelerated promotion,
+ * internally called "BA" throughout the original spreadsheet), awarded directly per the rectorat's
+ * own "Pro BA." marker (see isEligibleBonificationAnciennete below and baStatus.ts) — this mirrors
+ * the CCMA_CALCULS filter `[Echelon départ] = 6 or [Echelon départ] = 8`.
+ */
+export type EchelonBA = 6 | 8;
 
 /**
  * Eligibility gates for the three PPCR career-advancement mechanisms, as confirmed against the
  * grille indiciaire durées (échelon 6/8 durées of 3/3.5 years match the "2 ans/2,5 ans avec BA"
- * figures exactly) and the union's own description of the current rules. These are deliberately
- * separate from `computeEchelonPromotion` (which always projects the non-accelerated timeline) and
- * from `baThreshold.ts` (which decides who, among the eligible pool, actually clears the
- * competitive selection bar) — this module only answers "is this teacher even in the running".
+ * figures exactly) and the union's own description of the current rules. Deliberately separate
+ * from `computeEchelonPromotion`, which always projects the non-accelerated timeline — this module
+ * only answers "is this teacher even in the running".
  */
 
 /**
- * BA (bonification d'ancienneté) eligibility window — being in this window doesn't guarantee the
- * accelerated promotion (only ~30% of the eligible pool gets it, decided by the competitive
- * threshold in baThreshold.ts), but being OUTSIDE it means "not even a candidate this campaign".
+ * BA (bonification d'ancienneté) eligibility window — being in this window doesn't by itself mean
+ * the promotion was granted (see baStatus.ts's baStatus, which also requires the rectorat's own
+ * "BA."/"Pro BA." marker), but being OUTSIDE it means "not even a candidate this campaign".
  *   - échelon 6 -> 7 : "être dans la 2e année de cet échelon" -> ancienneté in [1, 2) years.
  *   - échelon 8 -> 9 : "entre 18 et 30 mois" -> ancienneté in [1.5, 2.5] years.
  *
@@ -26,9 +32,8 @@ import type { EchelonBA } from "./baThreshold.js";
  * not a BA candidate, despite their file still carrying a stray "BA" marker).
  *
  * Éligibilité (this function) is deliberately separate from PROMOTION: per the union's own rule,
- * éligibilité is échelon+ancienneté alone, while promotion additionally requires the rectorat file
- * to actually mark "BA" for that record — see rankBACandidates in baThreshold.ts and
- * computeBaRanking in the api package, which rank only the éligible+BA-marked pool.
+ * éligibilité is échelon+ancienneté alone, while promotion is decided definitively by the rectorat
+ * file's own "Pro BA." marker for that record (proConfirmee in baStatus.ts) — not estimated.
  */
 export function isEligibleBonificationAnciennete(echelonDepart: EchelonBA, ancienneteEchelonAnnees: number): boolean {
   if (echelonDepart === 6) {

@@ -29,7 +29,6 @@ teachersRouter.get("/", async (req, res) => {
     orderBy: [{ nomUsage: "asc" }, { prenom: "asc" }],
   });
 
-  const seuils = campagneId ? await prisma.baSeuil.findMany({ where: { campagneId } }) : [];
   const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
 
   const result = snapshots.map((snap) => {
@@ -38,11 +37,6 @@ teachersRouter.get("/", async (req, res) => {
     // BA candidacy/status/arrival — extracted to baStatus.ts (long rationale kept there) so
     // routes/stats.ts can aggregate over the exact same rule without re-deriving it.
     const { baEchelonDepart, baEligible, isBaCandidate, baStatus, arrivedThisEchelon } = computeBaStatus(snap);
-
-    // The rectorat's "ECHELON : NN" page groups every record by the échelon it would ARRIVE at if
-    // promoted this cycle, not the échelon it currently holds — BA candidates départ-échelon 6 are
-    // filed on the "07" page and départ-échelon 8 on the "09" page (see baStatus.ts).
-    const seuil = baEchelonDepart !== null ? seuils.find((s) => s.grade === snap.grade && s.echelonDepart === baEchelonDepart) : undefined;
 
     const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === snap.grade);
 
@@ -128,9 +122,6 @@ teachersRouter.get("/", async (req, res) => {
             adherentPrenom: snap.teacher.matchCandidate.adherent.prenom,
           }
         : { status: "NON_ADHERENT" as const },
-      seuilBa: seuil
-        ? { minBareme: seuil.minBareme, locked: seuil.locked, nombrePromusBa: seuil.nombrePromusBa }
-        : null,
       // The rendez-vous de carrière échelon the BA rule actually describes (6 or 8) — same value
       // as `echelonActuel` above once corrected for an unconfirmed candidate, surfaced explicitly
       // here for the "Éligibilité BA" column.

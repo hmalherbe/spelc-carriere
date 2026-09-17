@@ -5,7 +5,6 @@ import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords, matchUnresolvedAdherents } from "../adherentImport.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
-import { recomputeBaSeuils } from "../baSeuilCompute.js";
 import { computeEchelonPromotion, deriveNumericEchelonAliases, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
 import {
   extractPdfText,
@@ -249,11 +248,6 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
 
     results.push({ gradeCode: gradeBlock.gradeCode, grade, imported, warnings });
   }
-
-  // The BA seuils an admin sees on the "Seuils BA" page are auto-inferred from this campagne's own
-  // imported BA promotions — recomputed after every rectorat import so they reflect the latest
-  // data, without ever touching a row the admin has locked (see baSeuilCompute.ts).
-  await recomputeBaSeuils(campagneId);
 
   // A rectorat import is exactly what can resolve an adhérent whose matching attempt previously
   // found "Aucune correspondance trouvée" simply because their teacher hadn't been imported yet —

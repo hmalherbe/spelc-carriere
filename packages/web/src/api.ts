@@ -97,7 +97,6 @@ export interface TeacherListItem {
   matching:
     | { status: "AUTO_CONFIRMED" | "PENDING_REVIEW" | "CONFIRMED" | "REJECTED"; adherentNom: string; adherentPrenom: string }
     | { status: "NON_ADHERENT" };
-  seuilBa: { minBareme: number; locked: boolean; nombrePromusBa: number } | null;
   /** L'échelon de départ (6 ou 8) que la règle BA décrit — la même valeur que dans echelonActuel
    * ci-dessus quand le candidat n'est pas encore confirmé, fournie ici explicitement pour la
    * colonne BA. null = non applicable. */
@@ -124,19 +123,6 @@ export interface MatchCandidate {
   adherent: { id: string; nom: string; prenom: string; grade: string | null; mailPersonnel: string | null };
   teacher: { id: string; snapshots: { nomUsage: string; prenom: string; grade: string }[] } | null;
   teacherId: string | null;
-}
-
-export interface BaSeuil {
-  id: string;
-  campagneId: string;
-  grade: string;
-  echelonDepart: number;
-  nombrePromusBa: number;
-  minBareme: number;
-  minAncienneteGrade: number;
-  minAncienneteEchelon: number;
-  minAge: number;
-  locked: boolean;
 }
 
 export interface AdherentEligible {
@@ -345,9 +331,6 @@ export const api = {
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),
   rejectMatch: (id: string) => request(`/matches/${id}/reject`, { method: "POST" }),
   rescanMatches: () => request<{ autoConfirmed: number; pendingReview: number }>(`/matches/rescan`, { method: "POST" }),
-  baSeuils: (campagneId: string) => request<BaSeuil[]>(`/ba-seuils?campagneId=${campagneId}`),
-  updateBaSeuil: (id: string, data: Partial<Pick<BaSeuil, "minBareme" | "minAncienneteGrade" | "minAncienneteEchelon" | "minAge" | "locked">>) =>
-    request<BaSeuil>(`/ba-seuils/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   importRectorat: (campagneId: string, file: File) => {
     const form = new FormData();
     form.append("campagneId", campagneId);
