@@ -45,7 +45,7 @@ export function AiAssistantPage() {
         <h2>Questions possibles</h2>
         <div className="row-actions" style={{ flexWrap: "wrap" }}>
           {suggestions.map((q) => (
-            <button key={q} type="button" className="secondary" onClick={() => setQuestion(q)}>
+            <button key={q} type="button" className="chip" onClick={() => setQuestion(q)}>
               {q}
             </button>
           ))}

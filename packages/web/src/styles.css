@@ -99,6 +99,19 @@ button.secondary:hover {
   background: #fdf1f0;
 }
 
+/* Neutral chip style for a non-destructive suggestion/choice button (e.g. AI assistant sample
+ * questions) — button.secondary's red text is reserved for cancel/delete actions and would be
+ * misleading here. */
+button.chip {
+  background: var(--surface);
+  color: var(--accent-dark);
+  border: 1px solid var(--border);
+}
+
+button.chip:hover {
+  background: #eef2fd;
+}
+
 .error-text {
   color: var(--danger);
   font-size: 0.85rem;
