@@ -249,6 +249,10 @@ interface GenreBreakdown {
 }
 
 export interface CampagneStats {
+  /** Tous les grades présents dans la campagne — indépendant du filtre `grade` éventuellement
+   * appliqué à cette même réponse, pour que le menu qui le pilote ne se réduise pas à une option
+   * une fois un grade sélectionné. */
+  grades: string[];
   ba: {
     promus: number;
     nonPromus: number;
@@ -323,7 +327,8 @@ export const api = {
   createCampagne: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }) =>
     request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
-  stats: (campagneId: string) => request<CampagneStats>(`/stats?campagneId=${campagneId}`),
+  stats: (campagneId: string, grade?: string) =>
+    request<CampagneStats>(`/stats?campagneId=${campagneId}${grade ? `&grade=${encodeURIComponent(grade)}` : ""}`),
   pendingMatches: (campagneId?: string) =>
     request<MatchCandidate[]>(`/matches?status=PENDING_REVIEW${campagneId ? `&campagneId=${campagneId}` : ""}`),
   adherentsEligibles: (campagneId: string) => request<AdherentEligible[]>(`/adherents/eligibles?campagneId=${campagneId}`),

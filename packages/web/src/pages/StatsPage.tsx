@@ -33,6 +33,7 @@ function GenreTable({ genre }: { genre: CampagneStats["ba"]["genre"] }) {
 export function StatsPage() {
   const [campagnes, setCampagnes] = useState<Campagne[]>([]);
   const [campagneId, setCampagneId] = useState<string | null>(null);
+  const [gradeFilter, setGradeFilter] = useState<string>("all");
   const [stats, setStats] = useState<CampagneStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,16 +46,22 @@ export function StatsPage() {
     });
   }, []);
 
+  // Un changement de campagne repart d'un filtre "Tous les grades" — la liste de grades d'une
+  // autre campagne peut ne plus contenir celui qui était sélectionné.
+  useEffect(() => {
+    setGradeFilter("all");
+  }, [campagneId]);
+
   useEffect(() => {
     if (!campagneId) return;
     setLoading(true);
     setError(null);
     api
-      .stats(campagneId)
+      .stats(campagneId, gradeFilter === "all" ? undefined : gradeFilter)
       .then(setStats)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [campagneId]);
+  }, [campagneId, gradeFilter]);
 
   if (error) return <p className="error-text">{error}</p>;
 
@@ -71,6 +78,16 @@ export function StatsPage() {
             ))}
           </select>
         )}
+        {stats && stats.grades.length > 0 && (
+          <select value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
+            <option value="all">Tous les grades</option>
+            {stats.grades.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       <p className="hint">
         La civilité d'un adhérent est déclarée ; celle d'un non-adhérent est estimée à partir de son prénom et peut
@@ -83,7 +100,7 @@ export function StatsPage() {
       ) : (
         <>
           <section className="card">
-            <h2>Bonification d'ancienneté (BA)</h2>
+            <h2>Bonification d'ancienneté (BA){gradeFilter !== "all" && ` — ${gradeFilter}`}</h2>
             <div className="stat-grid">
               <div className="stat-tile">
                 <div className="stat-value">{stats.ba.promus}</div>
@@ -115,7 +132,7 @@ export function StatsPage() {
           </section>
 
           <section className="card">
-            <h2>Tous les promus (campagne)</h2>
+            <h2>Tous les promus (campagne){gradeFilter !== "all" && ` — ${gradeFilter}`}</h2>
             <div className="stat-grid">
               <div className="stat-tile">
                 <div className="stat-value">{stats.tousLesPromus.total}</div>

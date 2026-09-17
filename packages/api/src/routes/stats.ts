@@ -45,11 +45,16 @@ function withPct(counts: GenreCounts, total: number) {
 statsRouter.get("/", async (req, res) => {
   const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
   if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
+  const grade = typeof req.query.grade === "string" && req.query.grade !== "" ? req.query.grade : undefined;
 
-  const snapshots = await prisma.teacherSnapshot.findMany({
+  const allSnapshots = await prisma.teacherSnapshot.findMany({
     where: { campagneId },
     include: { teacher: { include: { matchCandidate: { include: { adherent: true } } } } },
   });
+  // Always the full campagne's grade list, independent of the `grade` filter itself, so the
+  // dropdown that drives it doesn't collapse to one option once a grade is selected.
+  const grades = Array.from(new Set(allSnapshots.map((s) => s.grade))).sort();
+  const snapshots = grade ? allSnapshots.filter((s) => s.grade === grade) : allSnapshots;
 
   const seenTeacherIds = new Set<string>();
   let baPromus = 0;
@@ -102,6 +107,7 @@ statsRouter.get("/", async (req, res) => {
   const baPromouvables = baPromus + baNonPromus;
 
   res.json({
+    grades,
     ba: {
       promus: baPromus,
       nonPromus: baNonPromus,
