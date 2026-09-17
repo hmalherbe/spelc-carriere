@@ -146,8 +146,21 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
     await page.waitForLoadState("networkidle");
 
     // --- 3. Filter by Spelc name ---
+    // Confirmed live (screenshot from a real failure): this page lays the field out as plain
+    // adjacent table cells ("Nom du SPELC" text next to an <input>), not a proper <label for="...">
+    // or aria-label — so getByLabel/getByPlaceholder never match at all and just time out, even
+    // though the field is visibly right there. The third alternative below finds the label TEXT
+    // node instead, then takes the next <input> that follows it in document order (works for this
+    // table-cells-side-by-side layout regardless of whether it's a real <table> or styled <div>s).
     step = "filtre nom du Spelc";
-    await page.getByLabel(/nom du spelc/i).or(page.getByPlaceholder(/nom du spelc/i)).first().fill(config.spelcName);
+    const spelcLabelText = page.getByText(/nom du spelc/i).first();
+    const spelcInputByProximity = spelcLabelText.locator("xpath=following::input[not(@type='hidden')][1]");
+    await page
+      .getByLabel(/nom du spelc/i)
+      .or(page.getByPlaceholder(/nom du spelc/i))
+      .or(spelcInputByProximity)
+      .first()
+      .fill(config.spelcName);
     await page.getByRole("button", { name: /appliquer/i }).first().click();
     await page.waitForLoadState("networkidle");
 
