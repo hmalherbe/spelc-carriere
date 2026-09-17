@@ -66,17 +66,26 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   // (see routes/grilles.ts) must be reflected in newly computed promotions.
   const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
 
-  // Build a name -> teacherId lookup from every snapshot ever imported (any campagne), so a
-  // teacher re-appearing in a later campaign — or in another grade block of THIS SAME file, for a
+  // Build a (name, grade) -> teacherId lookup from every snapshot ever imported (any campagne), so
+  // a teacher re-appearing in a later campaign — or in another grade block of THIS SAME file, for a
   // combined "CN-HC-CE" export — reuses their existing Teacher row instead of forking a duplicate
   // identity. Exact match on normalized nom+prénom — deliberately NOT fuzzy here, unlike the
   // adherent matching: within the rectorat's own data, the same person's name should be spelled
-  // consistently campaign to campaign (same source system), so a stricter bar is safer. Shared
-  // across every grade block below and updated as new teachers get created along the way.
-  const existingSnapshots = await prisma.teacherSnapshot.findMany({ select: { teacherId: true, nomUsage: true, prenom: true } });
+  // consistently campaign to campaign (same source system), so a stricter bar is safer.
+  //
+  // Grade is part of the key, strictly (no CN/HC/EXC tolerance): two records with the same name
+  // but different grades are treated as two different people, full stop — even a genuine hors-
+  // classe promotion (CERTIFIE -> CERTIFIE HC) starts a new Teacher identity rather than continuing
+  // the old one. Per product decision: a same-name-different-grade homonym is common enough (and a
+  // silently wrong merge bad enough — it would blend two different careers' history/computed
+  // states under one Teacher) that requiring an exact grade match, even at the cost of splitting a
+  // real promotion's history, is the safer default.
+  //
+  // Shared across every grade block below and updated as new teachers get created along the way.
+  const existingSnapshots = await prisma.teacherSnapshot.findMany({ select: { teacherId: true, nomUsage: true, prenom: true, grade: true } });
   const teacherIdByName = new Map<string, string>();
   for (const s of existingSnapshots) {
-    teacherIdByName.set(`${normalizeName(s.nomUsage)}|${normalizeName(s.prenom)}`, s.teacherId);
+    teacherIdByName.set(`${normalizeName(s.nomUsage)}|${normalizeName(s.prenom)}|${s.grade}`, s.teacherId);
   }
 
   const results: {
@@ -141,7 +150,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
     let imported = 0;
 
     for (const record of gradeBlock.records) {
-      const key = `${normalizeName(record.nomUsage)}|${normalizeName(record.prenom)}`;
+      const key = `${normalizeName(record.nomUsage)}|${normalizeName(record.prenom)}|${grade}`;
       let teacherId = teacherIdByName.get(key);
       if (!teacherId) {
         const teacher = await prisma.teacher.create({ data: {} });

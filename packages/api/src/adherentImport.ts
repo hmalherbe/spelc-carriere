@@ -1,5 +1,5 @@
 import { prisma } from "./db.js";
-import { matchAdherents, type AdherentRecord } from "@spelc/import";
+import { matchAdherents, normalizeGrade, type AdherentRecord } from "@spelc/import";
 
 export interface ImportAdherentRecordsResult {
   created: number;
@@ -8,43 +8,77 @@ export interface ImportAdherentRecordsResult {
 }
 
 /**
- * Runs fuzzy matching for every adherent that doesn't yet have a SUCCESSFUL candidate — either no
- * MatchCandidate row at all (never attempted), or a still-open PENDING_REVIEW one that found no
- * teacher (teacherId null). The latter matters because matching only ever sees the teachers
- * imported SO FAR: an adherent whose teacher hadn't been imported yet (rectorat file imported
- * after the adherent file, or in a later session) got "Aucune correspondance trouvée" and — before
- * this — stayed stuck there forever, since a MatchCandidate row (even a failed one) made every
- * later import skip it as "already handled". Retrying these costs nothing when nothing's changed
- * (still no match) and fixes exactly that case once the missing teacher does show up.
+ * Runs fuzzy matching for every adherent that doesn't yet have a SUCCESSFUL, still-trustworthy
+ * candidate — no MatchCandidate row at all (never attempted), a still-open PENDING_REVIEW one that
+ * found no teacher (teacherId null), or a still-open PENDING_REVIEW one whose suggested teacher's
+ * grade no longer matches the adherent's own grade (a suggestion made before grade became part of
+ * the matching rule — see matching.ts — genuinely stale, not a legitimate call awaiting review).
  *
- * A CONFIRMED, AUTO_CONFIRMED, or REJECTED candidate is never touched here — those are final,
- * human-relevant decisions (REJECTED included: a human already looked and said no, even if
- * teacherId is null on that row too).
+ * The teacherId-null case matters because matching only ever sees the teachers imported SO FAR: an
+ * adherent whose teacher hadn't been imported yet (rectorat file imported after the adherent file,
+ * or in a later session) got "Aucune correspondance trouvée" and — before this function existed —
+ * stayed stuck there forever, since a MatchCandidate row (even a failed one) made every later
+ * import skip it as "already handled". The grade-mismatch case matters for the same reason applied
+ * retroactively: a suggestion proposed while matching only compared names can point at someone of
+ * a completely different grade (a real case: an adhérent CERTIFIE HC suggested a teacher AGREGE) —
+ * that's not a borderline call for a human to weigh, it's simply wrong, so it's cleared here rather
+ * than left sitting in the review queue. Retrying costs nothing when nothing's changed.
+ *
+ * A CONFIRMED or REJECTED candidate is never touched here — those are final, human-made decisions.
+ * A same-grade PENDING_REVIEW suggestion is also left alone — a legitimate low-confidence match
+ * genuinely awaiting review must never be silently swapped out from under whoever's looking at it.
  *
  * `adherentIds`, when given, restricts the retry to that set (used right after an adherent file
  * import — only the just-touched rows can possibly need it yet); omitted, it reconsiders every
- * stuck adherent in the DB (used after a rectorat import, since that's what actually changes the
- * pool of candidate teachers).
+ * stuck or stale adherent in the DB (used after a rectorat import, since that's what actually
+ * changes the pool of candidate teachers).
  */
 export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<{ autoConfirmed: number; pendingReview: number }> {
-  const toRetry = await prisma.adherent.findMany({
+  const candidates = await prisma.adherent.findMany({
     where: {
       ...(adherentIds ? { id: { in: adherentIds } } : {}),
-      OR: [{ matchCandidate: null }, { matchCandidate: { status: "PENDING_REVIEW", teacherId: null } }],
+      OR: [{ matchCandidate: null }, { matchCandidate: { status: "PENDING_REVIEW" } }],
     },
-    select: { id: true, nom: true, prenom: true, grade: true },
+    select: {
+      id: true,
+      nom: true,
+      prenom: true,
+      grade: true,
+      matchCandidate: {
+        select: {
+          teacherId: true,
+          teacher: { select: { snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" }, select: { grade: true } } } },
+        },
+      },
+    },
+  });
+
+  const toRetry = candidates.filter((a) => {
+    const candidate = a.matchCandidate;
+    if (!candidate || !candidate.teacherId) return true; // never attempted, or attempted and found nothing
+    const suggestedGrade = candidate.teacher?.snapshots[0]?.grade;
+    if (!a.grade || !suggestedGrade) return false; // can't tell either way — leave the existing suggestion as-is
+    return normalizeGrade(a.grade) !== normalizeGrade(suggestedGrade); // stale cross-grade suggestion
   });
 
   if (toRetry.length === 0) return { autoConfirmed: 0, pendingReview: 0 };
 
+  const retryIds = new Set(toRetry.map((a) => a.id));
+
   // A teacher can only ever be linked to one adherent (MatchCandidate.teacherId is unique in the
-  // DB) — exclude anyone already claimed by an existing candidate (AUTO_CONFIRMED, CONFIRMED, or a
-  // still-open PENDING_REVIEW that already suggested them) from the pool, or matchAdherents could
-  // propose an already-taken teacher and the upsert below would fail.
+  // DB) — exclude anyone already claimed by an existing candidate outside this retry batch
+  // (AUTO_CONFIRMED, CONFIRMED, or a still-open, still-valid PENDING_REVIEW) from the pool, or
+  // matchAdherents could propose an already-taken teacher and the upsert below would fail. A
+  // candidate INSIDE this batch does NOT count as claiming its (possibly stale) teacher: that hold
+  // is exactly what's being re-evaluated, and must not block the retry from re-proposing that same
+  // teacher (correctly, this time) to whichever adherent actually matches them.
   const claimedTeacherIds = new Set(
-    (await prisma.matchCandidate.findMany({ where: { teacherId: { not: null } }, select: { teacherId: true } })).map(
-      (m) => m.teacherId as string,
-    ),
+    (
+      await prisma.matchCandidate.findMany({
+        where: { teacherId: { not: null }, adherentId: { notIn: [...retryIds] } },
+        select: { teacherId: true },
+      })
+    ).map((m) => m.teacherId as string),
   );
 
   const allTeacherSnapshots = await prisma.teacherSnapshot.findMany({

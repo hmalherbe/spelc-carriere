@@ -64,8 +64,10 @@ export interface MatchCandidateAdherent {
 
 /** Same normalization `nameSimilarity` already applies to nom/prénom (case/accent/whitespace),
  * reused here so "Certifié" (as ADEL happens to spell it) and "CERTIFIE" (our internal grade
- * label) compare equal. */
-function normalizeGrade(grade: string): string {
+ * label) compare equal. Exported so callers needing the exact same grade-equality rule outside a
+ * fresh matchAdherents() call (e.g. deciding whether an EXISTING suggestion is stale) stay in sync
+ * with it, rather than risking a second, subtly different comparison. */
+export function normalizeGrade(grade: string): string {
   return stripDiacritics(grade).toUpperCase().trim();
 }
 
