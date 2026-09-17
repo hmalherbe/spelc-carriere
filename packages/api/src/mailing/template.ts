@@ -43,7 +43,7 @@ export interface MailingContext {
  * are interpolated into the HTML body — those files aren't authored by us, so treat their content
  * as untrusted rather than assuming it can't contain markup.
  */
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -52,12 +52,12 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function formatDateFr(iso: string | null): string | null {
+export function formatDateFr(iso: string | null): string | null {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function civilitePrefix(civilite: string | null): string {
+export function civilitePrefix(civilite: string | null): string {
   if (!civilite) return "";
   const c = civilite.trim().toLowerCase();
   if (c.startsWith("mme")) return "Madame";
@@ -70,7 +70,7 @@ function civilitePrefix(civilite: string | null): string {
  * every mail client (including Outlook's Word rendering engine) actually supports reliably.
  * Renders nothing at all when neither is configured, rather than an empty header row.
  */
-function buildHeader(logoDataUrl: string | null, t1Text: string | null): string {
+export function buildHeader(logoDataUrl: string | null, t1Text: string | null): string {
   if (!logoDataUrl && !t1Text) return "";
   const logoCell = logoDataUrl ? `<img src="${logoDataUrl}" alt="" style="max-height: 60px; max-width: 220px;">` : "";
   // escapeHtml first (untrusted admin input), then turn line breaks into <br> — mail clients don't
@@ -88,7 +88,7 @@ function buildHeader(logoDataUrl: string | null, t1Text: string | null): string 
 const ELU_ROLE_LABEL: Record<MailingElu["role"], string> = { TITULAIRE: "Titulaire", SUPPLEANT: "Suppléant(e)" };
 
 /** The union's élus for the recipient's own commission (CCMA/CCMI) — filtered by the caller. */
-function buildElusFooter(commission: MailingContext["commission"], elus: MailingElu[]): string {
+export function buildElusFooter(commission: MailingContext["commission"], elus: MailingElu[]): string {
   if (elus.length === 0) return "";
   const items = elus
     .map((e) => {
@@ -102,13 +102,13 @@ function buildElusFooter(commission: MailingContext["commission"], elus: Mailing
 
 /** Only shown for a non-adhérent (see MailingContext.isAdherent) — they never explicitly signed up
  * with the union, unlike an adhérent who chose to be a member. */
-function buildUnsubscribeLink(isAdherent: boolean): string {
+export function buildUnsubscribeLink(isAdherent: boolean): string {
   if (isAdherent) return "";
   const mailto = `mailto:spelc.cotedazur@gmail.com?subject=${encodeURIComponent("se désabonner")}`;
   return `<p style="font-size: 0.8rem; margin-bottom: 8px;"><a href="${mailto}">Se désabonner</a></p>`;
 }
 
-function buildSocialLinks(links: MailingSocialLink[]): string {
+export function buildSocialLinks(links: MailingSocialLink[]): string {
   if (links.length === 0) return "";
   const items = links.map((l) => `<a href="${escapeHtml(l.url)}">${escapeHtml(l.label)}</a>`).join(" · ");
   return `<p style="font-size: 0.8rem;">${items}</p>`;

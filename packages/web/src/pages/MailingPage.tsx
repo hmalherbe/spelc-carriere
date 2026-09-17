@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type BrevoSettings, type Campagne, type MailingPreview, type MailingRecipient, type MailingSendResult } from "../api.js";
+import {
+  api,
+  type BrevoSettings,
+  type Campagne,
+  type MailingPreview,
+  type MailingRecipient,
+  type MailingSendResult,
+  type MailingTemplate,
+} from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 function euros(n: number): string {
@@ -29,8 +37,10 @@ export function MailingPage() {
   const [savingEmail, setSavingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [brevoSettings, setBrevoSettings] = useState<BrevoSettings | null>(null);
+  const [template, setTemplate] = useState<MailingTemplate>("generique");
 
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
+  const ccmaModelAvailable = selectedCampagne?.type === "CCMA";
 
   useEffect(() => {
     api.campagnes().then((c) => {
@@ -56,6 +66,7 @@ export function MailingPage() {
 
   useEffect(() => {
     if (campagneId) refresh(campagneId);
+    setTemplate("generique");
   }, [campagneId]);
 
   function toggle(teacherId: string) {
@@ -69,8 +80,12 @@ export function MailingPage() {
 
   async function openPreview(teacherId: string) {
     if (!campagneId) return;
-    const data = await api.mailingPreview(campagneId, teacherId);
-    setPreview({ teacherId, data });
+    try {
+      const data = await api.mailingPreview(campagneId, teacherId, template);
+      setPreview({ teacherId, data });
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
   function startEditEmail(r: MailingRecipient) {
@@ -109,7 +124,7 @@ export function MailingPage() {
     setError(null);
     setSendResult(null);
     try {
-      const result = await api.mailingSend(campagneId, Array.from(selected));
+      const result = await api.mailingSend(campagneId, Array.from(selected), template);
       setSendResult(result);
       refresh(campagneId);
     } catch (e) {
@@ -134,6 +149,12 @@ export function MailingPage() {
             ))}
           </select>
         )}
+        {ccmaModelAvailable && (
+          <select value={template} onChange={(e) => setTemplate(e.target.value as MailingTemplate)}>
+            <option value="generique">Modèle générique</option>
+            <option value="ccma_avancement">Modèle CCMA (avancement d'échelon)</option>
+          </select>
+        )}
       </div>
       <p className="hint">
         Tout enseignant ayant un résultat de promotion pour cette campagne apparaît ici. Un adhérent (rapprochement
@@ -145,6 +166,12 @@ export function MailingPage() {
         page Élus CCMA/CCMI, page Import pour la corriger), un lien de désabonnement pour les non-adhérents et les
         réseaux sociaux de Paramètres apparaissent en bas. L'envoi se fait via Brevo.
       </p>
+      {template === "ccma_avancement" && (
+        <p className="hint">
+          Modèle reconstruit à partir du courrier CCMA du Spelc (report d'ancienneté, bonification, comparaison au
+          dernier promu du même grade/échelon...) — vérifiez l'aperçu de quelques destinataires avant l'envoi.
+        </p>
+      )}
       {selectedCampagne && !selectedCampagne.type && (
         <p className="hint error-text">
           Cette campagne n'a pas de commission (CCMA/CCMI) définie — aucun élu n'apparaîtra dans les mailings envoyés.

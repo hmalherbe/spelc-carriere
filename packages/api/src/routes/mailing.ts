@@ -4,10 +4,21 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { buildPromotionEmail, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
+import {
+  buildCcmaModelEmail,
+  CcmaModelUnavailableError,
+  type BonificationState,
+  type CcmaModelContext,
+} from "../mailing/ccmaModelTemplate.js";
+import { loadDernierPromuBaByGroup, type DernierPromuBa } from "../mailing/dernierPromuBa.js";
+import { loadBaCandidateCountByGroup } from "../mailing/baCandidateStats.js";
+import { computeFuturePromotion } from "../mailing/futurePromotion.js";
+import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
 import { loadMailingBranding } from "../mailingBranding.js";
+import type { GrilleCode } from "@spelc/domain";
 
 const SINGLETON_ID = "singleton";
 
@@ -58,6 +69,103 @@ async function loadBrevoConfigFromDb(): Promise<{
     testMode: dbConfig?.testMode ?? false,
     testEmail: dbConfig?.testEmail ?? null,
     testMaxSends: dbConfig?.testMaxSends ?? null,
+  };
+}
+
+/**
+ * Derives the CCMA model letter's 3-state "Bonification" field from the raw rectorat markers —
+ * see ccmaModelTemplate.ts's CcmaModelContext doc comment for what each state means. A teacher
+ * whose typePromotion isn't "BA" was never a bonification candidate this cycle at all.
+ */
+function deriveBonification(snap: { typePromotion: string | null; proTypePromotion: string | null; proConfirmee: boolean }): BonificationState {
+  if (snap.typePromotion !== "BA") return "ANCIENNETE";
+  return snap.proTypePromotion === "BA" && snap.proConfirmee ? "BONIFICATION" : "NON_PROMU";
+}
+
+type EligibleRecipient = Awaited<ReturnType<typeof eligibleRecipients>>[number];
+
+/** Everything the CCMA model template needs beyond what the generic template already uses —
+ * loaded once per request (campagne-wide or group-wide, not per recipient) so building N letters
+ * doesn't mean N queries. */
+interface CcmaModelExtras {
+  grilles: Awaited<ReturnType<typeof loadLiveGrilles>>;
+  valeurDuPoint: number;
+  dernierPromuByGroup: Map<string, DernierPromuBa>;
+  candidateCountByGroup: Map<string, number>;
+}
+
+async function loadCcmaModelExtras(campagneId: string): Promise<CcmaModelExtras> {
+  const [grilles, valeurDuPoint, dernierPromuByGroup, candidateCountByGroup] = await Promise.all([
+    loadLiveGrilles(),
+    loadCurrentValeurDuPoint(),
+    loadDernierPromuBaByGroup(campagneId),
+    loadBaCandidateCountByGroup(campagneId),
+  ]);
+  return { grilles, valeurDuPoint, dernierPromuByGroup, candidateCountByGroup };
+}
+
+function buildCcmaModelContext(
+  recipient: EligibleRecipient,
+  campagne: { dateCcma: Date; type: "CCMA" | "CCMI" | null },
+  extras: CcmaModelExtras,
+  shared: { elus: MailingElu[]; t1Text: string | null; logoDataUrl: string | null; socialLinks: MailingSocialLink[] },
+): CcmaModelContext {
+  const bonification = deriveBonification(recipient);
+  const groupKey = `${recipient.grade}|${recipient.echelonActuel}`;
+  const dernierPromu = extras.dernierPromuByGroup.get(groupKey) ?? null;
+
+  const candidateCount = extras.candidateCountByGroup.get(groupKey) ?? 0;
+  const pourcentagePromusBa =
+    candidateCount > 0 && recipient.nombrePromusBaSection != null
+      ? Math.round((recipient.nombrePromusBaSection / candidateCount) * 100)
+      : null;
+
+  const future = recipient.dateProchainePromotion
+    ? computeFuturePromotion({
+        grille: recipient.grilleCode as GrilleCode,
+        echelonApresCettePromotion: recipient.echelonSuivant,
+        dateEffetCettePromotion: recipient.dateProchainePromotion.toISOString(),
+        grilles: extras.grilles,
+        valeurDuPoint: extras.valeurDuPoint,
+      })
+    : { dateFuturePromotion: null, dateFuturePromotionSiBA: null };
+
+  return {
+    civilite: recipient.civilite,
+    prenom: recipient.prenom,
+    nom: recipient.nom,
+    email: recipient.email,
+    isAdherent: recipient.isAdherent,
+    commission: (campagne.type ?? "CCMA") as "CCMA" | "CCMI",
+    elus: shared.elus,
+    t1Text: shared.t1Text,
+    logoDataUrl: shared.logoDataUrl,
+    socialLinks: shared.socialLinks,
+    dateCcma: campagne.dateCcma.toISOString(),
+    grade: recipient.grade,
+    echelonDepart: recipient.echelonDepart,
+    echelonSuivant: recipient.echelonSuivant,
+    gainSalaireNet: recipient.gainSalaireNet,
+    dateAccesEchelonActuel: recipient.dateAccesEchelon.toISOString(),
+    dateEffetCcm: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
+    typePromotion: recipient.typePromotion,
+    dureeRestanteEncoded: recipient.dureeRestante,
+    bonification,
+    // Only meaningful for an actual BA candidate this cycle (typePromotion === "BA") — the
+    // rectorat's "Pro TYPE.date" marker fires for AN/CL confirmations too (see MOLENAT Marion, a
+    // "RE." report-d'ancienneté record confirmed "Pro AN." — her dateProchainePromotionRectorat is
+    // set but has nothing to do with a bonification d'ancienneté).
+    dateEligibiliteBA:
+      recipient.typePromotion === "BA" && recipient.dateProchainePromotionRectorat
+        ? recipient.dateProchainePromotionRectorat.toISOString()
+        : null,
+    pourcentagePromusBa,
+    bareme: recipient.avisEvaluation,
+    ancienneteGrade: recipient.ancienneteGrade,
+    ancienneteEchelon: recipient.ancienneteEchelon,
+    dernierPromu,
+    dateFuturePromotion: future.dateFuturePromotion,
+    dateFuturePromotionSiBA: future.dateFuturePromotionSiBA,
   };
 }
 
@@ -115,10 +223,24 @@ async function eligibleRecipients(campagneId: string) {
     gainSalaireBrut: number;
     gainSalaireNet: number;
     dateProchainePromotion: Date | null;
+    grilleCode: string;
     email: string | null;
     lastStatus: string | null;
     lastSentAt: Date | null;
     lastError: string | null;
+    // Raw fields only needed by the CCMA model template (see ccmaModelTemplate.ts) — the generic
+    // template ignores all of these.
+    echelonActuel: string;
+    dateAccesEchelon: Date;
+    typePromotion: string | null;
+    dureeRestante: string | null;
+    proTypePromotion: string | null;
+    proConfirmee: boolean;
+    dateProchainePromotionRectorat: Date | null;
+    nombrePromusBaSection: number | null;
+    avisEvaluation: number | null;
+    ancienneteGrade: number | null;
+    ancienneteEchelon: number | null;
   }[] = [];
 
   for (const snap of snapshots) {
@@ -161,10 +283,22 @@ async function eligibleRecipients(campagneId: string) {
       gainSalaireBrut: state.gainSalaireBrut,
       gainSalaireNet: state.gainSalaireNet,
       dateProchainePromotion: state.dateProchainePromotion,
+      grilleCode: state.grilleCode,
       email,
       lastStatus: log?.status ?? null,
       lastSentAt: log?.sentAt ?? null,
       lastError: log?.error ?? null,
+      echelonActuel: snap.echelonActuel,
+      dateAccesEchelon: snap.dateAccesEchelon,
+      typePromotion: snap.typePromotion,
+      dureeRestante: snap.dureeRestante,
+      proTypePromotion: snap.proTypePromotion,
+      proConfirmee: snap.proConfirmee,
+      dateProchainePromotionRectorat: snap.dateProchainePromotionRectorat,
+      nombrePromusBaSection: snap.nombrePromusBaSection,
+      avisEvaluation: snap.avisEvaluation,
+      ancienneteGrade: snap.ancienneteGrade,
+      ancienneteEchelon: snap.ancienneteEchelon,
     });
   }
 
@@ -180,6 +314,7 @@ mailingRouter.get("/eligible", asyncHandler(async (req, res) => {
 mailingRouter.get("/preview", asyncHandler(async (req, res) => {
   const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
   const teacherId = typeof req.query.teacherId === "string" ? req.query.teacherId : undefined;
+  const template = req.query.template === "ccma_avancement" ? "ccma_avancement" : "generique";
   if (!campagneId || !teacherId) return res.status(400).json({ error: "campagneId et teacherId requis" });
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
@@ -193,27 +328,42 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
     loadElusByCommission(),
     loadSocialLinks(),
   ]);
+  const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
 
-  const email = buildPromotionEmail({
-    civilite: recipient.civilite,
-    prenom: recipient.prenom,
-    nom: recipient.nom,
-    grade: recipient.grade,
-    echelonDepart: recipient.echelonDepart,
-    echelonSuivant: recipient.echelonSuivant,
-    indiceActuel: recipient.indiceActuel,
-    futurIndice: recipient.futurIndice,
-    gainSalaireBrut: recipient.gainSalaireBrut,
-    gainSalaireNet: recipient.gainSalaireNet,
-    dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
-    anneeScolaire: campagne.anneeScolaire,
-    isAdherent: recipient.isAdherent,
-    commission: campagne.type,
-    elus: campagne.type ? elusByCommission[campagne.type] : [],
-    t1Text: branding.t1Text,
-    logoDataUrl: branding.logoDataUrl,
-    socialLinks,
-  });
+  let email: { subject: string; html: string };
+  if (template === "ccma_avancement") {
+    if (campagne.type !== "CCMA") {
+      return res.status(400).json({ error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." });
+    }
+    try {
+      const extras = await loadCcmaModelExtras(campagneId);
+      email = buildCcmaModelEmail(buildCcmaModelContext(recipient, campagne, extras, shared));
+    } catch (e) {
+      if (e instanceof CcmaModelUnavailableError) return res.status(400).json({ error: e.message });
+      throw e;
+    }
+  } else {
+    email = buildPromotionEmail({
+      civilite: recipient.civilite,
+      prenom: recipient.prenom,
+      nom: recipient.nom,
+      grade: recipient.grade,
+      echelonDepart: recipient.echelonDepart,
+      echelonSuivant: recipient.echelonSuivant,
+      indiceActuel: recipient.indiceActuel,
+      futurIndice: recipient.futurIndice,
+      gainSalaireBrut: recipient.gainSalaireBrut,
+      gainSalaireNet: recipient.gainSalaireNet,
+      dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
+      anneeScolaire: campagne.anneeScolaire,
+      isAdherent: recipient.isAdherent,
+      commission: campagne.type,
+      elus: shared.elus,
+      t1Text: shared.t1Text,
+      logoDataUrl: shared.logoDataUrl,
+      socialLinks: shared.socialLinks,
+    });
+  }
   res.json({ to: recipient.email, ...email });
 }));
 
@@ -276,6 +426,7 @@ mailingRouter.get("/log", asyncHandler(async (req, res) => {
 const sendSchema = z.object({
   campagneId: z.string().min(1),
   teacherIds: z.array(z.string()).optional(),
+  template: z.enum(["generique", "ccma_avancement"]).optional(),
 });
 
 mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
@@ -283,10 +434,14 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
   if (!parsed.success) {
     return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
   }
-  const { campagneId, teacherIds } = parsed.data;
+  const { campagneId, teacherIds, template = "generique" } = parsed.data;
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
+
+  if (template === "ccma_avancement" && campagne.type !== "CCMA") {
+    return res.status(400).json({ error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." });
+  }
 
   let brevoConfig: BrevoConfig;
   let testMode: boolean;
@@ -313,6 +468,8 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
     loadElusByCommission(),
     loadSocialLinks(),
   ]);
+  const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
+  const ccmaExtras = template === "ccma_avancement" ? await loadCcmaModelExtras(campagneId) : null;
 
   const results: { teacherId: string; nom: string; prenom: string; email: string | null; status: "SENT" | "FAILED"; error?: string }[] = [];
 
@@ -330,26 +487,29 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
       continue;
     }
 
-    const { subject, html } = buildPromotionEmail({
-      civilite: recipient.civilite,
-      prenom: recipient.prenom,
-      nom: recipient.nom,
-      grade: recipient.grade,
-      echelonDepart: recipient.echelonDepart,
-      echelonSuivant: recipient.echelonSuivant,
-      indiceActuel: recipient.indiceActuel,
-      futurIndice: recipient.futurIndice,
-      gainSalaireBrut: recipient.gainSalaireBrut,
-      gainSalaireNet: recipient.gainSalaireNet,
-      dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
-      anneeScolaire: campagne.anneeScolaire,
-      isAdherent: recipient.isAdherent,
-      commission: campagne.type,
-      elus: campagne.type ? elusByCommission[campagne.type] : [],
-      t1Text: branding.t1Text,
-      logoDataUrl: branding.logoDataUrl,
-      socialLinks,
-    });
+    const { subject, html } =
+      template === "ccma_avancement" && ccmaExtras
+        ? buildCcmaModelEmail(buildCcmaModelContext(recipient, campagne, ccmaExtras, shared))
+        : buildPromotionEmail({
+            civilite: recipient.civilite,
+            prenom: recipient.prenom,
+            nom: recipient.nom,
+            grade: recipient.grade,
+            echelonDepart: recipient.echelonDepart,
+            echelonSuivant: recipient.echelonSuivant,
+            indiceActuel: recipient.indiceActuel,
+            futurIndice: recipient.futurIndice,
+            gainSalaireBrut: recipient.gainSalaireBrut,
+            gainSalaireNet: recipient.gainSalaireNet,
+            dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
+            anneeScolaire: campagne.anneeScolaire,
+            isAdherent: recipient.isAdherent,
+            commission: campagne.type,
+            elus: shared.elus,
+            t1Text: shared.t1Text,
+            logoDataUrl: shared.logoDataUrl,
+            socialLinks: shared.socialLinks,
+          });
     const effectiveSubject = testMode
       ? `[TEST — destinataire réel : ${recipient.nom} ${recipient.prenom} <${recipient.email ?? "aucune adresse"}>] ${subject}`
       : subject;

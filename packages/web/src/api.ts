@@ -227,6 +227,11 @@ export interface MailingPreview {
   html: string;
 }
 
+/** "generique" = le mailing standard. "ccma_avancement" = le modèle reconstruit à partir du
+ * courrier CCMA original (report d'ancienneté, bonification, comparaison au dernier promu...) —
+ * n'existe que pour une campagne de type CCMA. */
+export type MailingTemplate = "generique" | "ccma_avancement";
+
 export interface MailingSendResult {
   sent: number;
   failed: number;
@@ -406,11 +411,13 @@ export const api = {
   adelLastSync: (type: AdelSyncType) => request<AdelSyncLogEntry | null>(`/adel/last?type=${type}`),
   adelSync: (type: AdelSyncType) => request<AdelSyncResult>("/adel/sync", { method: "POST", body: JSON.stringify({ type }) }),
   mailingEligible: (campagneId: string) => request<MailingRecipient[]>(`/mailing/eligible?campagneId=${campagneId}`),
-  mailingPreview: (campagneId: string, teacherId: string) =>
-    request<MailingPreview>(`/mailing/preview?campagneId=${campagneId}&teacherId=${teacherId}`),
+  mailingPreview: (campagneId: string, teacherId: string, template?: MailingTemplate) =>
+    request<MailingPreview>(
+      `/mailing/preview?campagneId=${campagneId}&teacherId=${teacherId}${template ? `&template=${template}` : ""}`,
+    ),
   mailingLog: (campagneId: string) => request<MailingLogEntry[]>(`/mailing/log?campagneId=${campagneId}`),
-  mailingSend: (campagneId: string, teacherIds?: string[]) =>
-    request<MailingSendResult>("/mailing/send", { method: "POST", body: JSON.stringify({ campagneId, teacherIds }) }),
+  mailingSend: (campagneId: string, teacherIds?: string[], template?: MailingTemplate) =>
+    request<MailingSendResult>("/mailing/send", { method: "POST", body: JSON.stringify({ campagneId, teacherIds, template }) }),
   updateMailingEmail: (teacherId: string, email: string) =>
     request<{ email: string }>(`/mailing/${teacherId}/email`, { method: "PUT", body: JSON.stringify({ email }) }),
   grilles: () => request<GrillesData>("/grilles"),
