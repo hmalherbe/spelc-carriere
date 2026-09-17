@@ -4,3 +4,4 @@ export * from "./adherentXlsxParser.js";
 export * from "./academicEmailXlsxParser.js";
 export * from "./matching.js";
 export * from "./pdfText.js";
+export * from "./civiliteFromPrenom.js";

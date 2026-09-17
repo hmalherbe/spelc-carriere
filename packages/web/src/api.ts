@@ -210,6 +210,9 @@ export interface MailingRecipient {
   nom: string;
   prenom: string;
   civilite: string | null;
+  /** true when `civilite` was guessed from the prénom (non-adhérent, no declared value) — display
+   * it as an estimation, never as a fact. */
+  civiliteEstimee: boolean;
   grade: string;
   echelonDepart: string;
   echelonSuivant: string;

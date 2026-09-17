@@ -5,7 +5,7 @@ import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { buildPromotionEmail } from "../mailing/template.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
-import { normalizeName } from "@spelc/import";
+import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
 
 const SINGLETON_ID = "singleton";
@@ -82,6 +82,9 @@ async function eligibleRecipients(campagneId: string) {
     nom: string;
     prenom: string;
     civilite: string | null;
+    /** true when `civilite` was guessed from the prénom (non-adhérent, no declared value) rather
+     * than coming from Adherent.civilite — callers must display it as an estimation, not a fact. */
+    civiliteEstimee: boolean;
     grade: string;
     echelonDepart: string;
     echelonSuivant: string;
@@ -110,7 +113,11 @@ async function eligibleRecipients(campagneId: string) {
     const adherent = isAdherent ? candidate!.adherent : null;
     const nom = adherent?.nom ?? snap.nomUsage;
     const prenom = adherent?.prenom ?? snap.prenom;
-    const civilite = adherent?.civilite ?? null;
+    // Only a non-adhérent's civilité is ever guessed — an adhérent's is a declared field (from the
+    // ADEL export's Civ. column), left as-is (including null when that field wasn't filled in)
+    // rather than second-guessed from their prénom.
+    const civilite = isAdherent ? (adherent?.civilite ?? null) : civiliteFromPrenom(prenom);
+    const civiliteEstimee = !isAdherent && civilite != null;
     const email = adherent
       ? adherent.mailPersonnel
       : (academicEmailByName.get(`${normalizeName(snap.nomUsage)}|${normalizeName(snap.prenom)}`) ?? null);
@@ -123,6 +130,7 @@ async function eligibleRecipients(campagneId: string) {
       nom,
       prenom,
       civilite,
+      civiliteEstimee,
       grade: snap.grade,
       echelonDepart: state.echelonDepart,
       echelonSuivant: state.echelonSuivant,

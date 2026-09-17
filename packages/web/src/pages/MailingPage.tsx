@@ -136,8 +136,9 @@ export function MailingPage() {
       <p className="hint">
         Tout enseignant ayant un résultat de promotion pour cette campagne apparaît ici. Un adhérent (rapprochement
         confirmé) est notifié à son adresse personnelle ; un non-adhérent, à son adresse académique si elle est connue
-        (import "Emails académiques" de la page Import) — sinon aucun envoi n'est possible pour lui. L'envoi se fait via
-        Brevo.
+        (import "Emails académiques" de la page Import) — sinon aucun envoi n'est possible pour lui. La civilité d'un
+        adhérent est celle déclarée dans l'import Spelc ; celle d'un non-adhérent est estimée à partir de son prénom
+        (marquée "estimé") et peut être absente si le prénom est ambigu ou inconnu. L'envoi se fait via Brevo.
       </p>
 
       {error && <p className="error-text">{error}</p>}
@@ -191,6 +192,7 @@ export function MailingPage() {
           <thead>
             <tr>
               {canSend && <th></th>}
+              <th>Civilité</th>
               <th>Nom</th>
               <th>Prénom</th>
               <th>Adhérent</th>
@@ -210,6 +212,10 @@ export function MailingPage() {
                     <input type="checkbox" checked={selected.has(r.teacherId)} disabled={!r.email} onChange={() => toggle(r.teacherId)} />
                   </td>
                 )}
+                <td>
+                  {r.civilite ?? <span className="hint">—</span>}
+                  {r.civiliteEstimee && <span className="hint"> (estimé)</span>}
+                </td>
                 <td>{r.nom}</td>
                 <td>{r.prenom}</td>
                 <td>
