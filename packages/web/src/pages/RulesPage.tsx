@@ -8,9 +8,8 @@ export function RulesPage() {
   return (
     <div className="import-page">
       <p className="hint">
-        Règles de changement d'échelon pour les cas particuliers (bonification d'ancienneté, hors-classe, classe
-        exceptionnelle) — la progression normale d'échelon (durée + indice par grade) est dans l'onglet « Grilles
-        indiciaires ».
+        Règles de changement d'échelon pour les cas particuliers (bonification d'ancienneté) — la progression normale
+        d'échelon (durée + indice par grade) est dans l'onglet « Grilles indiciaires ».
       </p>
 
       <section className="card">
@@ -36,24 +35,6 @@ export function RulesPage() {
           éligible mais pas promu — jamais estimé. Exception : pour les <strong>agrégés</strong>, la bonification se
           décide au niveau national (proposition ministérielle), donc ce fichier départemental ne permet pas de dire
           promu / non promu, seulement la candidature.
-        </p>
-      </section>
-
-      <section className="card">
-        <h2>Hors-classe</h2>
-        <p>
-          Échelon 9 de la classe normale avec au moins <strong>2 ans d'ancienneté</strong> dans cet échelon (arrêtée au
-          31 août de l'année du tableau d'avancement) — ou automatiquement éligible à partir de l'échelon 10 ou 11.
-        </p>
-      </section>
-
-      <section className="card">
-        <h2>Classe exceptionnelle</h2>
-        <p>
-          Règle en vigueur depuis la réforme 2024 (le système à deux « viviers » a disparu) : purement statutaire,{" "}
-          <strong>aucune ancienneté supplémentaire requise</strong>. Il suffit d'avoir atteint l'échelon 5 de la
-          hors-classe (échelon 4 pour les agrégés — numéroté « A1 » dans leur grille) au 31 août de l'année de
-          promotion.
         </p>
       </section>
     </div>
