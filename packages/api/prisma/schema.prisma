@@ -208,7 +208,6 @@ model Adherent {
   ancienIndice   Int?
   dateEffet      DateTime?
   mailPersonnel  String?
-  mailAcademique String?
   departement    String?
   importedAt     DateTime  @default(now())
 

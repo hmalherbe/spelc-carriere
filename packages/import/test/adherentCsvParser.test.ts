@@ -3,10 +3,10 @@ import { parseAdherentCsv } from "../src/adherentCsvParser.js";
 
 describe("parseAdherentCsv", () => {
   const csv = [
-    'Civ.,Nom ,Prénom,Nom naissance,Grade,Ancien échelon,Statut,Type de contrat,Ancien Indice,Date_Effet,Mél.,Mail academique,Departement,Spelc',
-    'Mme,MARTIN,Camille,,CERTIFIE,5,Titulaire,Contrat définitif,481,01/09/2023,camille.martin@example.com,,06,Oui',
-    'M.,"DUPONT, DE LA TOUR",Julien,DUPONT,AGREGE,8,Titulaire,Contrat définitif,715,15/09/2021,,julien.dupont@ac-nice.fr,83,Oui',
-    ",,,,,,,,,,,,,", // blank trailing row some exports leave in
+    'Civ.,Nom ,Prénom,Nom naissance,Grade,Ancien échelon,Statut,Type de contrat,Ancien Indice,Date_Effet,Mél.,Departement,Spelc',
+    'Mme,MARTIN,Camille,,CERTIFIE,5,Titulaire,Contrat définitif,481,01/09/2023,camille.martin@example.com,06,Oui',
+    'M.,"DUPONT, DE LA TOUR",Julien,DUPONT,AGREGE,8,Titulaire,Contrat définitif,715,15/09/2021,,83,Oui',
+    ",,,,,,,,,,,,", // blank trailing row some exports leave in
   ].join("\n");
 
   const { records, unmappedFields } = parseAdherentCsv(csv);
@@ -36,7 +36,6 @@ describe("parseAdherentCsv", () => {
 
   it("handles a quoted field containing a comma", () => {
     expect(records[1].nom).toBe("DUPONT, DE LA TOUR");
-    expect(records[1].mailAcademique).toBe("julien.dupont@ac-nice.fr");
     expect(records[1].mailPersonnel).toBeNull();
   });
 
@@ -61,9 +60,9 @@ describe("parseAdherentCsv", () => {
     // can land back on the nom/prénom columns — creating a bogus extra adherent out of a
     // comment sentence.
     const withComment = [
-      'Civ.,Nom ,Prénom,Nom naissance,Grade,Ancien échelon,Statut,Type de contrat,Ancien Indice,Date_Effet,Mél.,Mail academique,Departement,Spelc,Commentaire',
-      'Mme,FERRER,Florence,,CERTIFIE,7,Titulaire,Contrat définitif,563,01/09/2020,florence.ferrer@example.com,,06,Oui,"Tél. du 20/09/23 : note interne.\nL\'élève a du redoubler, pas de place, donc elle a été replacée dans le public."',
-      'M.,MARTIN,Camille,,CERTIFIE,5,Titulaire,Contrat définitif,481,01/09/2023,camille.martin@example.com,,06,Oui,',
+      'Civ.,Nom ,Prénom,Nom naissance,Grade,Ancien échelon,Statut,Type de contrat,Ancien Indice,Date_Effet,Mél.,Departement,Spelc,Commentaire',
+      'Mme,FERRER,Florence,,CERTIFIE,7,Titulaire,Contrat définitif,563,01/09/2020,florence.ferrer@example.com,06,Oui,"Tél. du 20/09/23 : note interne.\nL\'élève a du redoubler, pas de place, donc elle a été replacée dans le public."',
+      'M.,MARTIN,Camille,,CERTIFIE,5,Titulaire,Contrat définitif,481,01/09/2023,camille.martin@example.com,06,Oui,',
     ].join("\n");
 
     const { records } = parseAdherentCsv(withComment);
@@ -159,9 +158,7 @@ describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore 
   const { records, unmappedFields } = parseAdherentCsv(csv);
 
   it("maps every field this export actually has a column for, via its underscore/oddly-named headers", () => {
-    // mailAcademique genuinely has no corresponding column in this export (no separate
-    // academic-email column) — everything else does, once mapped.
-    expect(unmappedFields).toEqual(["mailAcademique"]);
+    expect(unmappedFields).toEqual([]);
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({
       civilite: "Mme",

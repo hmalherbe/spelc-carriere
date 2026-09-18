@@ -160,7 +160,6 @@ export async function importAdherentRecords(records: AdherentRecord[]): Promise<
       ancienIndice: r.ancienIndice,
       dateEffet: r.dateEffet ? new Date(r.dateEffet) : null,
       mailPersonnel: r.mailPersonnel,
-      mailAcademique: r.mailAcademique,
       departement: r.departement,
     };
     if (existing) {

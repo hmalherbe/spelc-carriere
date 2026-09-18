@@ -17,7 +17,6 @@ export interface AdherentRecord {
   ancienIndice: number | null;
   dateEffet: string | null; // ISO date
   mailPersonnel: string | null;
-  mailAcademique: string | null;
   departement: string | null;
   spelc: string | null;
 }
@@ -57,7 +56,6 @@ const HEADER_ALIASES: Record<keyof AdherentRecord, string[]> = {
   // changement d'échelon, malgré le nom de colonne (qui évoque plutôt une promotion en général).
   dateEffet: ["date_effet", "date effet", "promo"],
   mailPersonnel: ["mel.", "mail perso", "mail personnel", "email"],
-  mailAcademique: ["mail academique"],
   // "departement_rattachem" : en-tête (tronqué) de l'export adhérents ADEL pour ce même champ.
   departement: ["departement", "departement_rattachem"],
   spelc: ["spelc"],
@@ -229,7 +227,6 @@ export function parseAdherentCsv(csvText: string): AdherentParseResult {
       ancienIndice: ancienIndiceRaw ? toIntOrNull(ancienIndiceRaw) : null,
       dateEffet: dateEffetRaw ? toIsoDateFromFrench(dateEffetRaw) : null,
       mailPersonnel: get("mailPersonnel"),
-      mailAcademique: get("mailAcademique"),
       departement: get("departement"),
       spelc: get("spelc"),
     });

@@ -41,7 +41,7 @@ Tables disponibles :
 "Adherent" (adhérent Spelc, importé depuis ADEL)
   - "id" text, "civilite" text, "nom" text, "prenom" text, "nomNaissance" text, "grade" text
   - "echelleSpelc" text, "ancienEchelon" text, "statut" text, "typeContrat" text, "ancienIndice" int
-  - "dateEffet" timestamp, "mailPersonnel" text, "mailAcademique" text, "departement" text, "importedAt" timestamp
+  - "dateEffet" timestamp, "mailPersonnel" text, "departement" text, "importedAt" timestamp
 
 "AcademicEmail" (annuaire académique nom/prénom -> mail, pour les non-adhérents)
   - "id" text, "nom" text, "prenom" text, "email" text, "importedAt" timestamp
