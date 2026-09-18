@@ -385,8 +385,7 @@ export const api = {
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
   stats: (campagneId: string, grade?: string) =>
     request<CampagneStats>(`/stats?campagneId=${campagneId}${grade ? `&grade=${encodeURIComponent(grade)}` : ""}`),
-  pendingMatches: (campagneId?: string) =>
-    request<MatchCandidate[]>(`/matches?status=PENDING_REVIEW${campagneId ? `&campagneId=${campagneId}` : ""}`),
+  pendingMatches: () => request<MatchCandidate[]>("/matches?status=PENDING_REVIEW"),
   adherentsEligibles: (campagneId: string) => request<AdherentEligible[]>(`/adherents/eligibles?campagneId=${campagneId}`),
   confirmMatch: (id: string, teacherId?: string) =>
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),

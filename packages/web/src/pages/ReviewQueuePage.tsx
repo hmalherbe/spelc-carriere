@@ -1,56 +1,44 @@
 import { useEffect, useState } from "react";
-import { api, type Campagne, type MatchCandidate } from "../api.js";
+import { api, type MatchCandidate } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 export function ReviewQueuePage() {
   const { user } = useAuth();
-  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
-  const [campagneId, setCampagneId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<MatchCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [rescanning, setRescanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canReview = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
-  useEffect(() => {
-    api.campagnes().then((c) => {
-      setCampagnes(c);
-      if (c.length > 0) setCampagneId(c[0].id);
-      else setLoading(false);
-    });
-  }, []);
-
-  function refresh(id: string) {
+  function refresh() {
     setLoading(true);
     api
-      .pendingMatches(id)
+      .pendingMatches()
       .then(setCandidates)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    if (campagneId) refresh(campagneId);
-  }, [campagneId]);
+    refresh();
+  }, []);
 
   async function confirm(id: string, teacherId: string | null) {
-    if (!teacherId || !campagneId) return;
+    if (!teacherId) return;
     await api.confirmMatch(id, teacherId);
-    refresh(campagneId);
+    refresh();
   }
 
   async function reject(id: string) {
-    if (!campagneId) return;
     await api.rejectMatch(id);
-    refresh(campagneId);
+    refresh();
   }
 
   async function rescan() {
-    if (!campagneId) return;
     setRescanning(true);
     try {
       await api.rescanMatches();
-      refresh(campagneId);
+      refresh();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -64,15 +52,6 @@ export function ReviewQueuePage() {
     <div>
       <div className="toolbar">
         <h2>File de révision des rapprochements adhérents ↔ enseignants</h2>
-        {campagnes.length > 0 && (
-          <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
-            {campagnes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.type ?? "?"} {c.anneeScolaire}
-              </option>
-            ))}
-          </select>
-        )}
         {canReview && (
           <button className="secondary" onClick={rescan} disabled={rescanning}>
             {rescanning ? "Recalcul..." : "Recalculer les rapprochements"}
@@ -80,10 +59,11 @@ export function ReviewQueuePage() {
         )}
       </div>
       <p className="hint">
-        Limité aux adhérents éligibles à la CCMA/CCMI pour cette campagne (prochaine promotion d'échelon prévue dans sa
-        période). Une fois confirmé ou rejeté ici, un lien reste permanent — seuls les nouveaux cas ambigus reviennent
-        dans cette file lors des prochains imports. Le bouton « Recalculer les rapprochements » relance
-        immédiatement cette recherche pour tous les cas en attente, sans attendre le prochain import.
+        Tous les rapprochements en attente, toutes campagnes confondues — pour la liste des adhérents dus pour une
+        campagne précise, voir l'onglet « Adhérents éligibles ». Une fois confirmé ou rejeté ici, un lien reste
+        permanent — seuls les nouveaux cas ambigus reviennent dans cette file lors des prochains imports. Le bouton
+        « Recalculer les rapprochements » relance immédiatement cette recherche pour tous les cas en attente, sans
+        attendre le prochain import.
       </p>
       {loading ? (
         <p>Chargement...</p>

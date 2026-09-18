@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
-import { computeAdherentEligibility } from "../adherentEligibility.js";
 import { matchUnresolvedAdherents } from "../adherentImport.js";
 
 export const matchesRouter = Router();
@@ -12,14 +11,16 @@ matchesRouter.use(requireAuth);
  * Per product decision: a confirmed link is permanent — this endpoint (and the queue it feeds)
  * only ever surfaces PENDING_REVIEW candidates, never re-litigates AUTO_CONFIRMED/CONFIRMED ones.
  *
- * When campagneId is given, also restricted to adherents actually due (CCMA/CCMI-eligible) for
- * that campagne's period — otherwise every adherent ever imported piles up here forever, most of
- * them irrelevant to any campaign currently being worked on. Without campagneId, unfiltered (kept
- * for backward compatibility, not used by the app's own UI anymore).
+ * Deliberately NOT filtered by campagne eligibility (whether the adherent is due for a promotion
+ * in some campagne's period): matching an adhérent to the right enseignant is an identity question,
+ * unrelated to promotion timing. An earlier version filtered by campagne here, which made a case
+ * shown as "À vérifier" on the Dashboard (unfiltered) silently vanish from this queue whenever the
+ * campagne-eligibility estimate said the adhérent wasn't due this period — or whenever that
+ * estimate simply failed on incomplete grade/échelon data. Campagne-scoped due lists belong on the
+ * "Adhérents éligibles" tab (routes/adherents.ts's /eligibles), which exists for exactly that.
  */
 matchesRouter.get("/", async (req, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : "PENDING_REVIEW";
-  const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
 
   const candidates = await prisma.matchCandidate.findMany({
     where: { status: status as never },
@@ -27,13 +28,7 @@ matchesRouter.get("/", async (req, res) => {
     orderBy: { createdAt: "asc" },
   });
 
-  if (!campagneId) return res.json(candidates);
-
-  const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
-  if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
-
-  const filtered = candidates.filter((c) => computeAdherentEligibility(c.adherent, campagne).eligible);
-  res.json(filtered);
+  res.json(candidates);
 });
 
 /**
