@@ -8,8 +8,15 @@ export const campagnesRouter = Router();
 campagnesRouter.use(requireAuth);
 
 campagnesRouter.get("/", async (_req, res) => {
+  // periodeDebut alone leaves ties unresolved: several campagnes for the same année scolaire (test
+  // campagnes, a redone CCMA/CCMI split, ...) commonly share the exact same start date, and without
+  // a secondary key the DB is free to return them in any order — including a different one on every
+  // request. DashboardPage.tsx defaults its campagne selector to the FIRST entry here, so an
+  // unstable tie order meant the dashboard could silently default to a stale campagne even right
+  // after importing into the intended one, with no visible sign anything was wrong. createdAt desc
+  // breaks the tie deterministically in favor of the most recently created campagne.
   const campagnes = await prisma.campagne.findMany({
-    orderBy: { periodeDebut: "desc" },
+    orderBy: [{ periodeDebut: "desc" }, { createdAt: "desc" }],
     include: { _count: { select: { teacherSnapshots: true, imports: true } } },
   });
   res.json(campagnes);
