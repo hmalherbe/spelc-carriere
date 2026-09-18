@@ -50,6 +50,30 @@ describe("computeEchelonPromotion (ports the Calculs adhérents / ETATS_CCM_CALC
     expect(withoutReport.dateProchainePromotion).toBe("2026-03-01");
   });
 
+  it("shifts the promotion date later when ancienneté is à déduire (a career interruption the rectorat's own date d'accès doesn't reflect) — real case: Jan Cesar NATAF, CERTIFIE échelon 6", () => {
+    // NATAF's dateAccesEchelon (2017-09-01) is nearly 9 years before today, yet the rectorat's own
+    // Z1ANEC (ancienneté dans l'échelon) is only 2.878 years — a career interruption (disponibilité,
+    // congé...) isn't reflected in "date d'accès", inflating the raw calendar-elapsed time. Without
+    // a manual correction the engine computes a nonsense promotion date years in the past; with a
+    // 7-year "ancienneté à déduire" correction, it reproduces the rectorat's own confirmed
+    // "Pro AN.15/04/2026" exactly (real ancienneté-report marker "RE. 01a04m16j" also applies).
+    const withoutDeduction = computeEchelonPromotion({
+      grille: "PROFS",
+      echelonDepart: "06",
+      dateDernierChangementEchelon: "2017-09-01",
+      ancienneteAReporter: { annees: 1, mois: 4, jours: 16 },
+    });
+    const withDeduction = computeEchelonPromotion({
+      grille: "PROFS",
+      echelonDepart: "06",
+      dateDernierChangementEchelon: "2017-09-01",
+      ancienneteAReporter: { annees: 1, mois: 4, jours: 16 },
+      ancienneteADeduire: { annees: 7, mois: 0, jours: 0 },
+    });
+    expect(withoutDeduction.dateProchainePromotion).toBe("2019-04-15");
+    expect(withDeduction.dateProchainePromotion).toBe("2026-04-15");
+  });
+
   it("uses overridden grilles/valeurDuPoint when passed (e.g. an admin's edited indices)", () => {
     const result = computeEchelonPromotion({
       grille: "AGR",

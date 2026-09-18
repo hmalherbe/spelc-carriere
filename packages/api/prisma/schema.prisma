@@ -184,6 +184,20 @@ model Teacher {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
+  // Manual correction for a career interruption (disponibilité, congé longue durée, détachement...)
+  // that the rectorat's own "date d'accès à l'échelon" doesn't reflect — the file just keeps the
+  // date of the last real échelon change, so a teacher who spent e.g. 2 years on disponibilité looks
+  // (to computeEchelonPromotion's date math) like they've been accumulating ancienneté that whole
+  // time, projecting their next promotion years too early. Lives on Teacher, not TeacherSnapshot,
+  // because it's a fact about the person's own history — true regardless of campagne — whereas every
+  // TeacherSnapshot field gets wiped and recreated on each reimport (see routes/imports.ts) and would
+  // silently lose a manually-entered correction on the next rectorat file upload. "AAaMMmJJj" format,
+  // same convention as TeacherSnapshot.dureeRestante; parsed via parseAncienneteText and fed into
+  // computeEchelonPromotion's ancienneteADeduire parameter. Mirrors the "Ancienneté à déduire" column
+  // of the union's own original manual spreadsheet.
+  ancienneteADeduire     String?
+  ancienneteADeduireNote String? // free-text reason for the admin who set it, e.g. "disponibilité 09/2018-08/2020"
+
   snapshots      TeacherSnapshot[]
   matchCandidate MatchCandidate?
   computedStates ComputedPromotionState[]

@@ -4,15 +4,9 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords, matchUnresolvedAdherents } from "../adherentImport.js";
-import { deriveAncienneteAReporter } from "../ancienneteReportee.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
-import {
-  computeEchelonPromotion,
-  deriveEchelonActuelFromProjection,
-  deriveNumericEchelonAliases,
-  GRADE_MAPPINGS,
-  type GrilleCode,
-} from "@spelc/domain";
+import { recomputeAndStorePromotionState } from "../promotionState.js";
+import { deriveEchelonActuelFromProjection, deriveNumericEchelonAliases, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
 import {
   extractPdfText,
   parseRectoratFile,
@@ -93,6 +87,13 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   for (const s of existingSnapshots) {
     teacherIdByName.set(`${normalizeName(s.nomUsage)}|${normalizeName(s.prenom)}|${s.grade}`, s.teacherId);
   }
+
+  // Manual "ancienneté à déduire" corrections (see Teacher.ancienneteADeduire's doc comment) live on
+  // the Teacher row precisely so they survive this reimport's wholesale TeacherSnapshot replacement —
+  // fetched once here, keyed by teacherId, rather than re-queried per record.
+  const ancienneteADeduireByTeacherId = new Map(
+    (await prisma.teacher.findMany({ select: { id: true, ancienneteADeduire: true } })).map((t) => [t.id, t.ancienneteADeduire]),
+  );
 
   const results: {
     gradeCode: string;
@@ -219,47 +220,19 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
       const recordWarnings = [...record.warnings];
 
       if (record.dateAccesEchelon) {
-        try {
-          const promotion = computeEchelonPromotion({
-            grille: gradeMapping.grille as GrilleCode,
-            echelonDepart: record.echelonActuel,
-            dateDernierChangementEchelon: record.dateAccesEchelon,
-            ancienneteAReporter: deriveAncienneteAReporter(record.typePromotion, record.dureeRestante),
-            grilles: liveGrilles,
-            valeurDuPoint: liveValeurDuPoint,
-          });
-          await prisma.computedPromotionState.upsert({
-            where: { teacherId_campagneId: { teacherId, campagneId } },
-            update: {
-              grilleCode: promotion.grille,
-              echelonDepart: String(promotion.echelonDepart),
-              echelonSuivant: String(promotion.echelonSuivant),
-              indiceActuel: promotion.indiceActuel,
-              futurIndice: promotion.futurIndice,
-              gainSalaireBrut: promotion.gainSalaireBrut,
-              gainSalaireNet: promotion.gainSalaireNet,
-              dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
-            },
-            create: {
-              teacherId,
-              campagneId,
-              grilleCode: promotion.grille,
-              echelonDepart: String(promotion.echelonDepart),
-              echelonSuivant: String(promotion.echelonSuivant),
-              indiceActuel: promotion.indiceActuel,
-              futurIndice: promotion.futurIndice,
-              gainSalaireBrut: promotion.gainSalaireBrut,
-              gainSalaireNet: promotion.gainSalaireNet,
-              dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
-            },
-          });
-        } catch (e) {
-          // Échelon introuvable dans la grille de ce grade (donnée aberrante, ou grade mal détecté
-          // pour cette fiche) — signale la fiche en avertissement plutôt que de faire échouer tout le
-          // fichier : les autres fiches, elles, sont valides et ne doivent pas être perdues avec elle.
-          const message = e instanceof Error ? e.message : String(e);
-          recordWarnings.push(`Calcul de la promotion impossible : ${message}`);
-        }
+        const { warning } = await recomputeAndStorePromotionState({
+          teacherId,
+          campagneId,
+          grade,
+          echelonActuel: record.echelonActuel,
+          dateAccesEchelon: new Date(record.dateAccesEchelon),
+          typePromotion: record.typePromotion,
+          dureeRestante: record.dureeRestante,
+          ancienneteADeduireRaw: ancienneteADeduireByTeacherId.get(teacherId) ?? null,
+          liveGrilles,
+          liveValeurDuPoint,
+        });
+        if (warning) recordWarnings.push(`Calcul de la promotion impossible : ${warning}`);
       }
 
       imported++;

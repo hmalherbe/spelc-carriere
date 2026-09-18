@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Campagne, type TeacherListItem } from "../api.js";
+import { useAuth } from "../AuthContext.js";
 
 const MATCHING_LABEL: Record<string, string> = {
   AUTO_CONFIRMED: "Adhérent (auto)",
@@ -78,6 +79,8 @@ type AdherentFilter = "all" | "adherent" | "non_adherent";
 type BaFilter = "all" | "eligible" | "non_eligible";
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  const canEdit = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
   const [campagnes, setCampagnes] = useState<Campagne[]>([]);
   const [campagneId, setCampagneId] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<TeacherListItem[]>([]);
@@ -93,6 +96,14 @@ export function DashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("fichier");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
+  // Édition de la correction "ancienneté à déduire" (voir Teacher.ancienneteADeduire côté API) — un
+  // seul enseignant à la fois, comme le montre le pattern équivalent pour l'email dans MailingPage.
+  const [editingDeduireId, setEditingDeduireId] = useState<string | null>(null);
+  const [deduireDraft, setDeduireDraft] = useState("");
+  const [deduireNoteDraft, setDeduireNoteDraft] = useState("");
+  const [savingDeduire, setSavingDeduire] = useState(false);
+  const [deduireError, setDeduireError] = useState<string | null>(null);
+
   useEffect(() => {
     api
       .campagnes()
@@ -103,7 +114,7 @@ export function DashboardPage() {
       .catch((e) => setError(String(e)));
   }, []);
 
-  useEffect(() => {
+  function refreshTeachers() {
     if (!campagneId) return;
     setLoading(true);
     api
@@ -111,7 +122,30 @@ export function DashboardPage() {
       .then(setTeachers)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [campagneId]);
+  }
+
+  useEffect(refreshTeachers, [campagneId]);
+
+  function startEditDeduire(t: TeacherListItem) {
+    setEditingDeduireId(t.teacherId);
+    setDeduireDraft(t.ancienneteADeduire ?? "");
+    setDeduireNoteDraft(t.ancienneteADeduireNote ?? "");
+    setDeduireError(null);
+  }
+
+  async function saveDeduire(teacherId: string) {
+    setSavingDeduire(true);
+    setDeduireError(null);
+    try {
+      await api.updateAncienneteADeduire(teacherId, deduireDraft.trim() || null, deduireNoteDraft.trim() || null);
+      setEditingDeduireId(null);
+      refreshTeachers();
+    } catch (e) {
+      setDeduireError(String(e));
+    } finally {
+      setSavingDeduire(false);
+    }
+  }
 
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
 
@@ -189,7 +223,10 @@ export function DashboardPage() {
         <p className="hint">
           Période du {formatDate(selectedCampagne.periodeDebut)} au {formatDate(selectedCampagne.periodeFin)} — date CCMA :{" "}
           {formatDate(selectedCampagne.dateCcma)}. Par défaut, la liste est triée par grade puis dans le même ordre
-          que le fichier du rectorat correspondant — cliquez sur un en-tête de colonne pour trier autrement.
+          que le fichier du rectorat correspondant — cliquez sur un en-tête de colonne pour trier autrement. La
+          colonne « Anc. à déduire » permet de corriger, au cas par cas, les rares dossiers où la date d'accès à
+          l'échelon du rectorat ne reflète plus l'ancienneté réelle (disponibilité, congé longue durée...) — la
+          date de prochaine promotion est recalculée immédiatement.
         </p>
       )}
 
@@ -270,6 +307,7 @@ export function DashboardPage() {
               </th>
               <th>Date échelon actuel</th>
               <th>Ancienneté échelon</th>
+              <th>Anc. à déduire</th>
               <th>Prochaine promotion</th>
               <th>Gain net</th>
               <th>Adhérent</th>
@@ -290,6 +328,41 @@ export function DashboardPage() {
                   </td>
                   <td>{formatDate(t.dateAccesEchelon)}</td>
                   <td>{formatAnciennete(t.ancienneteEchelon)}</td>
+                  <td>
+                    {editingDeduireId === t.teacherId ? (
+                      <div className="row-actions">
+                        <input
+                          value={deduireDraft}
+                          onChange={(e) => setDeduireDraft(e.target.value)}
+                          placeholder="AAaMMmJJj (ex. 07a00m00j)"
+                          style={{ width: "10em" }}
+                          autoFocus
+                        />
+                        <input
+                          value={deduireNoteDraft}
+                          onChange={(e) => setDeduireNoteDraft(e.target.value)}
+                          placeholder="Motif (ex. disponibilité 2018-2020)"
+                          style={{ width: "16em" }}
+                        />
+                        <button type="button" disabled={savingDeduire} onClick={() => saveDeduire(t.teacherId)}>
+                          {savingDeduire ? "..." : "Enregistrer"}
+                        </button>
+                        <button type="button" className="secondary" onClick={() => setEditingDeduireId(null)} disabled={savingDeduire}>
+                          Annuler
+                        </button>
+                        {deduireError && <span className="error-text">{deduireError}</span>}
+                      </div>
+                    ) : (
+                      <div className="row-actions">
+                        <span title={t.ancienneteADeduireNote ?? undefined}>{t.ancienneteADeduire ?? "—"}</span>
+                        {canEdit && (
+                          <button type="button" className="secondary" onClick={() => startEditDeduire(t)}>
+                            {t.ancienneteADeduire ? "Modifier" : "Ajouter"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td>{formatDate(t.computedState?.dateProchainePromotion ?? null)}</td>
                   <td className={t.computedState && t.computedState.gainSalaireNet > 0 ? "gain-positive" : ""}>
                     {t.computedState ? euros(t.computedState.gainSalaireNet) : "—"}

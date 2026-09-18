@@ -1,9 +1,17 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
-import { requireAuth } from "../auth/middleware.js";
-import { isEligibleHorsClasse, isEligibleClasseExceptionnelle, computeEchelonPromotion, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
+import { requireAuth, requireRole } from "../auth/middleware.js";
+import {
+  isEligibleHorsClasse,
+  isEligibleClasseExceptionnelle,
+  computeEchelonPromotion,
+  parseAncienneteText,
+  GRADE_MAPPINGS,
+  type GrilleCode,
+} from "@spelc/domain";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { computeBaStatus } from "../baStatus.js";
+import { recomputeAndStorePromotionState } from "../promotionState.js";
 
 export const teachersRouter = Router();
 
@@ -69,6 +77,7 @@ teachersRouter.get("/", async (req, res) => {
           grille: gradeMapping.grille as GrilleCode,
           echelonDepart: String(baEchelonDepart),
           dateDernierChangementEchelon: snap.dateAccesEchelon.toISOString().slice(0, 10),
+          ancienneteADeduire: parseAncienneteText(snap.teacher.ancienneteADeduire),
           grilles: liveGrilles,
           valeurDuPoint: liveValeurDuPoint,
         });
@@ -135,6 +144,10 @@ teachersRouter.get("/", async (req, res) => {
       baEligible,
       horsClasseEligible,
       classeExceptionnelleEligible,
+      // Manual career-interruption correction (see Teacher.ancienneteADeduire's doc comment) —
+      // exposed so DashboardPage can show which teachers carry one and let an admin edit it.
+      ancienneteADeduire: snap.teacher.ancienneteADeduire,
+      ancienneteADeduireNote: snap.teacher.ancienneteADeduireNote,
     };
   });
 
@@ -152,4 +165,53 @@ teachersRouter.get("/:id", async (req, res) => {
   });
   if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
   res.json(teacher);
+});
+
+/**
+ * Sets or clears a teacher's "ancienneté à déduire" correction (see Teacher.ancienneteADeduire's
+ * doc comment) — a manual admin correction for career interruptions (disponibilité, congé longue
+ * durée...) that the rectorat file's own "date d'accès à l'échelon" doesn't reflect. Recomputes
+ * ComputedPromotionState immediately for every campagne this teacher has a snapshot in, so the
+ * correction is visible right away rather than only after the next rectorat reimport.
+ */
+teachersRouter.put("/:id/anciennete-a-deduire", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const { ancienneteADeduire, ancienneteADeduireNote } = req.body as {
+    ancienneteADeduire?: string | null;
+    ancienneteADeduireNote?: string | null;
+  };
+
+  const raw = ancienneteADeduire?.trim() || null;
+  try {
+    if (raw) parseAncienneteText(raw);
+  } catch {
+    return res.status(400).json({ error: `Format attendu "AAaMMmJJj" (ex. "01a06m00j"), reçu ${JSON.stringify(raw)}` });
+  }
+
+  const teacher = await prisma.teacher.findUnique({ where: { id: req.params.id }, include: { snapshots: true } });
+  if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
+
+  await prisma.teacher.update({
+    where: { id: req.params.id },
+    data: { ancienneteADeduire: raw, ancienneteADeduireNote: ancienneteADeduireNote?.trim() || null },
+  });
+
+  const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
+  const warnings: string[] = [];
+  for (const snap of teacher.snapshots) {
+    const { warning } = await recomputeAndStorePromotionState({
+      teacherId: teacher.id,
+      campagneId: snap.campagneId,
+      grade: snap.grade,
+      echelonActuel: snap.echelonActuel,
+      dateAccesEchelon: snap.dateAccesEchelon,
+      typePromotion: snap.typePromotion,
+      dureeRestante: snap.dureeRestante,
+      ancienneteADeduireRaw: raw,
+      liveGrilles,
+      liveValeurDuPoint,
+    });
+    if (warning) warnings.push(warning);
+  }
+
+  res.json({ ancienneteADeduire: raw, ancienneteADeduireNote: ancienneteADeduireNote?.trim() || null, warnings });
 });

@@ -118,6 +118,10 @@ export interface TeacherListItem {
   baEligible: boolean | null;
   horsClasseEligible: boolean | null;
   classeExceptionnelleEligible: boolean | null;
+  /** Correction manuelle "ancienneté à déduire" (interruption de carrière non reflétée par la date
+   * d'accès à l'échelon du rectorat) — "AAaMMmJJj", ou null si aucune correction n'est en place. */
+  ancienneteADeduire: string | null;
+  ancienneteADeduireNote: string | null;
 }
 
 export interface MatchCandidate {
@@ -383,6 +387,11 @@ export const api = {
   updateCampagneType: (id: string, type: "CCMA" | "CCMI") =>
     request<Campagne>(`/campagnes/${id}`, { method: "PATCH", body: JSON.stringify({ type }) }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
+  updateAncienneteADeduire: (teacherId: string, ancienneteADeduire: string | null, ancienneteADeduireNote: string | null) =>
+    request<{ ancienneteADeduire: string | null; ancienneteADeduireNote: string | null; warnings: string[] }>(
+      `/teachers/${teacherId}/anciennete-a-deduire`,
+      { method: "PUT", body: JSON.stringify({ ancienneteADeduire, ancienneteADeduireNote }) },
+    ),
   stats: (campagneId: string, grade?: string) =>
     request<CampagneStats>(`/stats?campagneId=${campagneId}${grade ? `&grade=${encodeURIComponent(grade)}` : ""}`),
   pendingMatches: () => request<MatchCandidate[]>("/matches?status=PENDING_REVIEW"),
