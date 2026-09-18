@@ -27,7 +27,12 @@ export interface BaStatusResult {
  * drifting out of sync) — see routes/teachers.ts for the full rationale behind each rule below.
  */
 export function computeBaStatus(snap: BaStatusInput): BaStatusResult {
-  const baEchelonDepart: 6 | 8 | null = snap.echelonActuel === "07" ? 6 : snap.echelonActuel === "09" ? 8 : null;
+  // Compared as a number, not the raw string ("06" vs "6"), since echelonActuel now always holds
+  // the teacher's own départ échelon (see deriveEchelonActuelFromProjection in @spelc/domain) rather
+  // than the arrival échelon this used to key on before the échelon-off-by-one fix — a BA candidate
+  // at échelon 6 is stored as "06"/"6" here, never "07" any more.
+  const echelonNumber = Number(snap.echelonActuel);
+  const baEchelonDepart: 6 | 8 | null = echelonNumber === 6 ? 6 : echelonNumber === 8 ? 8 : null;
 
   const baEligible =
     baEchelonDepart !== null && snap.ancienneteEchelon != null

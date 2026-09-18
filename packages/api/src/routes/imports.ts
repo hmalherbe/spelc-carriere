@@ -174,9 +174,15 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
       // échelon — see deriveEchelonActuelFromProjection below), so this lookup must happen BEFORE
       // record.echelonActuel is corrected to the teacher's true départ échelon a few lines down.
       const nombrePromusBaSection = nombrePromusBaBySection.get(record.echelonActuel) ?? null;
+      // Zero-padded to match the two-digit convention the rectorat's own file uses everywhere else
+      // ("06", "07", "09"...) — the raw échelon codes in the grille tables are plain numbers (6, not
+      // "06"), so deriveEchelonActuelFromProjection's own return value isn't padded; leaving it as
+      // "6" here would silently split every exact-string comparison downstream that still expects
+      // the padded form (baStatus.ts's BA-window detection, the Dashboard's échelon dropdown) into
+      // two distinct values for the same échelon depending on which import produced the row.
       record.echelonActuel = String(
         deriveEchelonActuelFromProjection(gradeMapping.grille as GrilleCode, record.echelonActuel, liveGrilles),
-      );
+      ).padStart(2, "0");
 
       await prisma.teacherSnapshot.create({
         data: {
