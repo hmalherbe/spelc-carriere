@@ -52,7 +52,8 @@ export interface CcmaModelContext {
 
   /** AN / CL / BA / RE, tel qu'imprimé par le rectorat. */
   typePromotion: string | null;
-  /** "XXaYYmZZj" — n'a le sens d'un report d'ancienneté que lorsque typePromotion === "RE". */
+  /** "XXaYYmZZj" — n'a le sens d'un report d'ancienneté que lorsque typePromotion vaut "RE" (report)
+   * ou "CL" (reclassement) ; pour "AN"/"BA" la même colonne, même présente, ne signifie rien ici. */
   dureeRestanteEncoded: string | null;
 
   bonification: BonificationState;
@@ -77,10 +78,12 @@ function p(html: string): string {
   return `<p>${html}</p>`;
 }
 
-/** Bloc "Report d'ancienneté" — affiché seulement quand le rectorat a marqué ce record "RE."
- * (voir formatDureeEncodedText et son commentaire : confirmé sur un cas réel, MOLENAT Marion). */
+/** Bloc "Report d'ancienneté" — affiché quand le rectorat a marqué ce record "RE." (report
+ * d'ancienneté) ou "CL." (reclassement, même mécanisme : voir Elise MORIN, cas réel de la campagne
+ * du 25 mars 2026 — "CL. 01a04m24j" — dont le texte figure bien dans le vrai courrier ; voir aussi
+ * formatDureeEncodedText et son commentaire, confirmé sur un autre cas réel, MOLENAT Marion). */
 function buildReportAncienneteBlock(ctx: CcmaModelContext): string {
-  if (ctx.typePromotion !== "RE") return "";
+  if (ctx.typePromotion !== "RE" && ctx.typePromotion !== "CL") return "";
   // "00a00m00j" is a real, common value (no report at all) — formatDureeEncodedText renders it as
   // "0 jour" rather than null, but the real letter omits the whole sentence when there's nothing to
   // report, so that literal-zero case must be filtered out here rather than trusted as truthy.

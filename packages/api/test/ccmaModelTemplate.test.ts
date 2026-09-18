@@ -65,7 +65,7 @@ describe("buildCcmaModelEmail", () => {
     expect(html).not.toContain("l'accélération de carrière d'un an du PPCR");
   });
 
-  it("shows the report d'ancienneté paragraph only when typePromotion is RE", () => {
+  it("shows the report d'ancienneté paragraph when typePromotion is RE", () => {
     const withReport = buildCcmaModelEmail({
       ...BASE,
       typePromotion: "RE",
@@ -76,9 +76,22 @@ describe("buildCcmaModelEmail", () => {
     expect(buildCcmaModelEmail(BASE).html).not.toContain("report d'ancienneté");
   });
 
-  it("omits the report d'ancienneté paragraph when typePromotion is RE but the duration is literally zero (real case)", () => {
-    const html = buildCcmaModelEmail({ ...BASE, typePromotion: "RE", dureeRestanteEncoded: "00a00m00j" }).html;
-    expect(html).not.toContain("report d'ancienneté");
+  it("also shows the report d'ancienneté paragraph when typePromotion is CL (reclassement) — real case, Elise MORIN", () => {
+    const html = buildCcmaModelEmail({
+      ...BASE,
+      typePromotion: "CL",
+      dureeRestanteEncoded: "01a04m24j",
+    }).html;
+    expect(html).toContain("vous aviez un report d'ancienneté de 1 an 4 mois 24 jours");
+  });
+
+  it("omits the report d'ancienneté paragraph when typePromotion is RE/CL but the duration is literally zero (real case)", () => {
+    expect(buildCcmaModelEmail({ ...BASE, typePromotion: "RE", dureeRestanteEncoded: "00a00m00j" }).html).not.toContain(
+      "report d'ancienneté",
+    );
+    expect(buildCcmaModelEmail({ ...BASE, typePromotion: "CL", dureeRestanteEncoded: "00a00m00j" }).html).not.toContain(
+      "report d'ancienneté",
+    );
   });
 
   it("shows the accelerated future-promotion variant when landing on a BA window (échelon 6 or 8)", () => {

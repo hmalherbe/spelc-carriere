@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords, matchUnresolvedAdherents } from "../adherentImport.js";
+import { deriveAncienneteAReporter } from "../ancienneteReportee.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import {
   computeEchelonPromotion,
@@ -217,6 +218,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
             grille: gradeMapping.grille as GrilleCode,
             echelonDepart: record.echelonActuel,
             dateDernierChangementEchelon: record.dateAccesEchelon,
+            ancienneteAReporter: deriveAncienneteAReporter(record.typePromotion, record.dureeRestante),
             grilles: liveGrilles,
             valeurDuPoint: liveValeurDuPoint,
           });
