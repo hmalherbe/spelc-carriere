@@ -80,7 +80,7 @@ describe("computeBaStatus", () => {
     expect(result.baStatus).toBe("national");
   });
 
-  it("computes baStatus 'hors_fenetre' for a BA marker outside the ancienneté window", () => {
+  it("computes baStatus 'hors_fenetre' for a BA marker outside the ancienneté window, when NOT confirmed", () => {
     const result = computeBaStatus({
       echelonActuel: "06",
       grade: "CERTIFIE",
@@ -89,5 +89,34 @@ describe("computeBaStatus", () => {
       ancienneteEchelon: 3.0, // completed the full non-accelerated duration, not an actual BA candidate
     });
     expect(result.baStatus).toBe("hors_fenetre");
+  });
+
+  it("computes baStatus 'promu' for a CONFIRMED BA even when ancienneté falls outside the window — real cases, CCMA du 25 mars 2026 (BRUNO, NIZET, MELVIN, OLIVIERI, PARRA, BOTTON, EYMARD, BEZAC : échelon 6, CERTIFIE, 'Pro BA.' confirmed, ancienneté 2.0-2.85 ans)", () => {
+    // A rectorat confirmation ('Pro BA.') is a definitive, final fact — never something to discard
+    // just because it falls outside our own approximate candidacy window (see baStatus.ts's own
+    // comment on why proConfirmee is now checked BEFORE baEligible). This was the exact bug reported
+    // by the union: not one single "Promu" showed up at échelon 6 after the échelon fix, even though
+    // the real rectorat file plainly listed 10 confirmed "Pro BA." promotions to échelon 7 that day.
+    const realCases = [
+      { nom: "BRUNO", ancienneteEchelon: 2.536 },
+      { nom: "NIZET", ancienneteEchelon: 2.853 },
+      { nom: "MELVIN", ancienneteEchelon: 2.85 },
+      { nom: "OLIVIERI", ancienneteEchelon: 2.625 },
+      { nom: "PARRA", ancienneteEchelon: 2.206 },
+      { nom: "BOTTON", ancienneteEchelon: 2.086 },
+      { nom: "EYMARD", ancienneteEchelon: 2.219 },
+      { nom: "BEZAC", ancienneteEchelon: 2.008 },
+    ];
+    for (const { nom, ancienneteEchelon } of realCases) {
+      const result = computeBaStatus({
+        echelonActuel: "06",
+        grade: "CERTIFIE",
+        proTypePromotion: "BA",
+        proConfirmee: true,
+        ancienneteEchelon,
+      });
+      expect(result.baStatus, `${nom} (ancienneté ${ancienneteEchelon})`).toBe("promu");
+      expect(result.baEligible, `${nom} — window estimate itself stays honest, still false`).toBe(false);
+    }
   });
 });

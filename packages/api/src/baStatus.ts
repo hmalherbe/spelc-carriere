@@ -42,14 +42,25 @@ export function computeBaStatus(snap: BaStatusInput): BaStatusResult {
   const isBaCandidate = baEchelonDepart !== null && snap.proTypePromotion === "BA";
   const isAgrege = snap.grade.startsWith("AGREGE");
 
+  // proConfirmee ("Pro BA." on the record) and isAgrege (décision nationale, jamais tranchée par ce
+  // fichier départemental) are both checked BEFORE baEligible — per the same "Pro BA. is final, not
+  // an estimate to second-guess" rule this module's own doc comment states, never overridden by our
+  // own window estimate. baEligible only decides between "hors_fenetre"/"non_promu" for a candidate
+  // NOT (yet) confirmed. Real cases from the CCMA campaign of 25 mars 2026 (BRUNO, NIZET, MELVIN,
+  // OLIVIERI, PARRA, BOTTON, EYMARD, BEZAC — all CERTIFIE, échelon 6, "Pro BA." confirmed) all carry
+  // an ancienneté of 2.0 to 2.85 years at the point their promotion is confirmed — outside the [1, 2)
+  // window isEligibleBonificationAnciennete checks for échelon 6 — proof the window is only a rough
+  // candidacy estimate, not something a genuine rectorat confirmation should ever be discarded for:
+  // gating "promu" behind baEligible made every one of these real, already-decided promotions show
+  // as "hors_fenetre" instead.
   const baStatus: BaStatusResult["baStatus"] = !isBaCandidate
     ? null
-    : baEligible !== true
-      ? "hors_fenetre"
-      : isAgrege
-        ? "national"
-        : snap.proConfirmee
-          ? "promu"
+    : isAgrege
+      ? "national"
+      : snap.proConfirmee
+        ? "promu"
+        : baEligible !== true
+          ? "hors_fenetre"
           : "non_promu";
 
   const arrivedThisEchelon = isBaCandidate ? false : snap.proConfirmee;
