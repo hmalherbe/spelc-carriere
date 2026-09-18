@@ -198,6 +198,31 @@ describe("parseRectoratFile — multi-grade file (combined CN + HC export, two d
   });
 });
 
+describe("parseRectoratFile — same grade block spanning pages whose trailing column whitespace differs (real case: Certifiés EXC)", () => {
+  // Real production file: "4534 : ECR PROFESSEUR CERTIFIE CLASSE EXCEPT." reprints "PERIODE DE
+  // TRAITEMENT" on the SAME line as the grade header on every page, with a slightly different amount
+  // of column-alignment whitespace before it from page to page (an artefact of the export, not a
+  // different grade). Before GRADE_HEADER_RE stopped at the first run of 2+ spaces, that trailing
+  // whitespace variance made every page's captured "gradeLabel" a distinct string, so each page
+  // formed its own grade block under the (gradeCode, gradeLabel) merge key — and since each new block
+  // for the "same" grade code re-triggers teacherSnapshot.deleteMany({ campagneId, grade }) at import
+  // time, the previous page's already-imported records were silently wiped out by the next page's.
+  const result = parseRectoratFile(fixture("certifies-exc-varying-header-whitespace.txt"));
+
+  it("merges both pages into a single grade block despite the differing trailing whitespace", () => {
+    expect(result.grades).toHaveLength(1);
+    expect(result.grades[0].gradeCode).toBe("4534");
+  });
+
+  it("keeps every record from every page, not just the last one's", () => {
+    expect(result.grades[0].records.map((r) => r.nomUsage)).toEqual(["HURAULT", "MARQUETY", "DUFAY"]);
+  });
+
+  it("keeps both échelon sections' summaries", () => {
+    expect(result.grades[0].sections.map((s) => s.echelon)).toEqual(["03", "04"]);
+  });
+});
+
 describe("parseZ2AGEA", () => {
   it("decodes the AAMMJJ age encoding (verified against a real rectorat example)", () => {
     expect(parseZ2AGEA("290402")).toEqual({ annees: 29, mois: 4, jours: 2 });

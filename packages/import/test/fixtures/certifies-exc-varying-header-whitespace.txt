@@ -1,0 +1,66 @@
+ACADEMIE : ACADEMIE DE NICE               A V A N C E M E N T D' E C H E L O N                                 PAGE : 1
+
+BUREAU DE GESTION : PRV*                  4534 : ECR PROFESSEUR CERTIFIE CLASSE EXCEPT.                 PERIODE DE TRAITEMENT
+
+DATE : 20/03/2026                                                                                       DU 01/09/2025
+                                                                                                        AU 31/08/2026
+                                                  PROJET D'AVANCEMENT
+                                                                                                        ECHELON : 03
+!----------------------------------------------------------------------------------------------------------------------------------!
+! NOM USAGE - PRENOM                            AFFECTATION                                 ECHELON ACTUEL     PROCHAINES      !
+!                  DATE DE NAISSANCE                                   DISC. - AVIS EVAL. DATE ACCES REP. PROMOTIONS           !
+!----------------------------------------------------------------------------------------------------------------------------------!
+!                                                                                                                              !
+!HURAULT                              0060677D       LGT PR                                 17/08/2024                         !
+!         MARIE-LAURE     10/02/1967 SASSERNO                          0202E LET MODERN AN. 00a00m00j                          !
+!                                     06000 NICE                                                            Pro AN.17/08/2026 !
+!Bareme : .......................................................................................................................!
+!         ! EVAECH              ! Z1AGRA 2.000    ! Z1ANEC 2.039  ! Z2AGEA 580622        !                  !                  !
+!  0.000 !                      !                 !               !                      !                  !                  !
+!         !                     !                 !               !                      !                  !                  !
+!         !                     !                 !               !                      !                  !                  !
+!-----------!-------------------!-------------------!-------------------!-------------------!-------------------!------------------!
+
+   NOMBRE DE PROMOUVABLES :        BA      AN
+   NOMBRE DE PROMUS          :      0        1
+   DECIMALES                 :      0        1
+                                    0.00
+                                          0.00
+ACADEMIE : ACADEMIE DE NICE               A V A N C E M E N T D' E C H E L O N                                 PAGE : 1
+
+BUREAU DE GESTION : PRV*                  4534 : ECR PROFESSEUR CERTIFIE CLASSE EXCEPT.                    PERIODE DE TRAITEMENT
+
+DATE : 20/03/2026                                                                                          DU 01/09/2025
+                                                                                                           AU 31/08/2026
+                                                 PROJET D'AVANCEMENT
+                                                                                                           ECHELON : 04
+!----------------------------------------------------------------------------------------------------------------------------------!
+! NOM USAGE - PRENOM                            AFFECTATION                                 ECHELON ACTUEL     PROCHAINES         !
+!                  DATE DE NAISSANCE                                  DISC. - AVIS EVAL. DATE ACCES REP. PROMOTIONS               !
+!----------------------------------------------------------------------------------------------------------------------------------!
+!                                                                                                                                 !
+!MARQUETY                             0830100H      LGT PR                                  01/09/2024                            !
+!        MARCEL           18/12/1969 NOTRE DAME                       1000E HIST GEO        RE. 00a07m12j                         !
+!                                     83055 TOULON CEDEX                                                    Pro AN.19/07/2026 !
+!Bareme : .......................................................................................................................!
+!          ! EVAECH             ! Z1AGRA 1.000   ! Z1ANEC 2.617  ! Z2AGEA 550814         !                  !                     !
+!  0.000 !                      !                !               !                       !                  !                     !
+!          !                    !                !               !                       !                  !                     !
+!          !                    !                !               !                       !                  !                     !
+!-----------!-------------------!-------------------!-------------------!-------------------!-------------------!------------------!
+!                                                                                                                                 !
+!DUFAY                                0060673Z      LGT PR                                  01/09/2025                            !
+!        KARINE           15/09/1972 STANISLAS                        1500F SC.PHY.CH       RE. 02a05m12j                         !
+!                                     06414 CANNES CEDEX                                                    Pro AN.19/09/2025 !
+!Bareme : .......................................................................................................................!
+!          ! EVAECH             ! Z1AGRA 0.000   ! Z1ANEC 3.450  ! Z2AGEA 521117         !                  !                     !
+!  0.000 !                      !                !               !                       !                  !                     !
+!          !                    !                !               !                       !                  !                     !
+!          !                    !                !               !                       !                  !                     !
+!-----------!-------------------!-------------------!-------------------!-------------------!-------------------!------------------!
+
+   NOMBRE DE PROMOUVABLES :        BA      AN
+   NOMBRE DE PROMUS          :      0        2
+   DECIMALES                 :      0        2
+                                    0.00
+                                          0.00

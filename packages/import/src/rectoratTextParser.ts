@@ -119,7 +119,16 @@ function toNumber(text: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-const GRADE_HEADER_RE = /(\d{4})\s*:\s*(ECR[^\n]+)/g;
+// Non-greedy up to the first run of 2+ spaces (a column boundary in the fixed-width layout) or the
+// end of the line — not [^\n]+ (matches to end of line): some raw-text exports print "PERIODE DE
+// TRAITEMENT" on the SAME physical line as the grade header, with an amount of column-alignment
+// whitespace before it that varies slightly page to page for the exact same grade. Capturing that
+// trailing text made the grade label differ between pages of one real "Certifiés - EXC" file
+// ("... EXCEPT.                 PERIODE..." vs "... EXCEPT.                    PERIODE..."), so the
+// (gradeCode, gradeLabel) block-merging key below treated every page as a NEW grade block instead of
+// a continuation of the same one — each one's own teacherSnapshot.deleteMany() then silently wiped
+// out the previous page's already-imported records.
+const GRADE_HEADER_RE = /(\d{4})\s*:\s*(ECR.*?)(?:\s{2,}|\n|$)/g;
 const ECHELON_HEADER_RE = /ECHELON\s*:\s*(\d{2})/g;
 
 /**
@@ -214,6 +223,16 @@ function parseSectionRecords(sectionText: string, echelon: string): ParsedTeache
   const out: ParsedTeacherRecord[] = [];
   for (const chunk of chunks) {
     if (!chunk) continue;
+    // The table's own column-header text ("! NOM USAGE - PRENOM ... !" / "! ... DATE DE NAISSANCE
+    // ... !") sits between two "!---...---!" separator lines just like a real record does, so it
+    // becomes its own chunk here too. In text whose original fixed-width column spacing survived (a
+    // raw copy-paste .txt upload, as opposed to extractPdfText's whitespace-collapsing PDF
+    // extraction — see the "certifies-exc-varying-header-whitespace" fixture), the run of 2+ spaces
+    // before "AFFECTATION" makes parseRecordChunk's nom regex below mistake the literal header text
+    // "NOM USAGE - PRENOM" for an actual surname — that's not caught by the nomUsage-and-prenom-
+    // both-empty guard further down, since a "nomUsage" WAS found. Skip it here by its known, fixed,
+    // literal content instead of trying to make the nom regex itself rule out this one string.
+    if (chunk.includes("NOM USAGE - PRENOM")) continue;
     const record = parseRecordChunk(chunk, echelon);
     if (record) out.push(record);
   }
@@ -221,11 +240,18 @@ function parseSectionRecords(sectionText: string, echelon: string): ParsedTeache
 }
 
 function parseRecordChunk(chunk: string, echelon: string): ParsedTeacherRecord | null {
-  // Each record chunk starts with a lone "! !" blank-marker line before the actual NOM line —
-  // drop it (and it alone; don't strip further blank lines, since a genuinely établissement-less
-  // record has a meaningful blank line 3 that other indexing below relies on being present).
+  // Each record chunk starts with a lone blank-marker line ("!" and "!" with nothing but whitespace
+  // between) before the actual NOM line — drop it (and it alone; don't strip further blank lines,
+  // since a genuinely établissement-less record has a meaningful blank line 3 that other indexing
+  // below relies on being present). Matched by shape (/^!\s*!$/), not literal "! !"/"!": in text
+  // whose original fixed-width column spacing survived (a raw copy-paste .txt upload, as opposed to
+  // extractPdfText's whitespace-collapsing PDF extraction), this marker line is padded out to the
+  // full column width ("!" + dozens of spaces + "!"), which line.trim() does NOT collapse — trim()
+  // only strips the string's own leading/trailing edges, and both edges here are already "!". Left
+  // unstripped, every field below reads one line early, corrupting the whole record (see the
+  // "certifies-exc-varying-header-whitespace" fixture, a real case that reproduced exactly this).
   const rawLines = chunk.split("\n").map((l) => l.trim());
-  const lines = rawLines[0] === "! !" || rawLines[0] === "!" ? rawLines.slice(1) : rawLines;
+  const lines = /^!\s*!?$/.test(rawLines[0] ?? "") ? rawLines.slice(1) : rawLines;
   const warnings: string[] = [];
 
   // Line 1 (person/affectation line): "!NOM ... RNE TYPE_ETAB DATE [Pro TYPE.DATE]"
