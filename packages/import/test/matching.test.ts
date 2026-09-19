@@ -54,6 +54,15 @@ describe("matchAdherents", () => {
     expect(result.confidence).toBe(0);
   });
 
+  it("doesn't suggest a pair whose names only coincidentally overlap — real case: adherent ADANERO Olivia was suggested against teacher BARBERO FLORIAN (43% combined score, a different surname AND a different prénom)", () => {
+    const [result] = matchAdherents(
+      [{ adherentId: "a10", nom: "ADANERO", prenom: "Olivia", grade: "CERTIFIE" }],
+      [...teachers, { teacherId: "t5", nom: "BARBERO", prenom: "FLORIAN", grade: "CERTIFIE" }],
+    );
+    expect(result.teacherId).toBeNull();
+    expect(result.confidence).toBe(0);
+  });
+
   it("never assigns the same teacher to two different adherents — the higher-confidence pair wins the contested teacher", () => {
     // Both adherents' closest guess is t1 ("MARTIN Camille"); "MARTIN Camille" itself is the exact
     // match and must win it, leaving the weaker adherent with no candidate rather than a duplicate

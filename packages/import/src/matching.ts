@@ -85,6 +85,16 @@ export interface MatchResult {
  * eyeball it — chosen conservatively (normalized edit-distance similarity, not a probability). */
 const AUTO_CONFIRM_THRESHOLD = 0.92;
 
+/** Below this combined score, don't even suggest the pair for human review — real case that forced
+ * raising this from 0.4: adherent "ADANERO Olivia" was suggested against teacher "BARBERO FLORIAN",
+ * a 43% combined score (nomScore and prenomScore both ≈0.43 individually) — two names that just
+ * happen to share enough letters in Levenshtein terms despite being a different surname AND a
+ * different (and differently-gendered) prénom. A genuine near-miss — a real typo/nickname situation
+ * — scores far higher in practice (e.g. "MARTINE"/"Camil" against "MARTIN"/"Camille" scores ~0.80),
+ * so this bar still leaves comfortable room for those while cutting the coincidental-overlap noise
+ * that made the review queue mostly unhelpful garbage to page through. */
+const MIN_SUGGESTION_THRESHOLD = 0.55;
+
 /**
  * Matches each adherent to at most one teacher among `teachers` (typically: everyone in the
  * current campaign not already linked to a confirmed MatchCandidate — filtering that out is the
@@ -114,7 +124,7 @@ export function matchAdherents(adherents: MatchCandidateAdherent[], teachers: Ma
       const nomScore = nameSimilarity(adherent.nom, teacher.nom);
       const prenomScore = nameSimilarity(adherent.prenom, teacher.prenom);
       const score = nomScore * 0.6 + prenomScore * 0.4;
-      if (score >= 0.4) pairs.push({ adherentId: adherent.adherentId, teacherId: teacher.teacherId, score });
+      if (score >= MIN_SUGGESTION_THRESHOLD) pairs.push({ adherentId: adherent.adherentId, teacherId: teacher.teacherId, score });
     }
   }
   pairs.sort((a, b) => b.score - a.score);
