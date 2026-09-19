@@ -55,7 +55,18 @@ Tables disponibles :
   - "id" text, "teacherId" text (-> "Teacher"."id"), "campagneId" text
   - "grilleCode" text, "echelonDepart" text, "echelonSuivant" text, "indiceActuel" int, "futurIndice" int
   - "gainSalaireBrut" int, "gainSalaireNet" int, "dateProchainePromotion" timestamp
-  - "baEstimate" text ('promu_estime'/'non_promu_estime'/'indetermine', peut être NULL)
+  - "baStatus" text : statut de bonification d'ancienneté (BA) de cet enseignant pour cette campagne,
+    NULL si l'enseignant n'est pas candidat BA ce cycle (immense majorité des lignes). Sinon :
+      'promu' = BA accordée et confirmée par le rectorat (compte comme "promouvable à la BA" ET
+        "promu à la BA")
+      'non_promu' = candidat BA, dans la fenêtre d'ancienneté habituelle, mais pas encore confirmé
+        (compte comme "promouvable à la BA", pas comme "promu")
+      'hors_fenetre' = candidat BA mais ancienneté hors fenêtre habituelle, non confirmé (anomalie ;
+        compte quand même comme "promouvable à la BA")
+      'national' = agrégé candidat BA : la décision est nationale, jamais tranchée par ce fichier
+        départemental (compte comme "promouvable à la BA", ni promu ni non-promu déterminable)
+    Pour "combien de promouvables/candidats à la BA cette campagne ?" : COUNT WHERE "baStatus" IS NOT
+    NULL AND "campagneId" = ce_id. Pour "combien de promus à la BA ?" : ajoute AND "baStatus" = 'promu'.
 
 "MailingLog" (historique des mails de notification envoyés)
   - "id" text, "campagneId" text, "teacherId" text, "adherentId" text, "email" text

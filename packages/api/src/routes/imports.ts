@@ -229,6 +229,9 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
           typePromotion: record.typePromotion,
           dureeRestante: record.dureeRestante,
           ancienneteADeduireRaw: ancienneteADeduireByTeacherId.get(teacherId) ?? null,
+          proTypePromotion: record.proTypePromotion,
+          proConfirmee: record.proConfirmee,
+          ancienneteEchelon: record.ancienneteEchelon,
           liveGrilles,
           liveValeurDuPoint,
         });

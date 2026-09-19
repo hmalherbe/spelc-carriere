@@ -292,7 +292,18 @@ model ComputedPromotionState {
   gainSalaireBrut        Int
   gainSalaireNet         Int
   dateProchainePromotion DateTime?
-  baEstimate             String? // "promu_estime" | "non_promu_estime" | "indetermine", null if not échelon 6/8
+  // The teacher's BA (bonification d'ancienneté) status for this campagne, mirroring baStatus.ts's
+  // computeBaStatus() exactly — "hors_fenetre" | "national" | "promu" | "non_promu", null if not a
+  // BA candidate this cycle. Renamed from a dead "baEstimate" column (a ranking/estimation approach
+  // tried and abandoned — see git history around "Simplifie l'affichage BA" — that was never wired
+  // up again after being removed, yet stayed described to the AI assistant as the way to determine
+  // BA status: every SQL query it wrote against the always-NULL column silently returned zero rows,
+  // e.g. "combien de promouvables à la BA ?" always answering "aucun" however many there really
+  // were). computeBaStatus() itself stays the single source of truth (routes/teachers.ts's live
+  // list, routes/stats.ts's aggregates) — this column exists only so the AI assistant's read-only
+  // SQL access has a real, reliable field to query instead of re-deriving the same priority-ordered
+  // rule (proConfirmee/isAgrege checked before the ancienneté window) by hand in SQL.
+  baStatus String?
 
   @@unique([teacherId, campagneId])
 }

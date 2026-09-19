@@ -207,6 +207,9 @@ teachersRouter.put("/:id/anciennete-a-deduire", requireRole("ADMIN", "GESTIONNAI
       typePromotion: snap.typePromotion,
       dureeRestante: snap.dureeRestante,
       ancienneteADeduireRaw: raw,
+      proTypePromotion: snap.proTypePromotion,
+      proConfirmee: snap.proConfirmee,
+      ancienneteEchelon: snap.ancienneteEchelon,
       liveGrilles,
       liveValeurDuPoint,
     });

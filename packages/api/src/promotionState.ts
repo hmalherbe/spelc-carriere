@@ -1,6 +1,7 @@
 import { prisma } from "./db.js";
 import { computeEchelonPromotion, parseAncienneteText, GRADE_MAPPINGS, type GrilleCode, type EchelonRow } from "@spelc/domain";
 import { deriveAncienneteAReporter } from "./ancienneteReportee.js";
+import { computeBaStatus } from "./baStatus.js";
 
 export interface RecomputePromotionStateInput {
   teacherId: string;
@@ -12,6 +13,9 @@ export interface RecomputePromotionStateInput {
   dureeRestante: string | null;
   /** Raw "AAaMMmJJj" text from Teacher.ancienneteADeduire, or null if no correction is set. */
   ancienneteADeduireRaw: string | null;
+  proTypePromotion: string | null;
+  proConfirmee: boolean;
+  ancienneteEchelon: number | null;
   liveGrilles: Record<GrilleCode, EchelonRow[]>;
   liveValeurDuPoint: number;
 }
@@ -42,6 +46,17 @@ export async function recomputeAndStorePromotionState(
       valeurDuPoint: input.liveValeurDuPoint,
     });
 
+    // Same computeBaStatus() the live teacher list (routes/teachers.ts) and stats aggregates
+    // (routes/stats.ts) already use — stored here too so the AI assistant's read-only SQL access
+    // has a real, always-current field to query (see the column's own doc comment in schema.prisma).
+    const { baStatus } = computeBaStatus({
+      echelonActuel: input.echelonActuel,
+      grade: input.grade,
+      proTypePromotion: input.proTypePromotion,
+      proConfirmee: input.proConfirmee,
+      ancienneteEchelon: input.ancienneteEchelon,
+    });
+
     const data = {
       grilleCode: promotion.grille,
       echelonDepart: String(promotion.echelonDepart),
@@ -51,6 +66,7 @@ export async function recomputeAndStorePromotionState(
       gainSalaireBrut: promotion.gainSalaireBrut,
       gainSalaireNet: promotion.gainSalaireNet,
       dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+      baStatus,
     };
 
     await prisma.computedPromotionState.upsert({
