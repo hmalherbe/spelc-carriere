@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type AdherentEligible, type Campagne } from "../api.js";
+import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -98,7 +99,7 @@ export function AdherentsEligiblesPage() {
             {visible.map((a) => (
               <tr key={a.adherentId}>
                 <td>{a.nom}</td>
-                <td>{a.prenom}</td>
+                <td>{formatPrenom(a.prenom)}</td>
                 <td>{a.grade ?? "—"}</td>
                 <td>{commissionLabel(a.degre)}</td>
                 <td>{formatDate(a.dateProchainePromotion)}</td>

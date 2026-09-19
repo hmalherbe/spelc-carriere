@@ -9,6 +9,7 @@ import {
   type MailingTemplate,
 } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { formatPrenom } from "../format.js";
 
 function euros(n: number): string {
   return `${n >= 0 ? "+" : ""}${n} €`;
@@ -212,7 +213,7 @@ export function MailingPage() {
                   .filter((r) => r.status === "FAILED")
                   .map((r) => (
                     <li key={r.teacherId}>
-                      {r.nom} {r.prenom} — {r.error}
+                      {r.nom} {formatPrenom(r.prenom)} — {r.error}
                     </li>
                   ))}
               </ul>
@@ -255,7 +256,7 @@ export function MailingPage() {
                   {r.civiliteEstimee && <span className="hint"> (estimé)</span>}
                 </td>
                 <td>{r.nom}</td>
-                <td>{r.prenom}</td>
+                <td>{formatPrenom(r.prenom)}</td>
                 <td>
                   <span className={`badge ${r.isAdherent ? "badge-auto_confirmed" : "badge-non_adherent"}`}>
                     {r.isAdherent ? "Adhérent" : "Non adhérent"}

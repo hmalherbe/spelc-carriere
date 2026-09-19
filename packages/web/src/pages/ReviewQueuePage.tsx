@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type MatchCandidate } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { formatPrenom } from "../format.js";
 
 export function ReviewQueuePage() {
   const { user } = useAuth();
@@ -91,14 +92,14 @@ export function ReviewQueuePage() {
               return (
                 <tr key={c.id}>
                   <td>
-                    {c.adherent.nom} {c.adherent.prenom}
+                    {c.adherent.nom} {formatPrenom(c.adherent.prenom)}
                     <br />
                     <span className="hint">{c.adherent.grade ?? "—"}</span>
                   </td>
                   <td>
                     {suggestion ? (
                       <>
-                        {suggestion.nomUsage} {suggestion.prenom}
+                        {suggestion.nomUsage} {formatPrenom(suggestion.prenom)}
                         <br />
                         <span className="hint">{suggestion.grade}</span>
                       </>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Campagne, type TeacherListItem } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { formatPrenom } from "../format.js";
 
 const MATCHING_LABEL: Record<string, string> = {
   AUTO_CONFIRMED: "Adhérent (auto)",
@@ -320,7 +321,7 @@ export function DashboardPage() {
               return (
                 <tr key={t.teacherId}>
                   <td>{t.nom}</td>
-                  <td>{t.prenom}</td>
+                  <td>{formatPrenom(t.prenom)}</td>
                   <td>{t.grade}</td>
                   <td>
                     {formatEchelonLabel(t.echelonActuel)} →{" "}

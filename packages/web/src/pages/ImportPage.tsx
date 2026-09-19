@@ -10,6 +10,7 @@ import {
   type RectoratImportResult,
 } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { formatPrenom } from "../format.js";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -361,7 +362,7 @@ export function ImportPage() {
                               <ul>
                                 {g.warnings.map((w, k) => (
                                   <li key={k}>
-                                    {w.nomUsage} {w.prenom} — {w.warnings.join("; ")}
+                                    {w.nomUsage} {formatPrenom(w.prenom)} — {w.warnings.join("; ")}
                                   </li>
                                 ))}
                               </ul>

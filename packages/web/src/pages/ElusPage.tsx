@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Elu, type EluInput } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { formatPrenom } from "../format.js";
 
 const ROLE_LABEL: Record<Elu["role"], string> = { TITULAIRE: "Titulaire", SUPPLEANT: "Suppléant(e)" };
 
@@ -195,7 +196,7 @@ export function ElusPage() {
               ) : (
                 <tr key={elu.id}>
                   <td>{ROLE_LABEL[elu.role]}</td>
-                  <td>{elu.prenom}</td>
+                  <td>{formatPrenom(elu.prenom)}</td>
                   <td>{elu.nom}</td>
                   <td>{elu.telephone ?? <span className="hint">—</span>}</td>
                   <td>{elu.email ?? <span className="hint">—</span>}</td>
