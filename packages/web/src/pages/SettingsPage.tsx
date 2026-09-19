@@ -419,8 +419,8 @@ function MailingBrandingCard({ canEdit }: { canEdit: boolean }) {
     <section className="card">
       <h2>Image de marque des mailings</h2>
       <p className="hint">
-        Logo affiché en haut à gauche et texte « t1 » affiché en haut à droite de chaque mailing CCMA/CCMI envoyé aux
-        enseignants.
+        Logo affiché en haut à gauche et « Entête haut droit » affiché en haut à droite de chaque mailing CCMA/CCMI
+        envoyé aux enseignants.
       </p>
 
       {!canEdit ? (
@@ -446,7 +446,7 @@ function MailingBrandingCard({ canEdit }: { canEdit: boolean }) {
 
           <form className="inline-form" onSubmit={submitText}>
             <label style={{ flex: "1 1 100%" }}>
-              Texte « t1 » (haut à droite)
+              Entête haut droit
               <textarea
                 value={t1Text}
                 onChange={(e) => setT1Text(e.target.value)}

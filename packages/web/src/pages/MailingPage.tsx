@@ -161,8 +161,8 @@ export function MailingPage() {
         confirmé) est notifié à son adresse personnelle ; un non-adhérent, à son adresse académique si elle est connue
         (import "Emails académiques" de la page Import) — sinon aucun envoi n'est possible pour lui. La civilité d'un
         adhérent est celle déclarée dans l'import Spelc ; celle d'un non-adhérent est estimée à partir de son prénom
-        (marquée "estimé") et peut être absente si le prénom est ambigu ou inconnu. Le logo et le texte "t1" de
-        Paramètres apparaissent en haut de chaque mailing ; les élus de la commission de cette campagne (CCMA ou CCMI —
+        (marquée "estimé") et peut être absente si le prénom est ambigu ou inconnu. Le logo et l'« Entête haut droit »
+        de Paramètres apparaissent en haut de chaque mailing ; les élus de la commission de cette campagne (CCMA ou CCMI —
         page Élus CCMA/CCMI, page Import pour la corriger), un lien de désabonnement pour les non-adhérents et les
         réseaux sociaux de Paramètres apparaissent en bas. L'envoi se fait via Brevo.
       </p>
