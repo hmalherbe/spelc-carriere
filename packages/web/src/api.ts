@@ -262,6 +262,12 @@ export interface MistralSettings {
   updatedAt: string | null;
 }
 
+export interface MatchingSettings {
+  /** 0 to 1 — see @spelc/import's matchAdherents (DEFAULT_MIN_SUGGESTION_THRESHOLD). */
+  minSuggestionThreshold: number;
+  updatedAt: string | null;
+}
+
 export interface AiAssistantAnswer {
   sql: string;
   rowCount: number;
@@ -467,6 +473,9 @@ export const api = {
   mistralSettings: () => request<MistralSettings>("/settings/mistral"),
   updateMistralSettings: (data: { model: string; apiKey?: string }) =>
     request<MistralSettings>("/settings/mistral", { method: "PUT", body: JSON.stringify(data) }),
+  matchingSettings: () => request<MatchingSettings>("/settings/matching"),
+  updateMatchingSettings: (minSuggestionThreshold: number) =>
+    request<MatchingSettings>("/settings/matching", { method: "PUT", body: JSON.stringify({ minSuggestionThreshold }) }),
   aiAssistantSuggestions: () => request<{ questions: string[] }>("/ai-assistant/suggestions"),
   askAiAssistant: (question: string) =>
     request<AiAssistantAnswer>("/ai-assistant/ask", { method: "POST", body: JSON.stringify({ question }) }),

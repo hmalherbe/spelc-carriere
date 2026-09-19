@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { api, type AdelSettings, type BrevoSettings, type MailingBranding, type MistralSettings, type SocialLink } from "../api.js";
+import {
+  api,
+  type AdelSettings,
+  type BrevoSettings,
+  type MailingBranding,
+  type MatchingSettings,
+  type MistralSettings,
+  type SocialLink,
+} from "../api.js";
 import { useAuth } from "../AuthContext.js";
 
 export function SettingsPage() {
@@ -117,6 +125,7 @@ export function SettingsPage() {
       <MailingBrandingCard canEdit={canEdit} />
       <SocialLinksCard canEdit={canEdit} />
       <MistralSettingsCard canEdit={canEdit} />
+      <MatchingSettingsCard canEdit={canEdit} />
     </div>
   );
 }
@@ -198,6 +207,95 @@ function MistralSettingsCard({ canEdit }: { canEdit: boolean }) {
           <label>
             Modèle
             <input required type="text" value={model} onChange={(e) => setModel(e.target.value)} />
+          </label>
+          <button type="submit" disabled={saving}>
+            {saving ? "Enregistrement..." : "Enregistrer"}
+          </button>
+          {saved && <span className="hint"> Enregistré.</span>}
+        </form>
+      )}
+      {saveError && <p className="error-text">{saveError}</p>}
+    </section>
+  );
+}
+
+function MatchingSettingsCard({ canEdit }: { canEdit: boolean }) {
+  const [settings, setSettings] = useState<MatchingSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Displayed/edited as a whole percentage (0-100) — friendlier than a 0-1 decimal — converted at
+  // the API boundary, since matchAdherents() itself works in the 0-1 similarity-score scale.
+  const [thresholdPct, setThresholdPct] = useState("55");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  function refresh() {
+    setLoading(true);
+    api
+      .matchingSettings()
+      .then((s) => {
+        setSettings(s);
+        setThresholdPct(String(Math.round(s.minSuggestionThreshold * 100)));
+      })
+      .catch((e) => setLoadError(String(e)))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSaveError(null);
+    setSaved(false);
+    try {
+      const updated = await api.updateMatchingSettings(Number(thresholdPct) / 100);
+      setSettings(updated);
+      setSaved(true);
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loadError) return <p className="error-text">{loadError}</p>;
+  if (loading || !settings) return <p>Chargement...</p>;
+
+  return (
+    <section className="card">
+      <h2>Rapprochement adhérents ↔ enseignants</h2>
+      <p className="hint">
+        Score minimal (ressemblance nom + prénom) en dessous duquel un enseignant n'est même plus proposé comme
+        rapprochement possible pour un adhérent, dans la File de révision. Un score trop bas laisse passer des
+        coïncidences sans rapport (ex. réel : "ADANERO Olivia" proposée en face de "BARBERO Florian", 43 %) ; un
+        score trop haut peut faire manquer de vraies correspondances avec une faute de frappe ou un diminutif.
+        {settings.updatedAt && <> Dernière modification le {new Date(settings.updatedAt).toLocaleString("fr-FR")}.</>}
+        {" "}Après modification, cliquez sur « Recalculer les rapprochements » (page File de révision) pour
+        l'appliquer aux suggestions déjà en attente.
+      </p>
+
+      {!canEdit ? (
+        <p className="hint">Seuil actuel : {Math.round(settings.minSuggestionThreshold * 100)} %. Seul un administrateur peut le modifier.</p>
+      ) : (
+        <form className="inline-form" onSubmit={submit}>
+          <label>
+            Seuil minimal (%)
+            <input
+              required
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={thresholdPct}
+              onChange={(e) => setThresholdPct(e.target.value)}
+              style={{ width: "6em" }}
+            />
           </label>
           <button type="submit" disabled={saving}>
             {saving ? "Enregistrement..." : "Enregistrer"}

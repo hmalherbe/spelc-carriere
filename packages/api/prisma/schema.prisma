@@ -465,3 +465,15 @@ model MistralConfig {
   updatedAt       DateTime @updatedAt
   updatedById     String? // free-text: User.id at time of edit, kept even if the user is later deleted
 }
+
+// The adhérent<->enseignant fuzzy name-matching threshold (see @spelc/import's matchAdherents) —
+// admin-editable rather than a hard-coded constant, since the right cutoff between "worth a human's
+// glance" and "coincidental letter overlap, pure noise" depends on how this union's own real names
+// happen to collide, which nobody can predict in advance from the code alone. Same singleton-row
+// pattern as AdelConfig/BrevoConfig above.
+model MatchingConfig {
+  id                     String   @id @default("singleton")
+  minSuggestionThreshold Float    @default(0.55)
+  updatedAt              DateTime @updatedAt
+  updatedById            String? // free-text: User.id at time of edit, kept even if the user is later deleted
+}

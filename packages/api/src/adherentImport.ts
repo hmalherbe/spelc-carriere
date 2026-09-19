@@ -1,5 +1,5 @@
 import { prisma } from "./db.js";
-import { matchAdherents, normalizeGrade, type AdherentRecord } from "@spelc/import";
+import { matchAdherents, normalizeGrade, DEFAULT_MIN_SUGGESTION_THRESHOLD, type AdherentRecord } from "@spelc/import";
 
 export interface ImportAdherentRecordsResult {
   created: number;
@@ -95,9 +95,12 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
   });
   const availableTeachers = allTeacherSnapshots.filter((t) => !claimedTeacherIds.has(t.teacherId));
 
+  const matchingConfig = await prisma.matchingConfig.findUnique({ where: { id: "singleton" } });
+
   const matchResults = matchAdherents(
     toRetry.map((a) => ({ adherentId: a.id, nom: a.nom, prenom: a.prenom, grade: a.grade })),
     availableTeachers.map((t) => ({ teacherId: t.teacherId, nom: t.nomUsage, prenom: t.prenom, grade: t.grade })),
+    matchingConfig?.minSuggestionThreshold ?? DEFAULT_MIN_SUGGESTION_THRESHOLD,
   );
 
   // matchAdherents() never proposes the same teacher twice WITHIN matchResults (see its own

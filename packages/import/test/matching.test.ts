@@ -63,6 +63,17 @@ describe("matchAdherents", () => {
     expect(result.confidence).toBe(0);
   });
 
+  it("honors an explicit minSuggestionThreshold override (admin-configured in Paramètres) instead of the default", () => {
+    const adherents = [{ adherentId: "a11", nom: "ADANERO", prenom: "Olivia", grade: "CERTIFIE" }];
+    const candidateTeachers = [...teachers, { teacherId: "t5", nom: "BARBERO", prenom: "FLORIAN", grade: "CERTIFIE" }];
+    // Same 43% pair the default (0.55) rejects — a lower admin-set threshold lets it back in...
+    const [lenient] = matchAdherents(adherents, candidateTeachers, 0.4);
+    expect(lenient.teacherId).toBe("t5");
+    // ...and a stricter one raises the bar even past the default.
+    const [strict] = matchAdherents(adherents, candidateTeachers, 0.6);
+    expect(strict.teacherId).toBeNull();
+  });
+
   it("never assigns the same teacher to two different adherents — the higher-confidence pair wins the contested teacher", () => {
     // Both adherents' closest guess is t1 ("MARTIN Camille"); "MARTIN Camille" itself is the exact
     // match and must win it, leaving the weaker adherent with no candidate rather than a duplicate

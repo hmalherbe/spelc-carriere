@@ -242,6 +242,40 @@ settingsRouter.put(
 );
 
 /**
+ * The adhérent<->enseignant fuzzy-matching cutoff (see @spelc/import's matchAdherents) — no secret
+ * here, just a plain admin-editable number, unlike the other Paramètres cards above.
+ */
+settingsRouter.get(
+  "/matching",
+  asyncHandler(async (_req, res) => {
+    const config = await prisma.matchingConfig.findUnique({ where: { id: SINGLETON_ID } });
+    res.json({ minSuggestionThreshold: config?.minSuggestionThreshold ?? 0.55, updatedAt: config?.updatedAt ?? null });
+  }),
+);
+
+const updateMatchingSchema = z.object({
+  // 0 to 1: a normalized edit-distance similarity score, not a percentage — the UI converts.
+  minSuggestionThreshold: z.number().min(0).max(1),
+});
+
+settingsRouter.put(
+  "/matching",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const parsed = updateMatchingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+    }
+    const config = await prisma.matchingConfig.upsert({
+      where: { id: SINGLETON_ID },
+      create: { id: SINGLETON_ID, minSuggestionThreshold: parsed.data.minSuggestionThreshold, updatedById: req.auth!.userId },
+      update: { minSuggestionThreshold: parsed.data.minSuggestionThreshold, updatedById: req.auth!.userId },
+    });
+    res.json({ minSuggestionThreshold: config.minSuggestionThreshold, updatedAt: config.updatedAt });
+  }),
+);
+
+/**
  * One or more social network links shown at the end of every mailing (see mailing/template.ts).
  * No per-row CRUD: the admin edits the whole list at once, so PUT replaces it wholesale — same
  * pattern as the "Emails académiques" import.
