@@ -12,7 +12,7 @@ const ECHELLE_LABEL: Record<Echelle, string> = {
 
 /** Splits a GradeMapping's "grade" label into a base grade name and which échelle it represents —
  * the mappings themselves encode this via a " HC"/" EXC" suffix (e.g. "CERTIFIE HC"), except for
- * grades that only ever exist in one échelle (Instituteur, MA 1/2, BI-ADMISSIBLE), which have no
+ * grades that only ever exist in one échelle (Instituteur, MD 1/2, BI-ADMISSIBLE), which have no
  * suffix and stay CLASSE_NORMALE by convention. */
 function splitGrade(grade: string): { baseGrade: string; echelle: Echelle } {
   if (grade.endsWith(" HC")) return { baseGrade: grade.slice(0, -3), echelle: "HORS_CLASSE" };

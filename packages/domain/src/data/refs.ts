@@ -36,8 +36,15 @@ export const GRADE_MAPPINGS: GradeMapping[] = [
   { grade: "PEGC-CE d'EPS", grille: "PEGC", degre: 2, accesHorsClasse: true, accesClasseExceptionnelle: false },
   { grade: "Instituteur", grille: "INSTIT", degre: 1, accesHorsClasse: false, accesClasseExceptionnelle: false },
   { grade: "PEGC-CE d'EPS HC", grille: "HC_PEGC", degre: 2, accesHorsClasse: false, accesClasseExceptionnelle: true },
-  { grade: "MA 1", grille: "MA_1", degre: 1, accesHorsClasse: false, accesClasseExceptionnelle: false },
-  { grade: "MA 2", grille: "MA_2", degre: 1, accesHorsClasse: false, accesClasseExceptionnelle: false },
+  // "MA 1"/"MA 2" (the source spreadsheet's original label, matching the GrilleCode keys below)
+  // was the premier-degré maître auxiliaire grade's name at the time the sheet was extracted — the
+  // union itself confirmed it's since been renamed "MD 1"/"MD 2" (ADEL now exports adherents under
+  // that label), so the label here follows suit. Left the internal `grille` code ("MA_1"/"MA_2",
+  // and the matching GRILLES table key in grilles.ts) unchanged: it's never shown to a user, only
+  // this "grade" text is — and it's what ADEL/rectorat grade strings get compared against for
+  // adhérent<->enseignant matching (see @spelc/import's matchAdherents).
+  { grade: "MD 1", grille: "MA_1", degre: 1, accesHorsClasse: false, accesClasseExceptionnelle: false },
+  { grade: "MD 2", grille: "MA_2", degre: 1, accesHorsClasse: false, accesClasseExceptionnelle: false },
   { grade: "CERTIFIE EXC", grille: "EXC_PROFS", degre: 2, accesHorsClasse: false, accesClasseExceptionnelle: false },
   { grade: "PEPS EXC", grille: "EXC_PROFS", degre: 2, accesHorsClasse: false, accesClasseExceptionnelle: false },
   { grade: "PLP EXC", grille: "EXC_PROFS", degre: 2, accesHorsClasse: false, accesClasseExceptionnelle: false },
