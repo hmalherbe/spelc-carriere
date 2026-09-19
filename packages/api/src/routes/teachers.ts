@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import {
@@ -12,6 +12,7 @@ import {
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { computeBaStatus } from "../baStatus.js";
 import { recomputeAndStorePromotionState } from "../promotionState.js";
+import { deriveAncienneteAReporter } from "../ancienneteReportee.js";
 
 export const teachersRouter = Router();
 
@@ -78,6 +79,9 @@ teachersRouter.get("/", async (req, res) => {
           echelonDepart: String(baEchelonDepart),
           dateDernierChangementEchelon: snap.dateAccesEchelon.toISOString().slice(0, 10),
           ancienneteADeduire: parseAncienneteText(snap.teacher.ancienneteADeduire),
+          ancienneteAReporter: snap.teacher.ancienneteAReporter
+            ? parseAncienneteText(snap.teacher.ancienneteAReporter)
+            : deriveAncienneteAReporter(snap.typePromotion, snap.dureeRestante),
           grilles: liveGrilles,
           valeurDuPoint: liveValeurDuPoint,
         });
@@ -144,10 +148,12 @@ teachersRouter.get("/", async (req, res) => {
       baEligible,
       horsClasseEligible,
       classeExceptionnelleEligible,
-      // Manual career-interruption correction (see Teacher.ancienneteADeduire's doc comment) —
+      // Manual corrections (see Teacher.ancienneteADeduire/ancienneteAReporter's doc comments) —
       // exposed so DashboardPage can show which teachers carry one and let an admin edit it.
       ancienneteADeduire: snap.teacher.ancienneteADeduire,
       ancienneteADeduireNote: snap.teacher.ancienneteADeduireNote,
+      ancienneteAReporter: snap.teacher.ancienneteAReporter,
+      ancienneteAReporterNote: snap.teacher.ancienneteAReporterNote,
     };
   });
 
@@ -168,45 +174,29 @@ teachersRouter.get("/:id", async (req, res) => {
 });
 
 /**
- * Sets or clears a teacher's "ancienneté à déduire" correction (see Teacher.ancienneteADeduire's
- * doc comment) — a manual admin correction for career interruptions (disponibilité, congé longue
- * durée...) that the rectorat file's own "date d'accès à l'échelon" doesn't reflect. Recomputes
- * ComputedPromotionState immediately for every campagne this teacher has a snapshot in, so the
- * correction is visible right away rather than only after the next rectorat reimport.
+ * Recomputes ComputedPromotionState for every campagne `teacherId` has a snapshot in, using the
+ * given (possibly just-updated) manual corrections — shared by the "ancienneté à déduire" and
+ * "ancienneté à reporter" PUT endpoints below so editing one always recomputes with BOTH
+ * corrections' current values, never accidentally dropping the other while it's mid-edit.
  */
-teachersRouter.put("/:id/anciennete-a-deduire", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
-  const { ancienneteADeduire, ancienneteADeduireNote } = req.body as {
-    ancienneteADeduire?: string | null;
-    ancienneteADeduireNote?: string | null;
-  };
-
-  const raw = ancienneteADeduire?.trim() || null;
-  try {
-    if (raw) parseAncienneteText(raw);
-  } catch {
-    return res.status(400).json({ error: `Format attendu "AAaMMmJJj" (ex. "01a06m00j"), reçu ${JSON.stringify(raw)}` });
-  }
-
-  const teacher = await prisma.teacher.findUnique({ where: { id: req.params.id }, include: { snapshots: true } });
-  if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
-
-  await prisma.teacher.update({
-    where: { id: req.params.id },
-    data: { ancienneteADeduire: raw, ancienneteADeduireNote: ancienneteADeduireNote?.trim() || null },
-  });
-
+async function recomputeAllSnapshotsForTeacher(
+  teacherId: string,
+  corrections: { ancienneteADeduire: string | null; ancienneteAReporter: string | null },
+): Promise<string[]> {
+  const snapshots = await prisma.teacherSnapshot.findMany({ where: { teacherId } });
   const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
   const warnings: string[] = [];
-  for (const snap of teacher.snapshots) {
+  for (const snap of snapshots) {
     const { warning } = await recomputeAndStorePromotionState({
-      teacherId: teacher.id,
+      teacherId,
       campagneId: snap.campagneId,
       grade: snap.grade,
       echelonActuel: snap.echelonActuel,
       dateAccesEchelon: snap.dateAccesEchelon,
       typePromotion: snap.typePromotion,
       dureeRestante: snap.dureeRestante,
-      ancienneteADeduireRaw: raw,
+      ancienneteADeduireRaw: corrections.ancienneteADeduire,
+      ancienneteAReporterManualRaw: corrections.ancienneteAReporter,
       proTypePromotion: snap.proTypePromotion,
       proConfirmee: snap.proConfirmee,
       ancienneteEchelon: snap.ancienneteEchelon,
@@ -215,6 +205,72 @@ teachersRouter.put("/:id/anciennete-a-deduire", requireRole("ADMIN", "GESTIONNAI
     });
     if (warning) warnings.push(warning);
   }
+  return warnings;
+}
+
+function parseAncienneteBody(req: Request, res: Response, fieldName: string): string | null | undefined {
+  const raw = (req.body as Record<string, unknown>)[fieldName];
+  const trimmed = typeof raw === "string" ? raw.trim() : null;
+  try {
+    if (trimmed) parseAncienneteText(trimmed);
+  } catch {
+    res.status(400).json({ error: `Format attendu "AAaMMmJJj" (ex. "01a06m00j"), reçu ${JSON.stringify(trimmed)}` });
+    return undefined;
+  }
+  return trimmed || null;
+}
+
+/**
+ * Sets or clears a teacher's "ancienneté à déduire" correction (see Teacher.ancienneteADeduire's
+ * doc comment) — a manual admin correction for career interruptions (disponibilité, congé longue
+ * durée...) that the rectorat file's own "date d'accès à l'échelon" doesn't reflect. Recomputes
+ * ComputedPromotionState immediately for every campagne this teacher has a snapshot in, so the
+ * correction is visible right away rather than only after the next rectorat reimport.
+ */
+teachersRouter.put("/:id/anciennete-a-deduire", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const raw = parseAncienneteBody(req, res, "ancienneteADeduire");
+  if (raw === undefined) return; // response already sent by parseAncienneteBody
+
+  const { ancienneteADeduireNote } = req.body as { ancienneteADeduireNote?: string | null };
+  const teacher = await prisma.teacher.findUnique({ where: { id: req.params.id } });
+  if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
+
+  await prisma.teacher.update({
+    where: { id: req.params.id },
+    data: { ancienneteADeduire: raw, ancienneteADeduireNote: ancienneteADeduireNote?.trim() || null },
+  });
+
+  const warnings = await recomputeAllSnapshotsForTeacher(teacher.id, {
+    ancienneteADeduire: raw,
+    ancienneteAReporter: teacher.ancienneteAReporter,
+  });
 
   res.json({ ancienneteADeduire: raw, ancienneteADeduireNote: ancienneteADeduireNote?.trim() || null, warnings });
+});
+
+/**
+ * Sets or clears a teacher's "ancienneté à reporter" correction (see Teacher.ancienneteAReporter's
+ * doc comment) — a manual admin override for the credited duration normally derived automatically
+ * from the rectorat's own RE./CL. marker, for the rare case that derivation misses or gets it wrong.
+ * Same immediate-recompute behavior as the "ancienneté à déduire" endpoint above.
+ */
+teachersRouter.put("/:id/anciennete-a-reporter", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const raw = parseAncienneteBody(req, res, "ancienneteAReporter");
+  if (raw === undefined) return; // response already sent by parseAncienneteBody
+
+  const { ancienneteAReporterNote } = req.body as { ancienneteAReporterNote?: string | null };
+  const teacher = await prisma.teacher.findUnique({ where: { id: req.params.id } });
+  if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
+
+  await prisma.teacher.update({
+    where: { id: req.params.id },
+    data: { ancienneteAReporter: raw, ancienneteAReporterNote: ancienneteAReporterNote?.trim() || null },
+  });
+
+  const warnings = await recomputeAllSnapshotsForTeacher(teacher.id, {
+    ancienneteADeduire: teacher.ancienneteADeduire,
+    ancienneteAReporter: raw,
+  });
+
+  res.json({ ancienneteAReporter: raw, ancienneteAReporterNote: ancienneteAReporterNote?.trim() || null, warnings });
 });

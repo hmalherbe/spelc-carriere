@@ -88,11 +88,14 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
     teacherIdByName.set(`${normalizeName(s.nomUsage)}|${normalizeName(s.prenom)}|${s.grade}`, s.teacherId);
   }
 
-  // Manual "ancienneté à déduire" corrections (see Teacher.ancienneteADeduire's doc comment) live on
-  // the Teacher row precisely so they survive this reimport's wholesale TeacherSnapshot replacement —
-  // fetched once here, keyed by teacherId, rather than re-queried per record.
-  const ancienneteADeduireByTeacherId = new Map(
-    (await prisma.teacher.findMany({ select: { id: true, ancienneteADeduire: true } })).map((t) => [t.id, t.ancienneteADeduire]),
+  // Manual "ancienneté à déduire"/"ancienneté à reporter" corrections (see those fields' doc
+  // comments on Teacher) live on the Teacher row precisely so they survive this reimport's wholesale
+  // TeacherSnapshot replacement — fetched once here, keyed by teacherId, rather than re-queried per record.
+  const manualCorrectionsByTeacherId = new Map(
+    (await prisma.teacher.findMany({ select: { id: true, ancienneteADeduire: true, ancienneteAReporter: true } })).map((t) => [
+      t.id,
+      t,
+    ]),
   );
 
   const results: {
@@ -228,7 +231,8 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
           dateAccesEchelon: new Date(record.dateAccesEchelon),
           typePromotion: record.typePromotion,
           dureeRestante: record.dureeRestante,
-          ancienneteADeduireRaw: ancienneteADeduireByTeacherId.get(teacherId) ?? null,
+          ancienneteADeduireRaw: manualCorrectionsByTeacherId.get(teacherId)?.ancienneteADeduire ?? null,
+          ancienneteAReporterManualRaw: manualCorrectionsByTeacherId.get(teacherId)?.ancienneteAReporter ?? null,
           proTypePromotion: record.proTypePromotion,
           proConfirmee: record.proConfirmee,
           ancienneteEchelon: record.ancienneteEchelon,

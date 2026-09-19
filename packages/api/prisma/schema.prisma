@@ -198,6 +198,18 @@ model Teacher {
   ancienneteADeduire     String?
   ancienneteADeduireNote String? // free-text reason for the admin who set it, e.g. "disponibilité 09/2018-08/2020"
 
+  // Manual override for the credited duration normally derived automatically from the rectorat's
+  // own RE./CL. marker (see ancienneteReportee.ts's deriveAncienneteAReporter, fed from
+  // TeacherSnapshot.typePromotion/dureeRestante) — for the rare case that derivation misses or gets
+  // it wrong (a parser edge case, or a reclassement/report the rectorat's file doesn't carry a clean
+  // marker for at all). When set, this REPLACES the automatic derivation entirely rather than adding
+  // to it — same "AAaMMmJJj" format, fed into computeEchelonPromotion's ancienneteAReporter
+  // parameter. Lives on Teacher rather than TeacherSnapshot for the same reimport-survival reason as
+  // ancienneteADeduire above. Mirrors the "Ancienneté à reporter" column of the union's own original
+  // manual spreadsheet (the counterpart to "Ancienneté à déduire" there).
+  ancienneteAReporter     String?
+  ancienneteAReporterNote String?
+
   snapshots      TeacherSnapshot[]
   matchCandidate MatchCandidate?
   computedStates ComputedPromotionState[]

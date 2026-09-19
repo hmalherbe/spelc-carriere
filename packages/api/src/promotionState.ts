@@ -13,6 +13,10 @@ export interface RecomputePromotionStateInput {
   dureeRestante: string | null;
   /** Raw "AAaMMmJJj" text from Teacher.ancienneteADeduire, or null if no correction is set. */
   ancienneteADeduireRaw: string | null;
+  /** Raw "AAaMMmJJj" text from Teacher.ancienneteAReporter (manual override), or null if unset —
+   * REPLACES the automatic RE./CL.-marker derivation entirely when present (see that field's doc
+   * comment in schema.prisma). */
+  ancienneteAReporterManualRaw: string | null;
   proTypePromotion: string | null;
   proConfirmee: boolean;
   ancienneteEchelon: number | null;
@@ -24,8 +28,9 @@ export interface RecomputePromotionStateInput {
  * Computes one teacher's next-promotion projection for one campagne and upserts it into
  * ComputedPromotionState — the exact logic routes/imports.ts runs for every fresh snapshot at
  * import time, extracted here so routes/teachers.ts can re-run it on demand when an admin edits a
- * Teacher's ancienneteADeduire correction (see that field's doc comment): without this, the
- * correction would silently only take effect on the NEXT rectorat reimport, not immediately.
+ * Teacher's ancienneteADeduire or ancienneteAReporter correction (see those fields' doc comments):
+ * without this, either correction would silently only take effect on the NEXT rectorat reimport,
+ * not immediately.
  */
 export async function recomputeAndStorePromotionState(
   input: RecomputePromotionStateInput,
@@ -40,7 +45,9 @@ export async function recomputeAndStorePromotionState(
       grille: gradeMapping.grille as GrilleCode,
       echelonDepart: input.echelonActuel,
       dateDernierChangementEchelon: input.dateAccesEchelon.toISOString().slice(0, 10),
-      ancienneteAReporter: deriveAncienneteAReporter(input.typePromotion, input.dureeRestante),
+      ancienneteAReporter: input.ancienneteAReporterManualRaw
+        ? parseAncienneteText(input.ancienneteAReporterManualRaw)
+        : deriveAncienneteAReporter(input.typePromotion, input.dureeRestante),
       ancienneteADeduire: parseAncienneteText(input.ancienneteADeduireRaw),
       grilles: input.liveGrilles,
       valeurDuPoint: input.liveValeurDuPoint,

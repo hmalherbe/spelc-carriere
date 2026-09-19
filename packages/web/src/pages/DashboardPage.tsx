@@ -79,6 +79,12 @@ type SortKey = "fichier" | "nom" | "grade" | "echelon";
 type AdherentFilter = "all" | "adherent" | "non_adherent";
 type BaFilter = "all" | "eligible" | "non_eligible";
 
+type ManualCorrectionField = "ancienneteADeduire" | "ancienneteAReporter";
+const CORRECTION_LABEL: Record<ManualCorrectionField, string> = {
+  ancienneteADeduire: "Anc. à déduire",
+  ancienneteAReporter: "Anc. à reporter",
+};
+
 export function DashboardPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
@@ -97,13 +103,15 @@ export function DashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("fichier");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  // Édition de la correction "ancienneté à déduire" (voir Teacher.ancienneteADeduire côté API) — un
-  // seul enseignant à la fois, comme le montre le pattern équivalent pour l'email dans MailingPage.
-  const [editingDeduireId, setEditingDeduireId] = useState<string | null>(null);
-  const [deduireDraft, setDeduireDraft] = useState("");
-  const [deduireNoteDraft, setDeduireNoteDraft] = useState("");
-  const [savingDeduire, setSavingDeduire] = useState(false);
-  const [deduireError, setDeduireError] = useState<string | null>(null);
+  // Édition des corrections manuelles "ancienneté à déduire" / "ancienneté à reporter" (voir
+  // Teacher.ancienneteADeduire/ancienneteAReporter côté API) — un seul champ, un seul enseignant à
+  // la fois, comme le montre le pattern équivalent pour l'email dans MailingPage. Les deux
+  // corrections partagent la même forme et le même comportement, seul le champ édité diffère.
+  const [editingCorrection, setEditingCorrection] = useState<{ teacherId: string; field: ManualCorrectionField } | null>(null);
+  const [correctionDraft, setCorrectionDraft] = useState("");
+  const [correctionNoteDraft, setCorrectionNoteDraft] = useState("");
+  const [savingCorrection, setSavingCorrection] = useState(false);
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -127,24 +135,31 @@ export function DashboardPage() {
 
   useEffect(refreshTeachers, [campagneId]);
 
-  function startEditDeduire(t: TeacherListItem) {
-    setEditingDeduireId(t.teacherId);
-    setDeduireDraft(t.ancienneteADeduire ?? "");
-    setDeduireNoteDraft(t.ancienneteADeduireNote ?? "");
-    setDeduireError(null);
+  function startEditCorrection(t: TeacherListItem, field: ManualCorrectionField) {
+    setEditingCorrection({ teacherId: t.teacherId, field });
+    setCorrectionDraft((field === "ancienneteADeduire" ? t.ancienneteADeduire : t.ancienneteAReporter) ?? "");
+    setCorrectionNoteDraft((field === "ancienneteADeduire" ? t.ancienneteADeduireNote : t.ancienneteAReporterNote) ?? "");
+    setCorrectionError(null);
   }
 
-  async function saveDeduire(teacherId: string) {
-    setSavingDeduire(true);
-    setDeduireError(null);
+  async function saveCorrection() {
+    if (!editingCorrection) return;
+    setSavingCorrection(true);
+    setCorrectionError(null);
     try {
-      await api.updateAncienneteADeduire(teacherId, deduireDraft.trim() || null, deduireNoteDraft.trim() || null);
-      setEditingDeduireId(null);
+      const value = correctionDraft.trim() || null;
+      const note = correctionNoteDraft.trim() || null;
+      if (editingCorrection.field === "ancienneteADeduire") {
+        await api.updateAncienneteADeduire(editingCorrection.teacherId, value, note);
+      } else {
+        await api.updateAncienneteAReporter(editingCorrection.teacherId, value, note);
+      }
+      setEditingCorrection(null);
       refreshTeachers();
     } catch (e) {
-      setDeduireError(String(e));
+      setCorrectionError(String(e));
     } finally {
-      setSavingDeduire(false);
+      setSavingCorrection(false);
     }
   }
 
@@ -204,6 +219,47 @@ export function DashboardPage() {
     return sortDir === "asc" ? " ▲" : " ▼";
   }
 
+  function correctionCell(t: TeacherListItem, field: ManualCorrectionField) {
+    if (editingCorrection?.teacherId === t.teacherId && editingCorrection.field === field) {
+      return (
+        <div className="row-actions">
+          <input
+            value={correctionDraft}
+            onChange={(e) => setCorrectionDraft(e.target.value)}
+            placeholder="AAaMMmJJj (ex. 07a00m00j)"
+            style={{ width: "10em" }}
+            autoFocus
+          />
+          <input
+            value={correctionNoteDraft}
+            onChange={(e) => setCorrectionNoteDraft(e.target.value)}
+            placeholder="Motif (ex. disponibilité 2018-2020)"
+            style={{ width: "16em" }}
+          />
+          <button type="button" disabled={savingCorrection} onClick={saveCorrection}>
+            {savingCorrection ? "..." : "Enregistrer"}
+          </button>
+          <button type="button" className="secondary" onClick={() => setEditingCorrection(null)} disabled={savingCorrection}>
+            Annuler
+          </button>
+          {correctionError && <span className="error-text">{correctionError}</span>}
+        </div>
+      );
+    }
+    const value = field === "ancienneteADeduire" ? t.ancienneteADeduire : t.ancienneteAReporter;
+    const note = field === "ancienneteADeduire" ? t.ancienneteADeduireNote : t.ancienneteAReporterNote;
+    return (
+      <div className="row-actions">
+        <span title={note ?? undefined}>{value ?? "—"}</span>
+        {canEdit && (
+          <button type="button" className="secondary" onClick={() => startEditCorrection(t, field)}>
+            {value ? "Modifier" : "Ajouter"}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (error) return <p className="error-text">{error}</p>;
 
   return (
@@ -224,10 +280,11 @@ export function DashboardPage() {
         <p className="hint">
           Période du {formatDate(selectedCampagne.periodeDebut)} au {formatDate(selectedCampagne.periodeFin)} — date CCMA :{" "}
           {formatDate(selectedCampagne.dateCcma)}. Par défaut, la liste est triée par grade puis dans le même ordre
-          que le fichier du rectorat correspondant — cliquez sur un en-tête de colonne pour trier autrement. La
-          colonne « Anc. à déduire » permet de corriger, au cas par cas, les rares dossiers où la date d'accès à
-          l'échelon du rectorat ne reflète plus l'ancienneté réelle (disponibilité, congé longue durée...) — la
-          date de prochaine promotion est recalculée immédiatement.
+          que le fichier du rectorat correspondant — cliquez sur un en-tête de colonne pour trier autrement. Les
+          colonnes « Anc. à déduire » et « Anc. à reporter » permettent de corriger, au cas par cas, les rares
+          dossiers où la date d'accès à l'échelon du rectorat ne reflète plus l'ancienneté réelle (disponibilité,
+          congé longue durée...) ou où le report d'ancienneté / reclassement n'a pas été détecté automatiquement
+          depuis le fichier — la date de prochaine promotion est recalculée immédiatement.
         </p>
       )}
 
@@ -308,7 +365,8 @@ export function DashboardPage() {
               </th>
               <th>Date échelon actuel</th>
               <th>Ancienneté échelon</th>
-              <th>Anc. à déduire</th>
+              <th>{CORRECTION_LABEL.ancienneteADeduire}</th>
+              <th>{CORRECTION_LABEL.ancienneteAReporter}</th>
               <th>Prochaine promotion</th>
               <th>Gain net</th>
               <th>Adhérent</th>
@@ -329,41 +387,8 @@ export function DashboardPage() {
                   </td>
                   <td>{formatDate(t.dateAccesEchelon)}</td>
                   <td>{formatAnciennete(t.ancienneteEchelon)}</td>
-                  <td>
-                    {editingDeduireId === t.teacherId ? (
-                      <div className="row-actions">
-                        <input
-                          value={deduireDraft}
-                          onChange={(e) => setDeduireDraft(e.target.value)}
-                          placeholder="AAaMMmJJj (ex. 07a00m00j)"
-                          style={{ width: "10em" }}
-                          autoFocus
-                        />
-                        <input
-                          value={deduireNoteDraft}
-                          onChange={(e) => setDeduireNoteDraft(e.target.value)}
-                          placeholder="Motif (ex. disponibilité 2018-2020)"
-                          style={{ width: "16em" }}
-                        />
-                        <button type="button" disabled={savingDeduire} onClick={() => saveDeduire(t.teacherId)}>
-                          {savingDeduire ? "..." : "Enregistrer"}
-                        </button>
-                        <button type="button" className="secondary" onClick={() => setEditingDeduireId(null)} disabled={savingDeduire}>
-                          Annuler
-                        </button>
-                        {deduireError && <span className="error-text">{deduireError}</span>}
-                      </div>
-                    ) : (
-                      <div className="row-actions">
-                        <span title={t.ancienneteADeduireNote ?? undefined}>{t.ancienneteADeduire ?? "—"}</span>
-                        {canEdit && (
-                          <button type="button" className="secondary" onClick={() => startEditDeduire(t)}>
-                            {t.ancienneteADeduire ? "Modifier" : "Ajouter"}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
+                  <td>{correctionCell(t, "ancienneteADeduire")}</td>
+                  <td>{correctionCell(t, "ancienneteAReporter")}</td>
                   <td>{formatDate(t.computedState?.dateProchainePromotion ?? null)}</td>
                   <td className={t.computedState && t.computedState.gainSalaireNet > 0 ? "gain-positive" : ""}>
                     {t.computedState ? euros(t.computedState.gainSalaireNet) : "—"}

@@ -122,6 +122,10 @@ export interface TeacherListItem {
    * d'accès à l'échelon du rectorat) — "AAaMMmJJj", ou null si aucune correction n'est en place. */
   ancienneteADeduire: string | null;
   ancienneteADeduireNote: string | null;
+  /** Correction manuelle "ancienneté à reporter" (remplace la dérivation automatique depuis le
+   * marqueur RE./CL. du rectorat) — "AAaMMmJJj", ou null si aucune correction n'est en place. */
+  ancienneteAReporter: string | null;
+  ancienneteAReporterNote: string | null;
 }
 
 export interface MatchCandidate {
@@ -397,6 +401,11 @@ export const api = {
     request<{ ancienneteADeduire: string | null; ancienneteADeduireNote: string | null; warnings: string[] }>(
       `/teachers/${teacherId}/anciennete-a-deduire`,
       { method: "PUT", body: JSON.stringify({ ancienneteADeduire, ancienneteADeduireNote }) },
+    ),
+  updateAncienneteAReporter: (teacherId: string, ancienneteAReporter: string | null, ancienneteAReporterNote: string | null) =>
+    request<{ ancienneteAReporter: string | null; ancienneteAReporterNote: string | null; warnings: string[] }>(
+      `/teachers/${teacherId}/anciennete-a-reporter`,
+      { method: "PUT", body: JSON.stringify({ ancienneteAReporter, ancienneteAReporterNote }) },
     ),
   stats: (campagneId: string, grade?: string) =>
     request<CampagneStats>(`/stats?campagneId=${campagneId}${grade ? `&grade=${encodeURIComponent(grade)}` : ""}`),
