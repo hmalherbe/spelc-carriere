@@ -8,6 +8,7 @@ export function ReviewQueuePage() {
   const [candidates, setCandidates] = useState<MatchCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [rescanning, setRescanning] = useState(false);
+  const [rescanResult, setRescanResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canReview = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
@@ -37,8 +38,13 @@ export function ReviewQueuePage() {
 
   async function rescan() {
     setRescanning(true);
+    setRescanResult(null);
     try {
-      await api.rescanMatches();
+      const result = await api.rescanMatches();
+      setRescanResult(
+        `${result.autoConfirmed} confirmé(s) automatiquement, ${result.pendingReview} en attente, ` +
+          `${result.clearedLowConfidence} suggestion(s) faible(s) retirée(s) (sous le seuil configuré dans Paramètres).`,
+      );
       refresh();
     } catch (e) {
       setError(String(e));
@@ -64,8 +70,10 @@ export function ReviewQueuePage() {
         campagne précise, voir l'onglet « Adhérents éligibles ». Une fois confirmé ou rejeté ici, un lien reste
         permanent — seuls les nouveaux cas ambigus reviennent dans cette file lors des prochains imports. Le bouton
         « Recalculer les rapprochements » relance immédiatement cette recherche pour tous les cas en attente, sans
-        attendre le prochain import.
+        attendre le prochain import, et retire aussi les suggestions déjà en attente dont le score est repassé sous
+        le seuil configuré dans Paramètres (par ex. après l'avoir relevé) — sans en proposer une nouvelle à la place.
       </p>
+      {rescanResult && <p className="hint">{rescanResult}</p>}
       {loading ? (
         <p>Chargement...</p>
       ) : candidates.length === 0 ? (

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
-import { matchUnresolvedAdherents } from "../adherentImport.js";
+import { matchUnresolvedAdherents, purgeStaleLowConfidenceMatches } from "../adherentImport.js";
 
 export const matchesRouter = Router();
 
@@ -37,10 +37,16 @@ matchesRouter.get("/", async (req, res) => {
  * suggestion made before a matching-rule tightened (e.g. the grade hard-filter) otherwise sits in
  * the queue until someone imports a new rectorat file — which can be weeks away — even though the
  * fix to clear it is already deployed.
+ *
+ * Also runs purgeStaleLowConfidenceMatches() — a separate cleanup matchUnresolvedAdherents()
+ * deliberately never does on its own (see that function's doc comment) — so raising
+ * minSuggestionThreshold in Paramètres has a visible effect here, on demand, rather than only ever
+ * applying to brand new suggestions.
  */
 matchesRouter.post("/rescan", requireRole("ADMIN", "GESTIONNAIRE"), async (_req, res) => {
   const result = await matchUnresolvedAdherents();
-  res.json(result);
+  const { cleared } = await purgeStaleLowConfidenceMatches();
+  res.json({ ...result, clearedLowConfidence: cleared });
 });
 
 matchesRouter.post("/:id/confirm", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {

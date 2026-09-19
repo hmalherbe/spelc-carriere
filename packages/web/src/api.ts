@@ -414,7 +414,8 @@ export const api = {
   confirmMatch: (id: string, teacherId?: string) =>
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),
   rejectMatch: (id: string) => request(`/matches/${id}/reject`, { method: "POST" }),
-  rescanMatches: () => request<{ autoConfirmed: number; pendingReview: number }>(`/matches/rescan`, { method: "POST" }),
+  rescanMatches: () =>
+    request<{ autoConfirmed: number; pendingReview: number; clearedLowConfidence: number }>(`/matches/rescan`, { method: "POST" }),
   importRectorat: (campagneId: string, file: File) => {
     const form = new FormData();
     form.append("campagneId", campagneId);

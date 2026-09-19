@@ -139,6 +139,35 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
 }
 
 /**
+ * Clears the suggested teacher (teacherId -> null, confidence -> 0, same shape matchAdherents()
+ * itself uses for "no candidate found") on every still-open PENDING_REVIEW candidate whose stored
+ * confidence no longer clears the currently configured MatchingConfig.minSuggestionThreshold.
+ *
+ * matchUnresolvedAdherents() above deliberately never touches a same-grade PENDING_REVIEW candidate
+ * that already has a suggested teacher — by design, so a suggestion genuinely awaiting a human's
+ * review is never silently swapped out from under them. That's the right call for an ordinary
+ * reimport, but it also means raising minSuggestionThreshold in Paramètres has NO effect on
+ * whatever's already sitting in the queue: real case, an admin raised the threshold from 43% to 75%
+ * specifically to clear out coincidental-overlap noise (e.g. "ADANERO Olivia" suggested against
+ * "BARBERO Florian", 43%) and found those exact rows still there afterwards. This is the explicit,
+ * separate cleanup step for that — only ever run when an admin asks for it (the "Recalculer les
+ * rapprochements" button), and it only ever REMOVES a suggestion (never proposes a replacement, so
+ * it can't introduce a new wrong pairing) — a confirmed/rejected candidate is never touched, same as
+ * matchUnresolvedAdherents().
+ */
+export async function purgeStaleLowConfidenceMatches(): Promise<{ cleared: number }> {
+  const matchingConfig = await prisma.matchingConfig.findUnique({ where: { id: "singleton" } });
+  const threshold = matchingConfig?.minSuggestionThreshold ?? DEFAULT_MIN_SUGGESTION_THRESHOLD;
+
+  const { count } = await prisma.matchCandidate.updateMany({
+    where: { status: "PENDING_REVIEW", teacherId: { not: null }, confidence: { lt: threshold } },
+    data: { teacherId: null, confidence: 0 },
+  });
+
+  return { cleared: count };
+}
+
+/**
  * Upserts adherent rows (keyed on nom+prénom — not identity-critical, since the Teacher<->Adherent
  * link reviewed by a human is what's authoritative) and runs the fuzzy matching engine for the
  * ones just touched. Shared by both adherent import paths — the manual CSV upload and the ADEL
