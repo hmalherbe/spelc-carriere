@@ -2,10 +2,40 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { matchUnresolvedAdherents, purgeStaleLowConfidenceMatches } from "../adherentImport.js";
+import { normalizeGrade } from "@spelc/import";
 
 export const matchesRouter = Router();
 
 matchesRouter.use(requireAuth);
+
+/**
+ * Surfaces the actual size of the two pools being matched — added because "pourquoi autant
+ * d'Aucune correspondance ?" kept coming up, and the real answer is usually structural rather than
+ * a matching-algorithm problem: the rectorat CCMA files imported so far only cover the teachers up
+ * for promotion review in the campaign(s) actually imported, not the whole union membership, so
+ * most adherents have no counterpart at all to match against yet, regardless of how good the fuzzy
+ * matching is. `adherentsWithNoGradeInPool` counts adherents whose grade doesn't appear even ONCE
+ * among all imported teacher snapshots — i.e. structurally impossible to match, no matter the
+ * threshold — as distinct from adherents whose grade DOES have candidates but none close enough by
+ * name (a real matching-quality question, not a data-coverage one).
+ */
+matchesRouter.get("/stats", async (_req, res) => {
+  const totalAdherents = await prisma.adherent.count();
+  const teacherSnapshots = await prisma.teacherSnapshot.findMany({
+    distinct: ["teacherId"],
+    select: { teacherId: true, grade: true },
+  });
+  const totalTeachers = teacherSnapshots.length;
+  const teacherGradeSet = new Set(teacherSnapshots.filter((t) => t.grade).map((t) => normalizeGrade(t.grade!)));
+
+  const adherentGrades = await prisma.adherent.groupBy({ by: ["grade"], _count: { _all: true } });
+  const adherentsWithNoGradeInPool = adherentGrades
+    .filter((g) => g.grade && !teacherGradeSet.has(normalizeGrade(g.grade)))
+    .reduce((sum, g) => sum + g._count._all, 0);
+  const adherentsWithUnknownGrade = adherentGrades.filter((g) => !g.grade).reduce((sum, g) => sum + g._count._all, 0);
+
+  res.json({ totalAdherents, totalTeachers, adherentsWithNoGradeInPool, adherentsWithUnknownGrade });
+});
 
 /**
  * Per product decision: a confirmed link is permanent — this endpoint (and the queue it feeds)

@@ -410,6 +410,10 @@ export const api = {
   stats: (campagneId: string, grade?: string) =>
     request<CampagneStats>(`/stats?campagneId=${campagneId}${grade ? `&grade=${encodeURIComponent(grade)}` : ""}`),
   pendingMatches: () => request<MatchCandidate[]>("/matches?status=PENDING_REVIEW"),
+  matchStats: () =>
+    request<{ totalAdherents: number; totalTeachers: number; adherentsWithNoGradeInPool: number; adherentsWithUnknownGrade: number }>(
+      "/matches/stats",
+    ),
   adherentsEligibles: (campagneId: string) => request<AdherentEligible[]>(`/adherents/eligibles?campagneId=${campagneId}`),
   confirmMatch: (id: string, teacherId?: string) =>
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),

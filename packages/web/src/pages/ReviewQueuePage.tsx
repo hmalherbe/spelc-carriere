@@ -3,9 +3,12 @@ import { api, type MatchCandidate } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 import { formatPrenom } from "../format.js";
 
+type MatchStats = { totalAdherents: number; totalTeachers: number; adherentsWithNoGradeInPool: number; adherentsWithUnknownGrade: number };
+
 export function ReviewQueuePage() {
   const { user } = useAuth();
   const [candidates, setCandidates] = useState<MatchCandidate[]>([]);
+  const [stats, setStats] = useState<MatchStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [rescanning, setRescanning] = useState(false);
   const [rescanResult, setRescanResult] = useState<string | null>(null);
@@ -14,9 +17,11 @@ export function ReviewQueuePage() {
 
   function refresh() {
     setLoading(true);
-    api
-      .pendingMatches()
-      .then(setCandidates)
+    Promise.all([api.pendingMatches(), api.matchStats()])
+      .then(([c, s]) => {
+        setCandidates(c);
+        setStats(s);
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }
@@ -74,6 +79,15 @@ export function ReviewQueuePage() {
         le seuil configuré dans Paramètres (par ex. après l'avoir relevé) — sans en proposer une nouvelle à la place.
       </p>
       {rescanResult && <p className="hint">{rescanResult}</p>}
+      {stats && (
+        <p className="hint">
+          {stats.totalAdherents} adhérent(s) au total, {stats.totalTeachers} fiche(s) enseignant importée(s) (toutes campagnes
+          confondues). {stats.adherentsWithNoGradeInPool} adhérent(s) n'ont aucune fiche rectorat pour leur grade dans les campagnes
+          importées jusqu'ici — c'est attendu s'ils n'ont pas encore été concernés par une promotion, pas une erreur de
+          rapprochement.
+          {stats.adherentsWithUnknownGrade > 0 && ` ${stats.adherentsWithUnknownGrade} adhérent(s) ont un grade inconnu/manquant.`}
+        </p>
+      )}
       {loading ? (
         <p>Chargement...</p>
       ) : candidates.length === 0 ? (
