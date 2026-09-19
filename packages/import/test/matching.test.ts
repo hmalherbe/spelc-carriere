@@ -63,15 +63,53 @@ describe("matchAdherents", () => {
     expect(result.confidence).toBe(0);
   });
 
+  it("never suggests a pair on the strength of an exact common prénom alone, however different the nom — real cases found by lowering minSuggestionThreshold for testing: an exact first name (Sandrine, Nathalie, Olivier, Valerie...) alone pushed the combined score (nom*0.6 + prénom*0.4) to 49-55%, with nomScore as low as 0.14-0.50 for a completely different surname", () => {
+    const commonPrenomCases: [string, string, string, string][] = [
+      ["ABBASSI", "Sandrine", "DALMASSO", "Sandrine"],
+      ["AUDIBERT", "Nathalie", "XUEREB", "Nathalie"],
+      ["ARIZA VARGAS", "Olivier", "SAUSSEREAU", "Olivier"],
+      ["ALECH-GERARD", "Nathalie", "THOMAS", "Nathalie"],
+      ["AVENEL", "Valerie", "BOLUFER", "Valerie"],
+    ];
+    for (const [adherentNom, prenom, teacherNom, teacherPrenom] of commonPrenomCases) {
+      const [result] = matchAdherents(
+        [{ adherentId: "x", nom: adherentNom, prenom, grade: "CERTIFIE" }],
+        [{ teacherId: "y", nom: teacherNom, prenom: teacherPrenom, grade: "CERTIFIE" }],
+        0.4, // even at a lenient combined-score threshold, the nom floor alone must reject these
+      );
+      expect(result.teacherId).toBeNull();
+    }
+  });
+
+  it("still allows a genuine nom near-miss through the nom floor even with a different-looking prénom", () => {
+    // "MARTINE"/"MARTIN" (nomScore 0.857) must still clear NOM_SIMILARITY_FLOOR on its own —
+    // the existing "flags a low-confidence match for review" test above already covers the
+    // combined-score behavior for this pair; this one isolates that the nom floor isn't what
+    // would block it.
+    const [result] = matchAdherents([{ adherentId: "a3b", nom: "MARTINE", prenom: "Camil", grade: "CERTIFIE" }], teachers);
+    expect(result.teacherId).toBe("t1");
+  });
+
   it("honors an explicit minSuggestionThreshold override (admin-configured in Paramètres) instead of the default", () => {
-    const adherents = [{ adherentId: "a11", nom: "ADANERO", prenom: "Olivia", grade: "CERTIFIE" }];
-    const candidateTeachers = [...teachers, { teacherId: "t5", nom: "BARBERO", prenom: "FLORIAN", grade: "CERTIFIE" }];
-    // Same 43% pair the default (0.55) rejects — a lower admin-set threshold lets it back in...
+    // nomScore("BERNARDOT", "BERNARD") = 0.75 (clears NOM_SIMILARITY_FLOOR comfortably) but the
+    // prénom is unrelated (prenomScore = 0), so the combined score (0.45) sits between 0.4 and
+    // 0.6 — this isolates minSuggestionThreshold's effect from the independent nom floor. Uses a
+    // standalone candidate list (not `teachers`) so it doesn't tie against an unrelated pair.
+    const adherents = [{ adherentId: "a11", nom: "BERNARDOT", prenom: "Xyz", grade: "CERTIFIE" }];
+    const candidateTeachers = [{ teacherId: "t5", nom: "BERNARD", prenom: "Camille", grade: "CERTIFIE" }];
+    // A lower admin-set threshold lets a weaker combined score through...
     const [lenient] = matchAdherents(adherents, candidateTeachers, 0.4);
     expect(lenient.teacherId).toBe("t5");
     // ...and a stricter one raises the bar even past the default.
     const [strict] = matchAdherents(adherents, candidateTeachers, 0.6);
     expect(strict.teacherId).toBeNull();
+  });
+
+  it("rejects a pair below the nom floor even when minSuggestionThreshold is lowered far enough that the combined score alone would pass — real case: adherent ADANERO Olivia was suggested against teacher BARBERO FLORIAN (nomScore 0.43, prenomScore 0.43, 43% combined)", () => {
+    const adherents = [{ adherentId: "a12", nom: "ADANERO", prenom: "Olivia", grade: "CERTIFIE" }];
+    const candidateTeachers = [...teachers, { teacherId: "t5", nom: "BARBERO", prenom: "FLORIAN", grade: "CERTIFIE" }];
+    const [result] = matchAdherents(adherents, candidateTeachers, 0.1);
+    expect(result.teacherId).toBeNull();
   });
 
   it("never assigns the same teacher to two different adherents — the higher-confidence pair wins the contested teacher", () => {

@@ -98,6 +98,19 @@ const AUTO_CONFIRM_THRESHOLD = 0.92;
  * data — this default is only where routes/adherentImport.ts falls back to when nothing is set. */
 export const DEFAULT_MIN_SUGGESTION_THRESHOLD = 0.55;
 
+/** Independent floor on nomScore alone, applied on top of `minSuggestionThreshold` — not
+ * admin-configurable, because it fixes a structural flaw in the combined score rather than tuning
+ * a cutoff. With nom weighted only 60%, an EXACT common prénom (prenomScore = 1) can carry the
+ * combined score to 0.4*1 + 0.6*nomScore on its own: real false positives surfaced after lowering
+ * the threshold for testing show this reaching 49-55% combined with a nomScore as high as 0.50 for
+ * a genuinely different surname (e.g. "ABBASSI"/"DALMASSO", "AVENEL"/"BOLUFER" — both real
+ * adherent/teacher pairs, both a different person under a shared first name like Valerie or
+ * Sandrine). A genuine nom near-miss (typo, hyphenation, maiden/married name) scores far higher in
+ * practice — "MARTINE"/"MARTIN" is 0.857, "STEPHANE"/"STEPHANIE" is 0.889 — so this floor sits well
+ * clear of both groups: it rejects every observed coincidental-overlap case while still passing
+ * every genuine near-miss case seen so far. */
+const NOM_SIMILARITY_FLOOR = 0.55;
+
 /**
  * Matches each adherent to at most one teacher among `teachers` (typically: everyone in the
  * current campaign not already linked to a confirmed MatchCandidate — filtering that out is the
@@ -129,6 +142,7 @@ export function matchAdherents(
       if (!adherent.grade || !teacher.grade) continue;
       if (normalizeGrade(adherent.grade) !== normalizeGrade(teacher.grade)) continue;
       const nomScore = nameSimilarity(adherent.nom, teacher.nom);
+      if (nomScore < NOM_SIMILARITY_FLOOR) continue;
       const prenomScore = nameSimilarity(adherent.prenom, teacher.prenom);
       const score = nomScore * 0.6 + prenomScore * 0.4;
       if (score >= minSuggestionThreshold) pairs.push({ adherentId: adherent.adherentId, teacherId: teacher.teacherId, score });
