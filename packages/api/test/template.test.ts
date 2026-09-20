@@ -145,15 +145,35 @@ describe("buildPromotionEmail", () => {
     expect(nonAdherentHtml).toContain("mailto:spelc.cotedazur@gmail.com?subject=se%20d%C3%A9sabonner");
   });
 
-  it("renders social links at the end of the letter", () => {
+  it("renders social links at the end of the letter, each with an icon matching its network", () => {
     const { html } = buildPromotionEmail({
       ...BASE,
       socialLinks: [
         { label: "Facebook", url: "https://facebook.com/spelc" },
         { label: "Twitter", url: "https://twitter.com/spelc" },
+        { label: "Notre site", url: "https://spelc-cotedazur.example" },
       ],
     });
-    expect(html).toContain('<a href="https://facebook.com/spelc">Facebook</a>');
-    expect(html).toContain('<a href="https://twitter.com/spelc">Twitter</a>');
+    // Each link keeps its href, its visible text label, and gets exactly one <img> icon —
+    // never bare text-only anchors, and never an image with nothing to fall back on if it
+    // doesn't render.
+    expect(html).toContain('href="https://facebook.com/spelc"');
+    expect(html).toContain('href="https://twitter.com/spelc"');
+    expect(html).toContain('href="https://spelc-cotedazur.example"');
+    expect(html).toContain(">Facebook</a>");
+    expect(html).toContain(">Twitter</a>");
+    expect(html).toContain(">Notre site</a>");
+    expect(html.match(/<img src="data:image\/svg\+xml;base64,/g)?.length).toBe(3);
+  });
+
+  it("picks a different icon per recognized network, and a generic fallback for an unrecognized one", () => {
+    const { html: fbHtml } = buildPromotionEmail({ ...BASE, socialLinks: [{ label: "FB", url: "https://facebook.com/spelc" }] });
+    const { html: twHtml } = buildPromotionEmail({ ...BASE, socialLinks: [{ label: "X", url: "https://x.com/spelc" }] });
+    const { html: siteHtml } = buildPromotionEmail({ ...BASE, socialLinks: [{ label: "Site", url: "https://example.com" }] });
+    const iconOf = (html: string) => html.match(/<img src="(data:image\/svg\+xml;base64,[^"]+)"/)?.[1];
+    expect(iconOf(fbHtml)).toBeDefined();
+    expect(iconOf(fbHtml)).not.toBe(iconOf(twHtml));
+    expect(iconOf(twHtml)).not.toBe(iconOf(siteHtml));
+    expect(iconOf(fbHtml)).not.toBe(iconOf(siteHtml));
   });
 });
