@@ -409,7 +409,8 @@ export const api = {
     ),
   stats: (campagneId: string, grade?: string) =>
     request<CampagneStats>(`/stats?campagneId=${campagneId}${grade ? `&grade=${encodeURIComponent(grade)}` : ""}`),
-  pendingMatches: () => request<MatchCandidate[]>("/matches?status=PENDING_REVIEW"),
+  pendingMatches: (campagneId?: string) =>
+    request<MatchCandidate[]>(`/matches?status=PENDING_REVIEW${campagneId ? `&campagneId=${campagneId}` : ""}`),
   matchStats: () =>
     request<{ totalAdherents: number; totalTeachers: number; adherentsWithNoGradeInPool: number; adherentsWithUnknownGrade: number }>(
       "/matches/stats",
