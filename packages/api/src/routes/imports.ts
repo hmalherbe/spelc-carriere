@@ -6,10 +6,18 @@ import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords, matchUnresolvedAdherents } from "../adherentImport.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { recomputeAndStorePromotionState } from "../promotionState.js";
-import { deriveEchelonActuelFromProjection, deriveNumericEchelonAliases, GRADE_MAPPINGS, type GrilleCode } from "@spelc/domain";
+import {
+  deriveEchelonActuelFromProjection,
+  deriveNumericEchelonAliases,
+  GRADE_MAPPINGS,
+  parseAncienneteText,
+  ancienneteToBankingDays,
+  type GrilleCode,
+} from "@spelc/domain";
 import {
   extractPdfText,
   parseRectoratFile,
+  parseHcExcBaremeFile,
   parseAdherentCsv,
   parseAdherentXlsx,
   parseAcademicEmailXlsx,
@@ -258,6 +266,140 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
 
   res.status(201).json({ results });
 }));
+
+/**
+ * Maps the "Tableau Avancement" barème file's own grade-label text (printed in its title, e.g.
+ * "PROF.EPS", "P.L.P." — see hcExcBaremeParser.ts's `gradeLabel`) to our normalized classe-normale
+ * grade label (GradeMapping.grade). Only the labels actually observed in imported files are
+ * mapped — an unrecognized one fails the import loudly rather than silently misfiling records
+ * under the wrong grille. The campagne's own type (HC/EXC) then decides whether this is used as-is
+ * (a Hors Classe campagne promotes FROM classe normale) or with " HC" appended (a Classe
+ * Exceptionnelle campagne promotes FROM hors classe) — matches GRADE_MAPPINGS' own "X" vs "X HC"
+ * entries.
+ */
+const HC_EXC_GRADE_LABEL_MAP: Record<string, string> = {
+  "PROF.EPS": "PEPS",
+  PEPS: "PEPS",
+  "P.L.P.": "PLP",
+  PLP: "PLP",
+  CERTIFIES: "CERTIFIE",
+  CERTIFIE: "CERTIFIE",
+  AGREGES: "AGREGE",
+  AGREGE: "AGREGE",
+};
+
+importsRouter.post(
+  "/hc-exc",
+  requireRole("ADMIN", "GESTIONNAIRE"),
+  upload.single("file"),
+  asyncHandler(async (req, res) => {
+    const { campagneId } = req.body as { campagneId?: string };
+    if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
+    if (!req.file) return res.status(400).json({ error: "Fichier requis (champ 'file'), en PDF ou en texte brut" });
+
+    const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
+    if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
+    if (campagne.type !== "HC" && campagne.type !== "EXC") {
+      return res.status(400).json({ error: "Cette campagne n'est pas de type Hors Classe / Classe exceptionnelle." });
+    }
+
+    const isTxt = /\.txt$/i.test(req.file.originalname);
+    const text = isTxt ? req.file.buffer.toString("utf-8") : await extractPdfText(req.file.buffer);
+    const parsed = parseHcExcBaremeFile(text);
+
+    if (parsed.records.length === 0) {
+      return res.status(422).json({ error: "Aucun enregistrement reconnu dans ce fichier." });
+    }
+
+    const baseGrade = parsed.gradeLabel ? HC_EXC_GRADE_LABEL_MAP[parsed.gradeLabel.trim().toUpperCase()] : undefined;
+    if (!baseGrade) {
+      return res
+        .status(422)
+        .json({ error: `Grade "${parsed.gradeLabel ?? "inconnu"}" non reconnu — ajoutez-le à HC_EXC_GRADE_LABEL_MAP avant de réimporter.` });
+    }
+    const grade = campagne.type === "EXC" ? `${baseGrade} HC` : baseGrade;
+
+    // Same teacher-identity rule as the échelon import (exact match on normalized nom+prénom+grade
+    // — see that route's own comment for why), extended to also match against every HcExcSnapshot
+    // ever imported, so the same person's Hors Classe and Classe Exceptionnelle history — and their
+    // échelon history, if any — land on the same Teacher row.
+    const [existingSnapshots, existingHcExcSnapshots] = await Promise.all([
+      prisma.teacherSnapshot.findMany({ select: { teacherId: true, nomUsage: true, prenom: true, grade: true } }),
+      prisma.hcExcSnapshot.findMany({ select: { teacherId: true, nomUsage: true, prenom: true, grade: true } }),
+    ]);
+    const teacherIdByName = new Map<string, string>();
+    for (const s of [...existingSnapshots, ...existingHcExcSnapshots]) {
+      teacherIdByName.set(`${normalizeName(s.nomUsage)}|${normalizeName(s.prenom)}|${s.grade}`, s.teacherId);
+    }
+
+    const rectoratImport = await prisma.rectoratImport.create({
+      data: {
+        campagneId,
+        grade: `${parsed.processus ?? "?"} ${parsed.gradeLabel ?? "?"}`,
+        fileName: req.file.originalname,
+        importedBy: req.auth!.userId,
+        rowCount: parsed.records.length,
+      },
+    });
+
+    // Re-importing a corrected file for a grade (and, for Classe Exceptionnelle, vivier) already
+    // loaded in this campagne must supersede the old fiches, not sit alongside them.
+    await prisma.hcExcSnapshot.deleteMany({ where: { campagneId, grade, vivier: parsed.vivier } });
+
+    const warnings: { nomUsage: string; prenom: string; warnings: string[] }[] = [];
+    let imported = 0;
+
+    for (const record of parsed.records) {
+      const key = `${normalizeName(record.nomUsage)}|${normalizeName(record.prenom)}|${grade}`;
+      let teacherId = teacherIdByName.get(key);
+      if (!teacherId) {
+        const teacher = await prisma.teacher.create({ data: {} });
+        teacherId = teacher.id;
+        teacherIdByName.set(key, teacherId);
+      }
+
+      const ancienneteBareme = parseAncienneteText(record.ancienneteBaremeTexte);
+
+      await prisma.hcExcSnapshot.create({
+        data: {
+          campagneId,
+          importId: rectoratImport.id,
+          teacherId,
+          nomUsage: record.nomUsage,
+          prenom: record.prenom,
+          grade,
+          vivier: parsed.vivier,
+          rang: record.rang,
+          choixRecteur: record.choixRecteur,
+          totalBareme: record.totalBareme,
+          avisCE: record.avisCE,
+          avisInspecteur: record.avisInspecteur,
+          appreciationRecteur: record.appreciationRecteur,
+          pointsRecteur: record.pointsRecteur,
+          pointsAnciennete: record.pointsAnciennete,
+          millesime: record.millesime,
+          origine: record.origine,
+          disciplineLibelle: record.disciplineLibelle,
+          rneEtablissement: record.rneEtablissement,
+          nomEtablissement: record.nomEtablissement,
+          dateNaissance: record.dateNaissance ? new Date(record.dateNaissance) : null,
+          echelonActuel: record.echelonActuel ?? "",
+          ancienneteEchelon: ancienneteBareme ? ancienneteToBankingDays(ancienneteBareme) / 360 : null,
+          rowIndex: record.rang,
+        },
+      });
+
+      imported++;
+      if (record.warnings.length > 0) warnings.push({ nomUsage: record.nomUsage, prenom: record.prenom, warnings: record.warnings });
+    }
+
+    // Same reasoning as the échelon import above — a fresh batch of teachers may resolve adhérents
+    // previously stuck on "Aucune correspondance trouvée".
+    await matchUnresolvedAdherents();
+
+    res.status(201).json({ processus: parsed.processus, grade, vivier: parsed.vivier, imported, warnings });
+  }),
+);
 
 // Manual fallback to the ADEL automation: same export a human would download by hand from ADEL
 // (Excel) or the older CSV format, uploaded and matched through the exact same engine.

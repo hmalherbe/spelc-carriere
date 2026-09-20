@@ -88,12 +88,27 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
     ).map((m) => m.teacherId as string),
   );
 
-  const allTeacherSnapshots = await prisma.teacherSnapshot.findMany({
-    distinct: ["teacherId"],
-    orderBy: { dateAccesEchelon: "desc" },
-    select: { teacherId: true, nomUsage: true, prenom: true, grade: true },
-  });
-  const availableTeachers = allTeacherSnapshots.filter((t) => !claimedTeacherIds.has(t.teacherId));
+  // The candidate pool spans both rectorat processes a Teacher row can come from: échelon-
+  // advancement (TeacherSnapshot) and Hors Classe/Classe Exceptionnelle (HcExcSnapshot) — a
+  // teacher imported ONLY via an HC/EXC file (never yet seen in a CCMA échelon export) must still
+  // be a matchable candidate, or that entire import would never let its teachers link to an
+  // adhérent. Distinct per (teacherId, grade): unlike TeacherSnapshot's history-across-campagnes
+  // dedup, a teacher genuinely CAN legitimately appear under two different grades here at once
+  // (e.g. "PEPS" from an échelon campagne and "PEPS HC" from a Hors Classe one, mid-promotion) —
+  // both are real, distinct matching candidates, not duplicates of each other.
+  const [allTeacherSnapshots, allHcExcSnapshots] = await Promise.all([
+    prisma.teacherSnapshot.findMany({
+      distinct: ["teacherId"],
+      orderBy: { dateAccesEchelon: "desc" },
+      select: { teacherId: true, nomUsage: true, prenom: true, grade: true },
+    }),
+    prisma.hcExcSnapshot.findMany({
+      distinct: ["teacherId", "grade"],
+      select: { teacherId: true, nomUsage: true, prenom: true, grade: true },
+    }),
+  ]);
+  const allTeachers = [...allTeacherSnapshots, ...allHcExcSnapshots];
+  const availableTeachers = allTeachers.filter((t) => !claimedTeacherIds.has(t.teacherId));
 
   const matchingConfig = await prisma.matchingConfig.findUnique({ where: { id: "singleton" } });
 
