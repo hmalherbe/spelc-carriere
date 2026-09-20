@@ -118,12 +118,18 @@ const NOM_SIMILARITY_FLOOR = 0.55;
  * since prénoms vary more in spelling/usage (nicknames, accents) without indicating a different
  * person.
  *
- * Grade is a hard filter, not part of the similarity score: two people with a similar-looking name
- * but different grades (AGREGE vs CERTIFIE, say) are never the same person, so that pair is never
- * even considered, no matter how close the names are — this is what actually caused a wrong
- * teacher to be suggested for a genuinely present adherent. When either side's grade is unknown
- * (null), the pair is skipped too rather than guessed: a match nobody can vouch for on grade is
- * worse than "no match yet".
+ * Grade is a hard filter when it's actually known on both sides, not part of the similarity score:
+ * two people with a similar-looking name but different KNOWN grades (AGREGE vs CERTIFIE, say) are
+ * never the same person, so that pair is never even considered, no matter how close the names are
+ * — this is what actually caused a wrong teacher to be suggested for a genuinely present adherent.
+ * A teacher with an unknown grade is still always skipped (nothing to vouch for on that side at
+ * all), but an ADHERENT with an unknown grade (the source ADEL export sometimes leaves the "Civ."/
+ * "Echelle" column blank — real case: "ALDEGUER Anna" has grade null in ADEL, even though the
+ * teacher "ALDEGUER Anna Paula" is right there in the imported Certifiés CN rectorat file) no
+ * longer blocks matching outright: name similarity alone decides the pair, same thresholds as
+ * always. The missing grade cross-check is compensated by never letting such a pairing
+ * auto-confirm (see `autoConfirmable` below) — a human always reviews it — rather than by silently
+ * dropping a real match that was sitting right there in the data.
  *
  * Assignment is global, not per-adherent: a teacher can only ever end up matched to one adherent
  * (MatchCandidate.teacherId is unique in the DB), so if two adherents' best guess both point at the
@@ -136,28 +142,29 @@ export function matchAdherents(
   teachers: MatchCandidateTeacher[],
   minSuggestionThreshold: number = DEFAULT_MIN_SUGGESTION_THRESHOLD,
 ): MatchResult[] {
-  const pairs: { adherentId: string; teacherId: string; score: number }[] = [];
+  const pairs: { adherentId: string; teacherId: string; score: number; gradeVerified: boolean }[] = [];
   for (const adherent of adherents) {
     for (const teacher of teachers) {
-      if (!adherent.grade || !teacher.grade) continue;
-      if (normalizeGrade(adherent.grade) !== normalizeGrade(teacher.grade)) continue;
+      if (!teacher.grade) continue;
+      const gradeVerified = adherent.grade !== null;
+      if (gradeVerified && normalizeGrade(adherent.grade!) !== normalizeGrade(teacher.grade)) continue;
       const nomScore = nameSimilarity(adherent.nom, teacher.nom);
       if (nomScore < NOM_SIMILARITY_FLOOR) continue;
       const prenomScore = nameSimilarity(adherent.prenom, teacher.prenom);
       const score = nomScore * 0.6 + prenomScore * 0.4;
-      if (score >= minSuggestionThreshold) pairs.push({ adherentId: adherent.adherentId, teacherId: teacher.teacherId, score });
+      if (score >= minSuggestionThreshold) pairs.push({ adherentId: adherent.adherentId, teacherId: teacher.teacherId, score, gradeVerified });
     }
   }
   pairs.sort((a, b) => b.score - a.score);
 
   const claimedAdherents = new Set<string>();
   const claimedTeachers = new Set<string>();
-  const assignment = new Map<string, { teacherId: string; score: number }>();
+  const assignment = new Map<string, { teacherId: string; score: number; gradeVerified: boolean }>();
   for (const pair of pairs) {
     if (claimedAdherents.has(pair.adherentId) || claimedTeachers.has(pair.teacherId)) continue;
     claimedAdherents.add(pair.adherentId);
     claimedTeachers.add(pair.teacherId);
-    assignment.set(pair.adherentId, { teacherId: pair.teacherId, score: pair.score });
+    assignment.set(pair.adherentId, { teacherId: pair.teacherId, score: pair.score, gradeVerified: pair.gradeVerified });
   }
 
   return adherents.map((adherent) => {
@@ -169,7 +176,9 @@ export function matchAdherents(
       adherentId: adherent.adherentId,
       teacherId: match.teacherId,
       confidence: Math.round(match.score * 100) / 100,
-      autoConfirmable: match.score >= AUTO_CONFIRM_THRESHOLD,
+      // Never auto-confirm a pairing made on name alone — gradeVerified false means the grade
+      // hard-filter never actually vouched for this pair, so a human always has the final say.
+      autoConfirmable: match.gradeVerified && match.score >= AUTO_CONFIRM_THRESHOLD,
     };
   });
 }

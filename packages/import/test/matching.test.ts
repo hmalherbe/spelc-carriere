@@ -154,17 +154,29 @@ describe("matchAdherents", () => {
     expect(result.teacherId).toBe("t1");
   });
 
-  it("never proposes a match when either side's grade is unknown", () => {
+  it("never proposes a match when the TEACHER's grade is unknown — nothing to vouch for on that side at all", () => {
     const teachersWithUnknownGrade = [{ teacherId: "t4", nom: "MARTIN", prenom: "Camille", grade: null }];
-    const [byMissingAdherentGrade] = matchAdherents(
-      [{ adherentId: "a8", nom: "MARTIN", prenom: "Camille", grade: null }],
-      teachers,
-    );
     const [byMissingTeacherGrade] = matchAdherents(
       [{ adherentId: "a9", nom: "MARTIN", prenom: "Camille", grade: "CERTIFIE" }],
       teachersWithUnknownGrade,
     );
-    expect(byMissingAdherentGrade.teacherId).toBeNull();
     expect(byMissingTeacherGrade.teacherId).toBeNull();
+  });
+
+  it("still proposes a match by name alone when only the ADHERENT's grade is unknown — real case: adherent \"ALDEGUER Anna\" has a blank grade in the ADEL export (the \"Echelle\" column wasn't filled in), even though the matching teacher \"ALDEGUER Anna Paula\" (CERTIFIE) is right there in the imported rectorat file — but never auto-confirms it, since the grade cross-check that normally backs an auto-confirm never ran", () => {
+    const [result] = matchAdherents(
+      [{ adherentId: "a13", nom: "ALDEGUER", prenom: "Anna", grade: null }],
+      [...teachers, { teacherId: "t6", nom: "ALDEGUER", prenom: "Anna Paula", grade: "CERTIFIE" }],
+    );
+    expect(result.teacherId).toBe("t6");
+    expect(result.autoConfirmable).toBe(false);
+  });
+
+  it("with an unknown adherent grade, still only proposes teachers whose OWN grade is known — no grade at all to vouch for a pair isn't the same as an unverifiable-but-present one", () => {
+    const [result] = matchAdherents(
+      [{ adherentId: "a14", nom: "MARTIN", prenom: "Camille", grade: null }],
+      [{ teacherId: "t7", nom: "MARTIN", prenom: "Camille", grade: null }],
+    );
+    expect(result.teacherId).toBeNull();
   });
 });
