@@ -307,6 +307,12 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
+  // This route (and eligibleRecipients below) is built entirely around échelon-advancement
+  // campagnes (CCMA/CCMI) — a Hors Classe/Classe exceptionnelle campagne has no
+  // ComputedPromotionState to read from and needs its own dedicated mailing, not this one.
+  if (campagne.type === "HC" || campagne.type === "EXC") {
+    return res.status(400).json({ error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." });
+  }
 
   const recipient = (await eligibleRecipients(campagneId)).find((r) => r.teacherId === teacherId);
   if (!recipient) return res.status(404).json({ error: "Destinataire introuvable ou non éligible pour cette campagne" });
@@ -325,7 +331,9 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
     }
     try {
       const extras = await loadCcmaModelExtras(campagneId);
-      email = buildCcmaModelEmail(buildCcmaModelContext(recipient, campagne, extras, shared));
+      // Guard above already proved campagne.type === "CCMA" at runtime — TS doesn't narrow the
+      // enclosing object's type from a property-only check, so state it explicitly here.
+      email = buildCcmaModelEmail(buildCcmaModelContext(recipient, { ...campagne, type: "CCMA" as const }, extras, shared));
     } catch (e) {
       if (e instanceof CcmaModelUnavailableError) return res.status(400).json({ error: e.message });
       throw e;
@@ -426,6 +434,12 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
+  // This route (and eligibleRecipients below) is built entirely around échelon-advancement
+  // campagnes (CCMA/CCMI) — a Hors Classe/Classe exceptionnelle campagne has no
+  // ComputedPromotionState to read from and needs its own dedicated mailing, not this one.
+  if (campagne.type === "HC" || campagne.type === "EXC") {
+    return res.status(400).json({ error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." });
+  }
 
   if (template === "ccma_avancement" && campagne.type !== "CCMA") {
     return res.status(400).json({ error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." });
@@ -477,7 +491,9 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
 
     const { subject, html } =
       template === "ccma_avancement" && ccmaExtras
-        ? buildCcmaModelEmail(buildCcmaModelContext(recipient, campagne, ccmaExtras, shared))
+        ? // The guard above already rejects template === "ccma_avancement" for a non-CCMA campagne
+          // at runtime — restate that for TS, which doesn't narrow the enclosing object from it.
+          buildCcmaModelEmail(buildCcmaModelContext(recipient, { ...campagne, type: "CCMA" as const }, ccmaExtras, shared))
         : buildPromotionEmail({
             civilite: recipient.civilite,
             prenom: recipient.prenom,

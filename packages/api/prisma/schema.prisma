@@ -76,36 +76,49 @@ model GradeMapping {
 // so a re-import never silently loses history).
 // ---------------------------------------------------------------------------
 
+// CCMA (second degré) / CCMI (premier degré) — the échelon-advancement process, see
+// TeacherSnapshot — or HC (hors classe) / EXC (classe exceptionnelle) — the barème-ranked,
+// contingent-capped promotion process, see HcExcSnapshot. A distinct enum from AdelSyncType
+// (below): that one is specifically about what the ADEL scraper syncs (CCMA/CCMI membership data
+// only, never applicable to HC/EXC), so extending it with HC/EXC would mislabel what it means.
+enum CampagneType {
+  CCMA
+  CCMI
+  HC
+  EXC
+}
+
 model Campagne {
   id            String        @id @default(cuid())
   anneeScolaire String // e.g. "2024-2025"
   periodeDebut  DateTime
   periodeFin    DateTime
   dateCcma      DateTime // reference date used for "date de régularisation financière" calculations
-  // CCMA (second degré) or CCMI (premier degré) — per product decision each campagne is entirely
-  // one or the other (a distinct administrative process), never mixed. Drives which commission's
-  // élus (see Elu) are inserted in every mailing sent for this campagne (routes/mailing.ts) —
-  // campagne-wide, not derived per recipient from their own grade. Nullable only because existing
-  // campagnes created before this field existed have no value yet; the create-campagne form
-  // requires it for every new one (see routes/campagnes.ts).
-  type          AdelSyncType?
+  // Drives which commission's élus (see Elu) are inserted in every mailing sent for this campagne
+  // (routes/mailing.ts) — campagne-wide, not derived per recipient from their own grade. Nullable
+  // only because existing campagnes created before this field existed have no value yet; the
+  // create-campagne form requires it for every new one (see routes/campagnes.ts).
+  type          CampagneType?
   createdAt     DateTime      @default(now())
 
   imports          RectoratImport[]
   teacherSnapshots TeacherSnapshot[]
+  hcExcSnapshots   HcExcSnapshot[]
+  contingents      Contingent[]
   mailingLogs      MailingLog[]
 }
 
 model RectoratImport {
-  id         String            @id @default(cuid())
-  campagne   Campagne          @relation(fields: [campagneId], references: [id])
-  campagneId String
-  grade      String // "4531 : ECR PROFESSEUR CERTIFIE CL. NORMALE" style rectorat grade code+label
-  fileName   String
-  importedAt DateTime          @default(now())
-  importedBy String? // free-text/email, kept even if the User row is later deleted
-  rowCount   Int
-  snapshots  TeacherSnapshot[]
+  id             String            @id @default(cuid())
+  campagne       Campagne          @relation(fields: [campagneId], references: [id])
+  campagneId     String
+  grade          String // "4531 : ECR PROFESSEUR CERTIFIE CL. NORMALE" style rectorat grade code+label
+  fileName       String
+  importedAt     DateTime          @default(now())
+  importedBy     String? // free-text/email, kept even if the User row is later deleted
+  rowCount       Int
+  snapshots      TeacherSnapshot[]
+  hcExcSnapshots HcExcSnapshot[]
 }
 
 // One row = one teacher's state as it appeared in one rectorat PDF/campaign export.
@@ -148,7 +161,7 @@ model TeacherSnapshot {
   // "Z2AGEA" in the raw rectorat export's barème block — the teacher's age at the campaign's
   // reference date, packed as "AAMMJJ" (years/months/days), kept verbatim; see parseZ2AGEA in
   // @spelc/import to decode. Kept for audit/reference — not currently used downstream.
-  ageEncodedRectorat              String?
+  ageEncodedRectorat             String?
   typePromotion                  String? // AN / CL / BA / RE, as printed in the rectorat export
   dureeRestante                  String? // "XXaYYmZZj" raw text, kept verbatim for audit/debugging
   dateProchainePromotionRectorat DateTime? // as stated BY the rectorat itself, kept separate from our own computed estimate
@@ -161,22 +174,100 @@ model TeacherSnapshot {
   // second-guess against other candidates' barème/ancienneté (an earlier ranking-based estimation
   // approach was removed once this was confirmed reliable on real files).
   proTypePromotion               String? // AN / CL / BA
-  proConfirmee                   Boolean @default(false)
+  proConfirmee                   Boolean   @default(false)
   // The échelon section's own "NOMBRE DE PROMUS" (BA column) from the rectorat file — the exact
   // count of how many BA candidates in this (grade, échelon actuel) group were actually granted
   // the bonification this cycle. Same value repeated across every record in the section
   // (denormalized for simplicity); null when the footer wasn't found/parseable. Kept for
   // audit/reference — not currently used downstream.
-  nombrePromusBaSection           Int?
+  nombrePromusBaSection          Int?
   // 0-based position this record held within its own rectorat file (gradeBlock.records order in
   // routes/imports.ts) — lets the teacher list be sorted the same way the rectorat's own export
   // presents them, instead of only alphabetically. Meaningful only within one grade's own snapshots
   // (each grade comes from its own separate file/RectoratImport) — see routes/teachers.ts and
   // DashboardPage.tsx's "fichier" sort, which groups by grade first, then by this field. Existing
   // rows imported before this field existed default to 0 and need a re-import to get a real order.
-  rowIndex                        Int      @default(0)
+  rowIndex                       Int       @default(0)
 
   @@index([campagneId, teacherId])
+}
+
+// One row = one teacher's rectorat "Tableau Avancement" barème-ranking record, for one Hors
+// Classe or Classe Exceptionnelle campagne — a ranked-list-with-contingent-cutline promotion
+// mechanism, structurally different from TeacherSnapshot's échelon-advancement PROJECTION (see
+// that model's own doc comment): here the rectorat provides a barème score and a rank directly,
+// and the union decides who's promoted by comparing the rank against a contingent (see
+// Contingent below), not by a duration/date computation. Grade is the CLASSE NORMALE label a
+// teacher rises FROM for a Hors Classe campagne ("CERTIFIE"), or the HORS CLASSE label they rise
+// from for a Classe Exceptionnelle campagne ("CERTIFIE HC") — matches GRADE_MAPPINGS/reclassement
+// table selection in @spelc/domain.
+model HcExcSnapshot {
+  id         String         @id @default(cuid())
+  campagne   Campagne       @relation(fields: [campagneId], references: [id])
+  campagneId String
+  import     RectoratImport @relation(fields: [importId], references: [id])
+  importId   String
+
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+  teacherId String
+
+  nomUsage String
+  prenom   String
+  grade    String
+
+  // Null for Hors Classe (no viviers there) — "Vivier 1" or "Vivier 2" for classe exceptionnelle.
+  // A classe exceptionnelle candidate can legitimately hold a separate rang in each vivier they're
+  // eligible under, hence one HcExcSnapshot row per (teacher, vivier), not per teacher alone.
+  vivier String?
+
+  rang         Int
+  // The rectorat file's own "Choix du Recteur" marker for this record ("P"), kept verbatim and
+  // separate from the union's own contingent-cutline decision (computed on demand from `rang` vs
+  // Contingent, not stored here) — the two can legitimately disagree while a contingent isn't yet
+  // officially confirmed (real case: Agrégés Hors Classe, where the union proposes its own number
+  // pending the rectorat's official announcement).
+  choixRecteur Boolean @default(false)
+
+  totalBareme         Int?
+  avisCE              String? // free text, the chef d'établissement's motivated appraisal
+  avisInspecteur      String? // free text, the IPR's motivated appraisal
+  appreciationRecteur String? // "Excellent" / "Très satisfaisant" / "Satisfaisant" / "A consolider"
+  pointsRecteur       Int?
+  pointsAnciennete    Int?
+  millesime           Int?
+  origine             String?
+  disciplineCode      String?
+  disciplineLibelle   String?
+  rneEtablissement    String?
+  nomEtablissement    String?
+  dateNaissance       DateTime?
+  echelonActuel       String
+  ancienneteEchelon   Float?
+
+  rowIndex Int @default(0)
+
+  @@index([campagneId, teacherId])
+}
+
+// The rectorat's officially announced quota for a (campagne, grade[, vivier]) — how many people
+// can actually be promoted this cycle, regardless of how many rank above the contingent-cutline
+// (rang <= Contingent.contingentPropose ?? contingentAnnonce -> promu). Split into two numbers
+// because the rectorat doesn't always announce a grade's contingent before the union has to start
+// its own selection work (real case: Agrégés Hors Classe) — contingentAnnonce is the rectorat's
+// own figure once published, contingentPropose is the union's working estimate used until then;
+// contingentAnnonce, once set, is what the cutline computation actually uses.
+model Contingent {
+  id                String   @id @default(cuid())
+  campagne          Campagne @relation(fields: [campagneId], references: [id])
+  campagneId        String
+  grade             String // matches GradeMapping.grade, e.g. "CERTIFIE" (Hors Classe) or "CERTIFIE HC" (Classe Exceptionnelle)
+  vivier            String? // null for Hors Classe; "Vivier 1"/"Vivier 2" for Classe Exceptionnelle
+  contingentAnnonce Int?
+  contingentPropose Int?
+  updatedAt         DateTime @updatedAt
+  updatedById       String?
+
+  @@unique([campagneId, grade, vivier])
 }
 
 // The stable entity a human is actually tracking across campaigns and re-imports.
@@ -211,6 +302,7 @@ model Teacher {
   ancienneteAReporterNote String?
 
   snapshots      TeacherSnapshot[]
+  hcExcSnapshots HcExcSnapshot[]
   matchCandidate MatchCandidate?
   computedStates ComputedPromotionState[]
   mailingLogs    MailingLog[]
@@ -221,21 +313,21 @@ model Teacher {
 // ---------------------------------------------------------------------------
 
 model Adherent {
-  id             String    @id @default(cuid())
-  civilite       String?
-  nom            String
-  prenom         String
-  nomNaissance   String?
-  grade          String?
-  echelleSpelc   String?
-  ancienEchelon  String?
-  statut         String?
-  typeContrat    String?
-  ancienIndice   Int?
-  dateEffet      DateTime?
-  mailPersonnel  String?
-  departement    String?
-  importedAt     DateTime  @default(now())
+  id            String    @id @default(cuid())
+  civilite      String?
+  nom           String
+  prenom        String
+  nomNaissance  String?
+  grade         String?
+  echelleSpelc  String?
+  ancienEchelon String?
+  statut        String?
+  typeContrat   String?
+  ancienIndice  Int?
+  dateEffet     DateTime?
+  mailPersonnel String?
+  departement   String?
+  importedAt    DateTime  @default(now())
 
   matchCandidate MatchCandidate?
 }
@@ -315,7 +407,7 @@ model ComputedPromotionState {
   // list, routes/stats.ts's aggregates) — this column exists only so the AI assistant's read-only
   // SQL access has a real, reliable field to query instead of re-deriving the same priority-ordered
   // rule (proConfirmee/isAgrege checked before the ancienneté window) by hand in SQL.
-  baStatus String?
+  baStatus               String?
 
   @@unique([teacherId, campagneId])
 }
