@@ -87,3 +87,24 @@ export function pointsAccesClasseExceptionnelle(
 export function reclassement(table: ReclassementRow[], cle: number): ReclassementRow {
   return vlookupApprox(table, "cle", cle);
 }
+
+/**
+ * Ancienneté actually carried into the new échelon after a Hors Classe reclassement, in banking
+ * days — ported from the central spreadsheet's own reclassement formula (confirmed against its
+ * VBA/cell formulas, not guessed): zero when `reclassement()`'s `conservationAnciennete` came back
+ * false (a fresh start at the new échelon); otherwise the teacher's own ancienneté in their
+ * classe-normale échelon, MINUS 720 banking days (échelon 9's own 2-year minimum duration) when
+ * reclassing FROM échelon 9 specifically — only the ancienneté accrued BEYOND that mandatory
+ * minimum actually carries forward, since échelon 9 already requires 2 years before hors classe
+ * access is even possible (see isEligibleHorsClasse). Classe Exceptionnelle's own reclassement has
+ * no such carve-out — pass the ancienneté through unchanged there (conservationAnciennete alone
+ * decides it, i.e. call this only for the Hors Classe step).
+ */
+export function ancienneteReporteeReclassementHC(
+  echelonClasseNormaleDepart: number,
+  ancienneteJours: number,
+  conservationAnciennete: boolean,
+): number {
+  if (!conservationAnciennete) return 0;
+  return echelonClasseNormaleDepart === 9 ? ancienneteJours - 720 : ancienneteJours;
+}

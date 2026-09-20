@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ancienneteCle, pointsAccesHorsClasse, pointsAccesClasseExceptionnelle, reclassement } from "../src/calculations/hcExc.js";
+import {
+  ancienneteCle,
+  ancienneteReporteeReclassementHC,
+  pointsAccesHorsClasse,
+  pointsAccesClasseExceptionnelle,
+  reclassement,
+} from "../src/calculations/hcExc.js";
 import { RECLASSEMENT_AGR_VERS_HORS_CLASSE } from "../src/data/refs.js";
 
 describe("ancienneteCle", () => {
@@ -55,5 +61,20 @@ describe("reclassement (approximate VLOOKUP into breakpoint tables)", () => {
 
   it("can resolve to a lettered échelon (agrégés go up to A1/A2/A3)", () => {
     expect(reclassement(RECLASSEMENT_AGR_VERS_HORS_CLASSE, 120).echelonReclassement).toBe("A1");
+  });
+});
+
+describe("ancienneteReporteeReclassementHC (ported from the central spreadsheet's own reclassement formula)", () => {
+  it("resets to zero when the reclassement doesn't conserve ancienneté", () => {
+    expect(ancienneteReporteeReclassementHC(10, 900, false)).toBe(0);
+  });
+
+  it("carries the full ancienneté over for a départ échelon other than 9", () => {
+    expect(ancienneteReporteeReclassementHC(10, 900, true)).toBe(900);
+    expect(ancienneteReporteeReclassementHC(11, 400, true)).toBe(400);
+  });
+
+  it("subtracts échelon 9's own 720-day (2-year) minimum when reclassing FROM échelon 9 specifically", () => {
+    expect(ancienneteReporteeReclassementHC(9, 900, true)).toBe(180);
   });
 });
