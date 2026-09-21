@@ -64,10 +64,11 @@ export interface Campagne {
   periodeDebut: string;
   periodeFin: string;
   dateCcma: string;
-  /** CCMA (second degré) ou CCMI (premier degré) — chaque campagne est entièrement l'une ou
-   * l'autre, jamais mélangée ; détermine les élus insérés dans les mailings de cette campagne
-   * (page Élus CCMA/CCMI). null seulement pour une campagne créée avant l'ajout de ce champ. */
-  type: "CCMA" | "CCMI" | null;
+  /** CCMA (second degré) / CCMI (premier degré) — avancement d'échelon, détermine les élus
+   * insérés dans les mailings de cette campagne (page Élus CCMA/CCMI) — ou HC/EXC — Hors Classe /
+   * Classe exceptionnelle, voir HorsClasseExceptionnellePage. null seulement pour une campagne
+   * créée avant l'ajout de ce champ. */
+  type: "CCMA" | "CCMI" | "HC" | "EXC" | null;
   _count: { teacherSnapshots: number; imports: number };
 }
 
@@ -168,6 +169,65 @@ export interface AdherentImportResult {
   updated: number;
   unmappedFields: string[];
   matching: { autoConfirmed: number; pendingReview: number };
+}
+
+export interface HcExcImportResult {
+  processus: string | null;
+  grade: string;
+  vivier: string | null;
+  imported: number;
+  warnings: { nomUsage: string; prenom: string; warnings: string[] }[];
+  bareme: { calcules: number; nonCalcules: number } | null;
+}
+
+export interface HcExcTeacherRow {
+  id: string;
+  teacherId: string;
+  nomUsage: string;
+  prenom: string;
+  grade: string;
+  vivier: string | null;
+  rang: number;
+  totalBareme: number | null;
+  choixRecteur: boolean;
+  promu: boolean;
+  contingent: number;
+  appreciationRecteur: string | null;
+  pointsRecteur: number | null;
+  pointsAnciennete: number | null;
+  isAdherent: boolean;
+  adherentEmail: string | null;
+}
+
+export interface HcExcGroupe {
+  grade: string;
+  vivier: string | null;
+  contingent: number;
+  rangDernierPromu: number | null;
+  totalBaremeDernierPromu: number | null;
+}
+
+export interface HcExcListResult {
+  rows: HcExcTeacherRow[];
+  groupes: HcExcGroupe[];
+}
+
+export interface Contingent {
+  id: string;
+  campagneId: string;
+  grade: string;
+  vivier: string | null;
+  contingentAnnonce: number | null;
+  contingentPropose: number | null;
+  updatedAt: string;
+  updatedById: string | null;
+}
+
+export interface ContingentInput {
+  grade: string;
+  vivier: string | null;
+  contingentAnnonce: number | null;
+  contingentPropose: number | null;
 }
 
 export interface AcademicEmailImportResult {
@@ -392,9 +452,14 @@ export const api = {
     }),
   me: () => request<CurrentUser>("/auth/me"),
   campagnes: () => request<Campagne[]>("/campagnes"),
-  createCampagne: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string; type: "CCMA" | "CCMI" }) =>
-    request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
-  updateCampagneType: (id: string, type: "CCMA" | "CCMI") =>
+  createCampagne: (data: {
+    anneeScolaire: string;
+    periodeDebut: string;
+    periodeFin: string;
+    dateCcma: string;
+    type: "CCMA" | "CCMI" | "HC" | "EXC";
+  }) => request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
+  updateCampagneType: (id: string, type: "CCMA" | "CCMI" | "HC" | "EXC") =>
     request<Campagne>(`/campagnes/${id}`, { method: "PATCH", body: JSON.stringify({ type }) }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
   updateAncienneteADeduire: (teacherId: string, ancienneteADeduire: string | null, ancienneteADeduireNote: string | null) =>
@@ -427,6 +492,16 @@ export const api = {
     form.append("file", file);
     return upload<RectoratImportResult>("/imports/rectorat", form);
   },
+  importHcExc: (campagneId: string, file: File) => {
+    const form = new FormData();
+    form.append("campagneId", campagneId);
+    form.append("file", file);
+    return upload<HcExcImportResult>("/imports/hc-exc", form);
+  },
+  hcExcTeachers: (campagneId: string) => request<HcExcListResult>(`/hc-exc?campagneId=${campagneId}`),
+  hcExcContingents: (campagneId: string) => request<Contingent[]>(`/campagnes/${campagneId}/contingents`),
+  updateHcExcContingents: (campagneId: string, contingents: ContingentInput[]) =>
+    request<Contingent[]>(`/campagnes/${campagneId}/contingents`, { method: "PUT", body: JSON.stringify({ contingents }) }),
   importAdherents: (file: File) => {
     const form = new FormData();
     form.append("file", file);

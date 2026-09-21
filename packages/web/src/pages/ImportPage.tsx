@@ -80,13 +80,18 @@ export function ImportPage() {
   // Quelle synchronisation ADEL regarder (1er ou 2nd degré) suit désormais la commission de la
   // campagne sélectionnée — plus de sélecteur séparé qu'on pourrait laisser en désaccord avec elle.
   useEffect(() => {
-    if (selectedCampagne?.type) refreshAdelLast(selectedCampagne.type);
+    if (selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI") refreshAdelLast(selectedCampagne.type);
     else setAdelLast(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCampagne?.type]);
 
   function refreshCampagnes(selectId?: string) {
-    api.campagnes().then((c) => {
+    api.campagnes().then((all) => {
+      // Cette page (avancement d'échelon) ne concerne que CCMA/CCMI — les campagnes Hors
+      // Classe/Classe Exceptionnelle ont leur propre page (HorsClasseExceptionnellePage) et leur
+      // propre sélecteur. Une campagne sans type (créée avant son ajout) reste visible ici : c'est
+      // cette page qui offre de le définir, ci-dessous.
+      const c = all.filter((x) => x.type !== "HC" && x.type !== "EXC");
       setCampagnes(c);
       if (selectId) setCampagneId(selectId);
       else if (!campagneId && c.length > 0) setCampagneId(c[0].id);
@@ -148,7 +153,7 @@ export function ImportPage() {
   }
 
   async function syncAdel() {
-    if (!selectedCampagne?.type) return;
+    if (selectedCampagne?.type !== "CCMA" && selectedCampagne?.type !== "CCMI") return;
     setAdelBusy(true);
     setAdelError(null);
     setAdelResult(null);
