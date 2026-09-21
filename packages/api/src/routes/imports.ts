@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { importAdherentRecords, matchUnresolvedAdherents } from "../adherentImport.js";
+import { computeEtStockerBaremeExc } from "../hcExcComputation.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { recomputeAndStorePromotionState } from "../promotionState.js";
 import {
@@ -58,6 +59,9 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
+  if (campagne.type === "HC" || campagne.type === "EXC") {
+    return res.status(400).json({ error: "Cette campagne est de type Hors Classe / Classe exceptionnelle — utilisez plutôt l'import dédié." });
+  }
 
   // Accepts either the rectorat's native PDF export, or the same "AVANCEMENT D'ECHELON" content
   // already as plain text (e.g. copié-collé depuis un lecteur PDF, ou déjà extrait par un autre
@@ -397,7 +401,13 @@ importsRouter.post(
     // previously stuck on "Aucune correspondance trouvée".
     await matchUnresolvedAdherents();
 
-    res.status(201).json({ processus: parsed.processus, grade, vivier: parsed.vivier, imported, warnings });
+    // Classe Exceptionnelle snapshots never carry a rectorat-provided score (see
+    // hcExcBaremeParser.ts's module doc comment) — compute it now that every record of this import
+    // has a teacherId to source their avis from. A no-op for a Hors Classe campagne (nothing to
+    // compute: every snapshot already has totalBareme straight from the file).
+    const bareme = campagne.type === "EXC" ? await computeEtStockerBaremeExc(campagneId) : null;
+
+    res.status(201).json({ processus: parsed.processus, grade, vivier: parsed.vivier, imported, warnings, bareme });
   }),
 );
 

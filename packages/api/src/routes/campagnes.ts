@@ -27,10 +27,12 @@ const createCampagneSchema = z.object({
   periodeDebut: z.string().datetime().or(z.string().date()),
   periodeFin: z.string().datetime().or(z.string().date()),
   dateCcma: z.string().datetime().or(z.string().date()),
-  // CCMA/CCMI — required for every new campagne, since it decides which élus (see Elu) are
-  // inserted in every mailing sent for it (routes/mailing.ts). Existing campagnes created before
-  // this field existed keep it null until set via PATCH below.
-  type: z.enum(["CCMA", "CCMI"]),
+  // CCMA/CCMI (échelon advancement) or HC/EXC (Hors Classe/Classe Exceptionnelle) — required for
+  // every new campagne. For CCMA/CCMI it decides which élus (see Elu) are inserted in every
+  // mailing sent for it (routes/mailing.ts); HC/EXC campagnes instead accept HC/EXC "Tableau
+  // Avancement" imports (see routes/imports.ts's /hc-exc) and reject the échelon-import routes.
+  // Existing campagnes created before this field existed keep it null until set via PATCH below.
+  type: z.enum(["CCMA", "CCMI", "HC", "EXC"]),
 });
 
 campagnesRouter.post("/", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
@@ -51,7 +53,7 @@ campagnesRouter.post("/", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res)
   res.status(201).json(campagne);
 });
 
-const updateCampagneTypeSchema = z.object({ type: z.enum(["CCMA", "CCMI"]) });
+const updateCampagneTypeSchema = z.object({ type: z.enum(["CCMA", "CCMI", "HC", "EXC"]) });
 
 /** The only field editable after creation — lets an admin retroactively set the commission on a
  * campagne created before this field existed. */
@@ -65,4 +67,57 @@ campagnesRouter.patch("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, 
 
   const campagne = await prisma.campagne.update({ where: { id: req.params.id }, data: { type: parsed.data.type } });
   res.json(campagne);
+});
+
+/**
+ * The rectorat's promotion quota for each (grade[, vivier]) of a Hors Classe/Classe Exceptionnelle
+ * campagne — see Contingent's own doc comment in schema.prisma for contingentAnnonce vs
+ * contingentPropose. No per-row CRUD: an admin edits the whole campagne's contingents at once
+ * (there's only ever a handful per campagne), so PUT replaces them wholesale — same pattern as
+ * settings.ts's social-links.
+ */
+campagnesRouter.get("/:id/contingents", async (req, res) => {
+  const contingents = await prisma.contingent.findMany({ where: { campagneId: req.params.id }, orderBy: [{ grade: "asc" }, { vivier: "asc" }] });
+  res.json(contingents);
+});
+
+const contingentsSchema = z.object({
+  contingents: z
+    .array(
+      z.object({
+        grade: z.string().min(1),
+        vivier: z.string().min(1).nullable(),
+        contingentAnnonce: z.number().int().min(0).nullable(),
+        contingentPropose: z.number().int().min(0).nullable(),
+      }),
+    )
+    .max(50),
+});
+
+campagnesRouter.put("/:id/contingents", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const campagneId = req.params.id;
+  const existing = await prisma.campagne.findUnique({ where: { id: campagneId } });
+  if (!existing) return res.status(404).json({ error: "Campagne introuvable" });
+
+  const parsed = contingentsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+  }
+
+  await prisma.$transaction([
+    prisma.contingent.deleteMany({ where: { campagneId } }),
+    prisma.contingent.createMany({
+      data: parsed.data.contingents.map((c) => ({
+        campagneId,
+        grade: c.grade,
+        vivier: c.vivier,
+        contingentAnnonce: c.contingentAnnonce,
+        contingentPropose: c.contingentPropose,
+        updatedById: req.auth!.userId,
+      })),
+    }),
+  ]);
+
+  const contingents = await prisma.contingent.findMany({ where: { campagneId }, orderBy: [{ grade: "asc" }, { vivier: "asc" }] });
+  res.json(contingents);
 });
