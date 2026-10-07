@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
-import { buildPromotionEmail, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
+import { buildPromotionEmail, escapeHtml, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
 import { buildCcmaModelEmail, CcmaModelUnavailableError, type CcmaModelContext } from "../mailing/ccmaModelTemplate.js";
 import { deriveBonification } from "../mailing/bonification.js";
 import { loadDernierPromuBaByGroup, type DernierPromuBa } from "../mailing/dernierPromuBa.js";
@@ -11,6 +11,7 @@ import { loadBaCandidateCountByGroup } from "../mailing/baCandidateStats.js";
 import { computeFuturePromotion } from "../mailing/futurePromotion.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
+import { renderHtmlToPdf } from "../mailing/pdf.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
 import { loadMailingBranding } from "../mailingBranding.js";
@@ -155,6 +156,43 @@ function buildCcmaModelContext(
     dateFuturePromotion: future.dateFuturePromotion,
     dateFuturePromotionSiBA: future.dateFuturePromotionSiBA,
   };
+}
+
+/** Builds one recipient's letter under the chosen template — the exact same content whether it's
+ * about to be sent (/send), previewed (/preview), or exported to a read-only PDF archive (/pdf), so
+ * all three routes share this instead of each re-deriving the ternary. */
+function buildRecipientEmail(
+  recipient: EligibleRecipient,
+  campagne: { anneeScolaire: string; dateCcma: Date; type: "CCMA" | "CCMI" | null },
+  template: "generique" | "ccma_avancement",
+  shared: { elus: MailingElu[]; t1Text: string | null; logoDataUrl: string | null; socialLinks: MailingSocialLink[] },
+  ccmaExtras: CcmaModelExtras | null,
+): { subject: string; html: string } {
+  if (template === "ccma_avancement" && ccmaExtras) {
+    // Callers only ever pass ccmaExtras when campagne.type === "CCMA" (see loadCcmaModelExtras's
+    // call sites below) — TS doesn't narrow the enclosing object's type from that, so restate it.
+    return buildCcmaModelEmail(buildCcmaModelContext(recipient, { ...campagne, type: "CCMA" as const }, ccmaExtras, shared));
+  }
+  return buildPromotionEmail({
+    civilite: recipient.civilite,
+    prenom: recipient.prenom,
+    nom: recipient.nom,
+    grade: recipient.grade,
+    echelonDepart: recipient.echelonDepart,
+    echelonSuivant: recipient.echelonSuivant,
+    indiceActuel: recipient.indiceActuel,
+    futurIndice: recipient.futurIndice,
+    gainSalaireBrut: recipient.gainSalaireBrut,
+    gainSalaireNet: recipient.gainSalaireNet,
+    dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
+    anneeScolaire: campagne.anneeScolaire,
+    isAdherent: recipient.isAdherent,
+    commission: campagne.type,
+    elus: shared.elus,
+    t1Text: shared.t1Text,
+    logoDataUrl: shared.logoDataUrl,
+    socialLinks: shared.socialLinks,
+  });
 }
 
 export const mailingRouter = Router();
@@ -489,31 +527,7 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
       continue;
     }
 
-    const { subject, html } =
-      template === "ccma_avancement" && ccmaExtras
-        ? // The guard above already rejects template === "ccma_avancement" for a non-CCMA campagne
-          // at runtime — restate that for TS, which doesn't narrow the enclosing object from it.
-          buildCcmaModelEmail(buildCcmaModelContext(recipient, { ...campagne, type: "CCMA" as const }, ccmaExtras, shared))
-        : buildPromotionEmail({
-            civilite: recipient.civilite,
-            prenom: recipient.prenom,
-            nom: recipient.nom,
-            grade: recipient.grade,
-            echelonDepart: recipient.echelonDepart,
-            echelonSuivant: recipient.echelonSuivant,
-            indiceActuel: recipient.indiceActuel,
-            futurIndice: recipient.futurIndice,
-            gainSalaireBrut: recipient.gainSalaireBrut,
-            gainSalaireNet: recipient.gainSalaireNet,
-            dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
-            anneeScolaire: campagne.anneeScolaire,
-            isAdherent: recipient.isAdherent,
-            commission: campagne.type,
-            elus: shared.elus,
-            t1Text: shared.t1Text,
-            logoDataUrl: shared.logoDataUrl,
-            socialLinks: shared.socialLinks,
-          });
+    const { subject, html } = buildRecipientEmail(recipient, { ...campagne, type: campagne.type as "CCMA" | "CCMI" | null }, template, shared, ccmaExtras);
     const effectiveSubject = testMode
       ? `[TEST — destinataire réel : ${recipient.nom} ${recipient.prenom} <${recipient.email ?? "aucune adresse"}>] ${subject}`
       : subject;
@@ -551,4 +565,70 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
   const sent = results.filter((r) => r.status === "SENT").length;
   const failed = results.filter((r) => r.status === "FAILED").length;
   res.status(201).json({ sent, failed, results, testMode });
+}));
+
+const pdfSchema = z.object({
+  campagneId: z.string().min(1),
+  teacherIds: z.array(z.string()).min(1),
+  template: z.enum(["generique", "ccma_avancement"]).optional(),
+});
+
+/**
+ * One PDF with one page per selected recipient's letter — the exact content /send would e-mail
+ * them (via buildRecipientEmail, shared with that route), for an admin to archive or proofread
+ * offline. Purely a read-only export: unlike /send, it never touches MailingLog and is completely
+ * unaffected by test mode (the "À :" line always shows the real address on file, never the test
+ * redirect — this file is meant to show what WOULD be sent, not what test mode did with it).
+ */
+mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
+  const parsed = pdfSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+  }
+  const { campagneId, teacherIds, template = "generique" } = parsed.data;
+
+  const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
+  if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
+  if (campagne.type === "HC" || campagne.type === "EXC") {
+    return res.status(400).json({ error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." });
+  }
+  if (template === "ccma_avancement" && campagne.type !== "CCMA") {
+    return res.status(400).json({ error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." });
+  }
+
+  const all = await eligibleRecipients(campagneId);
+  const targets = all.filter((r) => teacherIds.includes(r.teacherId));
+  if (targets.length === 0) return res.status(400).json({ error: "Aucun destinataire sélectionné." });
+
+  const [branding, elusByCommission, socialLinks] = await Promise.all([
+    loadMailingBranding(),
+    loadElusByCommission(),
+    loadSocialLinks(),
+  ]);
+  const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
+  const ccmaExtras = template === "ccma_avancement" ? await loadCcmaModelExtras(campagneId) : null;
+
+  const pages = targets.map((recipient) => {
+    const { subject, html } = buildRecipientEmail(recipient, { ...campagne, type: campagne.type as "CCMA" | "CCMI" | null }, template, shared, ccmaExtras);
+    const to = recipient.email ?? "aucune adresse connue";
+    return `<section style="page-break-after: always;">
+        <p style="font-size: 0.75rem; color: #666666; border-bottom: 1px solid #cccccc; padding-bottom: 8px; margin-bottom: 16px;">
+          À : ${escapeHtml(to)} — Sujet : ${escapeHtml(subject)}
+        </p>
+        ${html}
+      </section>`;
+  });
+
+  const fullHtml = `<!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"></head>
+      <body style="font-family: Arial, sans-serif; color: #222222; font-size: 0.95rem;">
+        ${pages.join("\n")}
+      </body>
+    </html>`;
+
+  const pdf = await renderHtmlToPdf(fullHtml);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="mailing-${campagne.anneeScolaire}.pdf"`);
+  res.send(pdf);
 }));

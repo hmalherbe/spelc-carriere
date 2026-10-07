@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   api,
+  downloadBlob,
   type BrevoSettings,
   type Campagne,
   type MailingPreview,
@@ -33,6 +34,8 @@ export function MailingPage() {
   const [preview, setPreview] = useState<{ teacherId: string; data: MailingPreview } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<MailingSendResult | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [emailDraft, setEmailDraft] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
@@ -135,6 +138,20 @@ export function MailingPage() {
     }
   }
 
+  async function generatePdf() {
+    if (!campagneId || selected.size === 0) return;
+    setGeneratingPdf(true);
+    setPdfError(null);
+    try {
+      const blob = await api.mailingPdf(campagneId, Array.from(selected), template);
+      downloadBlob(blob, `mailing-${selectedCampagne?.anneeScolaire ?? campagneId}.pdf`);
+    } catch (e) {
+      setPdfError(String(e));
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }
+
   if (error && recipients.length === 0) return <p className="error-text">{error}</p>;
 
   return (
@@ -196,6 +213,10 @@ export function MailingPage() {
           <button onClick={send} disabled={selected.size === 0 || sending}>
             {sending ? "Envoi en cours..." : "Envoyer"}
           </button>
+          <button type="button" className="secondary" onClick={generatePdf} disabled={selected.size === 0 || generatingPdf}>
+            {generatingPdf ? "Génération en cours..." : "Générer PDF"}
+          </button>
+          {pdfError && <span className="error-text">{pdfError}</span>}
         </div>
       )}
 

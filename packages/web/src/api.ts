@@ -51,6 +51,37 @@ async function upload<T>(path: string, formData: FormData): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Like `request`, but for an endpoint whose success response is a binary file (e.g. a generated
+ * PDF) rather than JSON — an error response is still JSON, same shape as every other route. */
+async function requestBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new ApiError(body.error ?? "Erreur inconnue", res.status);
+  }
+  return res.blob();
+}
+
+/** Triggers the browser's normal file-save flow for a blob fetched via the API — there's no <a
+ * href> to the file (it was never at a URL, just a fetch response), so this fabricates a
+ * throwaway one long enough to click. */
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export interface CurrentUser {
   id: string;
   name: string;
@@ -522,6 +553,9 @@ export const api = {
   mailingLog: (campagneId: string) => request<MailingLogEntry[]>(`/mailing/log?campagneId=${campagneId}`),
   mailingSend: (campagneId: string, teacherIds?: string[], template?: MailingTemplate) =>
     request<MailingSendResult>("/mailing/send", { method: "POST", body: JSON.stringify({ campagneId, teacherIds, template }) }),
+  /** One PDF, one page per selected recipient's letter — the same content /send would e-mail them. */
+  mailingPdf: (campagneId: string, teacherIds: string[], template?: MailingTemplate) =>
+    requestBlob("/mailing/pdf", { method: "POST", body: JSON.stringify({ campagneId, teacherIds, template }) }),
   updateMailingEmail: (teacherId: string, email: string) =>
     request<{ email: string }>(`/mailing/${teacherId}/email`, { method: "PUT", body: JSON.stringify({ email }) }),
   grilles: () => request<GrillesData>("/grilles"),
