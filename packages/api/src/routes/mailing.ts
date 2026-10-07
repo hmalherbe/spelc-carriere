@@ -11,7 +11,7 @@ import { loadBaCandidateCountByGroup } from "../mailing/baCandidateStats.js";
 import { computeFuturePromotion } from "../mailing/futurePromotion.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
-import { renderMailingPdf } from "../mailing/pdf.js";
+import { renderMailingPdf, isFirstOfBatch } from "../mailing/pdf.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
 import { loadMailingBranding } from "../mailingBranding.js";
@@ -608,8 +608,20 @@ mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(as
   const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
   const ccmaExtras = template === "ccma_avancement" ? await loadCcmaModelExtras(campagneId) : null;
 
-  const pages = targets.map((recipient) => {
-    const { subject, html } = buildRecipientEmail(recipient, { ...campagne, type: campagne.type as "CCMA" | "CCMI" | null }, template, shared, ccmaExtras);
+  const pages = targets.map((recipient, index) => {
+    // The branding logo is a real, non-trivial image (confirmed ~760KB in production) that
+    // buildHeader embeds inline on every letter — fine for one self-contained e-mail, but
+    // multiplied across a whole campagne's worth of recipients in this one PDF it's what OOM-
+    // killed the api process (see pdf.ts's own comment). Keeping it only on the first page of each
+    // batch bounds that duplication regardless of how many recipients are selected.
+    const recipientShared = isFirstOfBatch(index) ? shared : { ...shared, logoDataUrl: null };
+    const { subject, html } = buildRecipientEmail(
+      recipient,
+      { ...campagne, type: campagne.type as "CCMA" | "CCMI" | null },
+      template,
+      recipientShared,
+      ccmaExtras,
+    );
     const to = recipient.email ?? "aucune adresse connue";
     return `<section style="page-break-after: always;">
         <p style="font-size: 0.75rem; color: #666666; border-bottom: 1px solid #cccccc; padding-bottom: 8px; margin-bottom: 16px;">
