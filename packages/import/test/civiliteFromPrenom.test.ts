@@ -32,6 +32,20 @@ describe("civiliteFromPrenom", () => {
     expect(civiliteFromPrenom("Zzyxqrst")).toBeNull();
   });
 
+  it("recognizes prénoms the old hand-curated list missed, now covered by the INSEE-derived table", () => {
+    // Real gaps surfaced from production data (packages/import/scripts/buildCiviliteTable.mjs) —
+    // all clearly single-gender in practice, just absent from the ~400-entry hand-curated list this
+    // table replaced.
+    expect(civiliteFromPrenom("Clothilde")).toBe("Mme");
+    expect(civiliteFromPrenom("Christelle")).toBe("Mme");
+    expect(civiliteFromPrenom("Elsa")).toBe("Mme");
+    expect(civiliteFromPrenom("Lola")).toBe("Mme");
+    expect(civiliteFromPrenom("Victoria")).toBe("Mme");
+    expect(civiliteFromPrenom("Mohamed")).toBe("M");
+    expect(civiliteFromPrenom("Yasmina")).toBe("Mme");
+    expect(civiliteFromPrenom("Adam")).toBe("M");
+  });
+
   it("returns null for an empty prénom", () => {
     expect(civiliteFromPrenom("")).toBeNull();
     expect(civiliteFromPrenom("   ")).toBeNull();
