@@ -11,7 +11,7 @@ import { loadBaCandidateCountByGroup } from "../mailing/baCandidateStats.js";
 import { computeFuturePromotion } from "../mailing/futurePromotion.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
-import { renderHtmlToPdf } from "../mailing/pdf.js";
+import { renderMailingPdf } from "../mailing/pdf.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
 import { loadMailingBranding } from "../mailingBranding.js";
@@ -619,15 +619,7 @@ mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(as
       </section>`;
   });
 
-  const fullHtml = `<!DOCTYPE html>
-    <html>
-      <head><meta charset="utf-8"></head>
-      <body style="font-family: Arial, sans-serif; color: #222222; font-size: 0.95rem;">
-        ${pages.join("\n")}
-      </body>
-    </html>`;
-
-  const pdf = await renderHtmlToPdf(fullHtml);
+  const pdf = await renderMailingPdf(pages);
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="mailing-${campagne.anneeScolaire}.pdf"`);
   res.send(pdf);
