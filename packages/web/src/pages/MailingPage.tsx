@@ -295,7 +295,7 @@ export function MailingPage() {
             Filtrer par civilité
             <select value={civiliteFilter} onChange={(e) => setCiviliteFilter(e.target.value as typeof civiliteFilter)}>
               <option value="">Toutes</option>
-              <option value="AUTO">Auto (non corrigée)</option>
+              <option value="AUTO">(auto)</option>
               <option value="M">M</option>
               <option value="Mme">Mme</option>
             </select>
