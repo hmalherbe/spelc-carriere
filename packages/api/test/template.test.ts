@@ -117,7 +117,7 @@ describe("buildPromotionEmail", () => {
     expect(html).toContain("Ligne 1<br>Ligne 2<br>Ligne 3");
   });
 
-  it("lists the recipient's own commission's élus, titulaires and suppléants, with their contact info", () => {
+  it("lists the recipient's own commission's élus as a table — name, mobile, mail, no titulaire/suppléant label", () => {
     const { html } = buildPromotionEmail({
       ...BASE,
       commission: "CCMA",
@@ -127,8 +127,16 @@ describe("buildPromotionEmail", () => {
       ],
     });
     expect(html).toContain("Vos élus CCMA");
-    expect(html).toContain("Titulaire : Julien MARTIN (06 00 00 00 00 — julien@spelc.example)");
-    expect(html).toContain("Suppléant(e) : Sophie DURAND");
+    expect(html).toContain("<th align=\"left\"");
+    expect(html).toContain(">Prénom NOM<");
+    expect(html).toContain(">Mobile<");
+    expect(html).toContain(">Mail<");
+    expect(html).toContain(">Julien MARTIN<");
+    expect(html).toContain(">06 00 00 00 00<");
+    expect(html).toContain(">julien@spelc.example<");
+    expect(html).toContain(">Sophie DURAND<");
+    expect(html).not.toContain("Titulaire");
+    expect(html).not.toContain("Suppléant");
   });
 
   it("renders no élus section when the list is empty", () => {

@@ -85,19 +85,32 @@ export function buildHeader(logoDataUrl: string | null, t1Text: string | null): 
     </table>`;
 }
 
-const ELU_ROLE_LABEL: Record<MailingElu["role"], string> = { TITULAIRE: "Titulaire", SUPPLEANT: "Suppléant(e)" };
-
-/** The union's élus for the recipient's own commission (CCMA/CCMI) — filtered by the caller. */
+/** The union's élus for the recipient's own commission (CCMA/CCMI) — filtered and ordered
+ * (titulaires then suppléants) by the caller. Rendered as a plain table, one row per élu — the
+ * titulaire/suppléant distinction is deliberately not shown here (confirmed by the union: the
+ * recipient just needs someone to call, not which seat they hold). */
 export function buildElusFooter(commission: MailingContext["commission"], elus: MailingElu[]): string {
   if (elus.length === 0) return "";
-  const items = elus
-    .map((e) => {
-      const contact = [e.telephone, e.email].filter((v): v is string => !!v).map(escapeHtml).join(" — ");
-      return `<li>${ELU_ROLE_LABEL[e.role]} : ${escapeHtml(e.prenom)} ${escapeHtml(e.nom)}${contact ? ` (${contact})` : ""}</li>`;
-    })
+  const rows = elus
+    .map(
+      (e) => `<tr>
+        <td style="padding: 4px 16px 4px 0; border-bottom: 1px solid #eeeeee;">${escapeHtml(e.prenom)} ${escapeHtml(e.nom)}</td>
+        <td style="padding: 4px 16px 4px 0; border-bottom: 1px solid #eeeeee;">${e.telephone ? escapeHtml(e.telephone) : ""}</td>
+        <td style="padding: 4px 0 4px 0; border-bottom: 1px solid #eeeeee;">${e.email ? escapeHtml(e.email) : ""}</td>
+      </tr>`,
+    )
     .join("");
   const label = commission ? `Vos élus ${escapeHtml(commission)}` : "Vos élus";
-  return `<p style="margin-top: 24px; margin-bottom: 4px;"><strong>${label} :</strong></p><ul style="margin-top: 0;">${items}</ul>`;
+  return `
+    <p style="margin-top: 24px; margin-bottom: 4px;"><strong>${label} :</strong></p>
+    <table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse; margin-top: 0; font-size: 0.9rem;">
+      <tr>
+        <th align="left" style="padding: 4px 16px 4px 0; border-bottom: 1px solid #cccccc;">Prénom NOM</th>
+        <th align="left" style="padding: 4px 16px 4px 0; border-bottom: 1px solid #cccccc;">Mobile</th>
+        <th align="left" style="padding: 4px 0 4px 0; border-bottom: 1px solid #cccccc;">Mail</th>
+      </tr>
+      ${rows}
+    </table>`;
 }
 
 /** Only shown for a non-adhérent (see MailingContext.isAdherent) — they never explicitly signed up
