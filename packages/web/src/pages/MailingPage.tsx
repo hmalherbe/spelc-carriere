@@ -57,6 +57,9 @@ export function MailingPage() {
     return recipients.filter((r) => r.civiliteCorrigee === civiliteFilter);
   }, [recipients, civiliteFilter]);
 
+  const missingEmail = useMemo(() => visibleRecipients.filter((r) => !r.email), [visibleRecipients]);
+  const missingEmailAllSelected = missingEmail.length > 0 && missingEmail.every((r) => selected.has(r.teacherId));
+
   useEffect(() => {
     api.campagnes().then((c) => {
       setCampagnes(c);
@@ -89,6 +92,21 @@ export function MailingPage() {
       const next = new Set(prev);
       if (next.has(teacherId)) next.delete(teacherId);
       else next.add(teacherId);
+      return next;
+    });
+  }
+
+  /** Bulk-toggles every currently visible recipient with no known e-mail address — their own
+   * checkbox stays disabled (nothing to send them by e-mail), but they're still valid "Générer
+   * PDF" targets (a paper fallback for someone unreachable by e-mail), so this is the only way to
+   * select exactly that group at once rather than one row at a time. */
+  function toggleMissingEmail() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of missingEmail) {
+        if (missingEmailAllSelected) next.delete(r.teacherId);
+        else next.add(r.teacherId);
+      }
       return next;
     });
   }
@@ -303,7 +321,20 @@ export function MailingPage() {
               <th>Grade</th>
               <th>Échelon</th>
               <th>Gain net</th>
-              <th>E-mail</th>
+              <th>
+                {canSend && (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                    <input
+                      type="checkbox"
+                      checked={missingEmailAllSelected}
+                      disabled={missingEmail.length === 0}
+                      onChange={toggleMissingEmail}
+                      title="Sélectionner les destinataires sans adresse e-mail (ex. pour « Générer PDF »)"
+                    />
+                  </div>
+                )}
+                E-mail
+              </th>
               <th>Statut</th>
               <th></th>
             </tr>
