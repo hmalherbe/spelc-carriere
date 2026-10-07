@@ -164,16 +164,25 @@ function toIntOrNull(text: string): number | null {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
-// Matches a leading "M"/"Mme"/"Mlle" (with an optional trailing period), whether followed by more
-// text ("Mme MARTIN Camille" — the "nom_long" export column) or nothing at all (a dedicated "Civ."
-// column, whose whole value already IS just the civilité). The downstream consumer
-// (civilitePrefix() in mailing/template.ts) only checks the "mme"/"m" prefix, so no further
-// normalization is needed beyond isolating this token from whatever follows it.
-const CIVILITE_PREFIX_RE = /^(mme|mlle|m)\.?(?=\s|$)/i;
+// Matches a leading civilité, abbreviated ("M.", "Mme", "Mlle") or spelled out in full
+// ("Monsieur", "Madame", "Mademoiselle") — confirmed from a real export that the "nom_long" column
+// (despite its name) holds nothing but this one word on its own, not a prefixed full name as
+// originally assumed (a dedicated "Civ." column, the other alias, could plausibly use either form
+// too). Longer alternatives are listed before their abbreviations so the lookahead can't stop
+// early (e.g. matching bare "m" out of "Monsieur" and then failing on the following "o").
+const CIVILITE_RE = /^(mademoiselle|mlle|monsieur|madame|mme|m)\.?(?=\s|$)/i;
 
-function extractCivilite(text: string): string | null {
-  const m = CIVILITE_PREFIX_RE.exec(text.trim());
-  return m ? m[1] : null;
+/** Always returns the short form ("M"/"Mme") regardless of which spelling matched — every consumer
+ * of Adherent.civilite (civilitePrefix() in mailing/template.ts, the Mailing page's civilité filter
+ * and manual-override selector in routes/mailing.ts) compares against exactly these two tokens.
+ * "Mademoiselle"/"Mlle" resolve to "Mme" — mirroring French administrative practice since 2012,
+ * which dropped "Mademoiselle" from official use entirely rather than treating it as a third,
+ * distinct civilité. */
+function extractCivilite(text: string): "M" | "Mme" | null {
+  const m = CIVILITE_RE.exec(text.trim());
+  if (!m) return null;
+  const token = m[1].toLowerCase();
+  return token === "mme" || token === "madame" || token === "mlle" || token === "mademoiselle" ? "Mme" : "M";
 }
 
 export interface AdherentParseResult {

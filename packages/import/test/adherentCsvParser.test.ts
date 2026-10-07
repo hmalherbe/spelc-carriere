@@ -72,17 +72,24 @@ describe("parseAdherentCsv", () => {
 });
 
 describe("parseAdherentCsv — civilité extracted from 'nom_long' when there's no dedicated 'Civ.' column", () => {
+  // Real format confirmed from a production export — despite its name, "nom_long" turned out to
+  // hold nothing but the civilité spelled out in full ("Monsieur"/"Madame"), not a prefixed full
+  // name as originally assumed. That wrong assumption is exactly why every adhérent's civilité came
+  // back empty in production (the old regex only recognized "M"/"Mme"/"Mlle" abbreviations).
   const csv = [
     "nom_long,nom,prenom",
-    "Mme MARTIN Camille,MARTIN,Camille",
-    "Mlle DUPONT Julie,DUPONT,Julie",
-    "M PETIT Marc,PETIT,Marc", // no trailing period on the civilité token
+    "Madame,MARTIN,Camille",
+    "Mademoiselle,DUPONT,Julie",
+    "Monsieur,PETIT,Marc",
+    "Mme,ROUX,Agnès", // an abbreviated value is still recognized too, same as a dedicated "Civ." column
   ].join("\n");
 
   const { records } = parseAdherentCsv(csv);
 
-  it("isolates just the leading civilité token, ignoring the rest of the name that follows it", () => {
-    expect(records.map((r) => r.civilite)).toEqual(["Mme", "Mlle", "M"]);
+  it("recognizes the civilité spelled out in full, normalized to the short M/Mme form", () => {
+    // Mademoiselle -> Mme: mirrors French administrative practice since 2012, which dropped
+    // "Mademoiselle" from official use entirely rather than keeping it a third, distinct civilité.
+    expect(records.map((r) => r.civilite)).toEqual(["Mme", "Mme", "M", "Mme"]);
   });
 });
 
