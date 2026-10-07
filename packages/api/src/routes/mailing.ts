@@ -241,6 +241,11 @@ async function eligibleRecipients(campagneId: string) {
     /** true when `civilite` was guessed from the prénom (non-adhérent, no declared value) rather
      * than coming from Adherent.civilite — callers must display it as an estimation, not a fact. */
     civiliteEstimee: boolean;
+    /** Raw Teacher.civiliteCorrigee — null when no manual override is set (the row's civilité
+     * still follows the adhérent-declared/guessed value), otherwise the override itself. Exposed
+     * separately from `civilite` so callers can filter by correction status (page Mailing's
+     * "M/Mme/Auto" filter) without reverse-engineering it from the resolved value. */
+    civiliteCorrigee: string | null;
     grade: string;
     echelonDepart: string;
     echelonSuivant: string;
@@ -303,6 +308,7 @@ async function eligibleRecipients(campagneId: string) {
       prenom,
       civilite,
       civiliteEstimee,
+      civiliteCorrigee: teacher.civiliteCorrigee,
       grade: snap.grade,
       echelonDepart: state.echelonDepart,
       echelonSuivant: state.echelonSuivant,

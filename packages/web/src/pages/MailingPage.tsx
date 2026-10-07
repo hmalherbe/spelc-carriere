@@ -44,9 +44,18 @@ export function MailingPage() {
   const [civiliteError, setCiviliteError] = useState<string | null>(null);
   const [brevoSettings, setBrevoSettings] = useState<BrevoSettings | null>(null);
   const [template, setTemplate] = useState<MailingTemplate>("generique");
+  const [civiliteFilter, setCiviliteFilter] = useState<"" | "AUTO" | "M" | "Mme">("");
 
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
   const ccmaModelAvailable = selectedCampagne?.type === "CCMA";
+
+  // Filtre d'affichage uniquement — ne touche pas à `selected` : la case à cocher d'une ligne
+  // masquée par le filtre garde son état, exactement comme les filtres de DashboardPage.
+  const visibleRecipients = useMemo(() => {
+    if (!civiliteFilter) return recipients;
+    if (civiliteFilter === "AUTO") return recipients.filter((r) => r.civiliteCorrigee == null);
+    return recipients.filter((r) => r.civiliteCorrigee === civiliteFilter);
+  }, [recipients, civiliteFilter]);
 
   useEffect(() => {
     api.campagnes().then((c) => {
@@ -262,10 +271,26 @@ export function MailingPage() {
         </div>
       )}
 
+      {recipients.length > 0 && (
+        <div className="toolbar">
+          <label>
+            Filtrer par civilité
+            <select value={civiliteFilter} onChange={(e) => setCiviliteFilter(e.target.value as typeof civiliteFilter)}>
+              <option value="">Toutes</option>
+              <option value="AUTO">Auto (non corrigée)</option>
+              <option value="M">M</option>
+              <option value="Mme">Mme</option>
+            </select>
+          </label>
+        </div>
+      )}
+
       {loading ? (
         <p>Chargement...</p>
       ) : recipients.length === 0 ? (
         <p className="hint">Aucun destinataire éligible pour cette campagne.</p>
+      ) : visibleRecipients.length === 0 ? (
+        <p className="hint">Aucun destinataire ne correspond à ce filtre.</p>
       ) : (
         <table className="data-table">
           <thead>
@@ -284,7 +309,7 @@ export function MailingPage() {
             </tr>
           </thead>
           <tbody>
-            {recipients.map((r) => (
+            {visibleRecipients.map((r) => (
               <tr key={r.teacherId}>
                 {canSend && (
                   <td>

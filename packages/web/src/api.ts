@@ -306,6 +306,8 @@ export interface MailingRecipient {
   /** true when `civilite` was guessed from the prénom (non-adhérent, no declared value) — display
    * it as an estimation, never as a fact. */
   civiliteEstimee: boolean;
+  /** Raw manual override (null = none set) — used by the Civilité filter (M / Mme / Auto). */
+  civiliteCorrigee: "M" | "Mme" | null;
   grade: string;
   echelonDepart: string;
   echelonSuivant: string;
