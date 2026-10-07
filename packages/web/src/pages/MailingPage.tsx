@@ -44,17 +44,19 @@ export function MailingPage() {
   const [civiliteError, setCiviliteError] = useState<string | null>(null);
   const [brevoSettings, setBrevoSettings] = useState<BrevoSettings | null>(null);
   const [template, setTemplate] = useState<MailingTemplate>("generique");
-  const [civiliteFilter, setCiviliteFilter] = useState<"" | "AUTO" | "M" | "Mme">("");
+  const [civiliteFilter, setCiviliteFilter] = useState<"" | "VIDE" | "M" | "Mme">("");
 
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
   const ccmaModelAvailable = selectedCampagne?.type === "CCMA";
 
-  // Filtre d'affichage uniquement — ne touche pas à `selected` : la case à cocher d'une ligne
-  // masquée par le filtre garde son état, exactement comme les filtres de DashboardPage.
+  // Filtre sur la civilité telle qu'affichée (estimée ou corrigée, peu importe) — "Vide" retrouve
+  // les destinataires dont on n'a aucune civilité du tout (ni déclarée, ni devinée), typiquement à
+  // corriger à la main. Affichage uniquement — ne touche pas à `selected` : la case à cocher d'une
+  // ligne masquée par le filtre garde son état, exactement comme les filtres de DashboardPage.
   const visibleRecipients = useMemo(() => {
     if (!civiliteFilter) return recipients;
-    if (civiliteFilter === "AUTO") return recipients.filter((r) => r.civiliteCorrigee == null);
-    return recipients.filter((r) => r.civiliteCorrigee === civiliteFilter);
+    if (civiliteFilter === "VIDE") return recipients.filter((r) => r.civilite == null);
+    return recipients.filter((r) => r.civilite === civiliteFilter);
   }, [recipients, civiliteFilter]);
 
   const missingEmail = useMemo(() => visibleRecipients.filter((r) => !r.email), [visibleRecipients]);
@@ -295,7 +297,7 @@ export function MailingPage() {
             Filtrer par civilité
             <select value={civiliteFilter} onChange={(e) => setCiviliteFilter(e.target.value as typeof civiliteFilter)}>
               <option value="">Toutes</option>
-              <option value="AUTO">(auto)</option>
+              <option value="VIDE">Vide</option>
               <option value="M">M</option>
               <option value="Mme">Mme</option>
             </select>
