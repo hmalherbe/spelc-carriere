@@ -558,6 +558,9 @@ export const api = {
     requestBlob("/mailing/pdf", { method: "POST", body: JSON.stringify({ campagneId, teacherIds, template }) }),
   updateMailingEmail: (teacherId: string, email: string) =>
     request<{ email: string }>(`/mailing/${teacherId}/email`, { method: "PUT", body: JSON.stringify({ email }) }),
+  /** null clears the override, reverting to the declared/estimated civilité. */
+  updateMailingCivilite: (teacherId: string, civilite: "M" | "Mme" | null) =>
+    request<{ civilite: "M" | "Mme" | null }>(`/mailing/${teacherId}/civilite`, { method: "PUT", body: JSON.stringify({ civilite }) }),
   grilles: () => request<GrillesData>("/grilles"),
   updateEchelonIndice: (grilleCode: string, echelon: string, indice: number) =>
     request<EchelonRowApi>(`/grilles/${encodeURIComponent(grilleCode)}/rows/${encodeURIComponent(echelon)}`, {

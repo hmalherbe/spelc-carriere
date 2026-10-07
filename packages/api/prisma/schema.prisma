@@ -301,6 +301,16 @@ model Teacher {
   ancienneteAReporter     String?
   ancienneteAReporterNote String?
 
+  // Manual override for the civilité (M/Mme) shown in a mailing — see routes/mailing.ts's
+  // eligibleRecipients, which otherwise sources it from Adherent.civilite (a declared ADEL field,
+  // for an adhérent) or guesses it from the prénom (civiliteFromPrenom, for a non-adhérent, always
+  // flagged "estimé"). Set from the Mailing page itself for the rare case either source is wrong
+  // or the guess failed — "M" or "Mme" exactly, matching civilitePrefix's own parsing, or null for
+  // no override (back to the normal adhérent/guessed behavior). Lives on Teacher, not Adherent,
+  // so it survives an ADEL reimport (which would otherwise overwrite Adherent.civilite wholesale)
+  // and also covers a non-adhérent, who has no Adherent row to put it on.
+  civiliteCorrigee String?
+
   snapshots      TeacherSnapshot[]
   hcExcSnapshots HcExcSnapshot[]
   matchCandidate MatchCandidate?

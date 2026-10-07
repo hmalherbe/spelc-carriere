@@ -285,9 +285,11 @@ async function eligibleRecipients(campagneId: string) {
     const prenom = adherent?.prenom ?? snap.prenom;
     // Only a non-adhérent's civilité is ever guessed — an adhérent's is a declared field (from the
     // ADEL export's Civ. column), left as-is (including null when that field wasn't filled in)
-    // rather than second-guessed from their prénom.
-    const civilite = isAdherent ? (adherent?.civilite ?? null) : civiliteFromPrenom(prenom);
-    const civiliteEstimee = !isAdherent && civilite != null;
+    // rather than second-guessed from their prénom. Either one can be overridden by hand from the
+    // Mailing page itself (Teacher.civiliteCorrigee's own doc comment) — when set, it always wins
+    // and is never flagged "estimé" (it's a deliberate choice, not a guess).
+    const civilite = teacher.civiliteCorrigee ?? (isAdherent ? (adherent?.civilite ?? null) : civiliteFromPrenom(prenom));
+    const civiliteEstimee = !teacher.civiliteCorrigee && !isAdherent && civilite != null;
     const email = adherent
       ? adherent.mailPersonnel
       : (academicEmailByName.get(`${normalizeName(snap.nomUsage)}|${normalizeName(snap.prenom)}`) ?? null);
@@ -445,6 +447,27 @@ mailingRouter.put("/:teacherId/email", requireRole("ADMIN", "GESTIONNAIRE"), asy
   }
 
   res.json({ email });
+}));
+
+const updateCiviliteSchema = z.object({ civilite: z.enum(["M", "Mme"]).nullable() });
+
+/**
+ * Sets or clears a teacher's civilité override (Teacher.civiliteCorrigee's own doc comment) — for
+ * when the adhérent-declared value is wrong, or the prénom-based guess for a non-adhérent is wrong
+ * or came back empty. null clears the override, reverting to the normal adhérent/guessed behavior.
+ * No ComputedPromotionState recompute needed (unlike the ancienneté corrections in routes/
+ * teachers.ts) — civilité only ever affects mailing display, never a salary/date calculation.
+ */
+mailingRouter.put("/:teacherId/civilite", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
+  const parsed = updateCiviliteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+  }
+  const teacher = await prisma.teacher.findUnique({ where: { id: req.params.teacherId } });
+  if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
+
+  await prisma.teacher.update({ where: { id: req.params.teacherId }, data: { civiliteCorrigee: parsed.data.civilite } });
+  res.json({ civilite: parsed.data.civilite });
 }));
 
 mailingRouter.get("/log", asyncHandler(async (req, res) => {

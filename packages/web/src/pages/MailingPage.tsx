@@ -40,6 +40,8 @@ export function MailingPage() {
   const [emailDraft, setEmailDraft] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [savingCiviliteId, setSavingCiviliteId] = useState<string | null>(null);
+  const [civiliteError, setCiviliteError] = useState<string | null>(null);
   const [brevoSettings, setBrevoSettings] = useState<BrevoSettings | null>(null);
   const [template, setTemplate] = useState<MailingTemplate>("generique");
 
@@ -110,6 +112,21 @@ export function MailingPage() {
       setEmailError(String(e));
     } finally {
       setSavingEmail(false);
+    }
+  }
+
+  async function saveCivilite(teacherId: string, value: string) {
+    if (!campagneId) return;
+    const civilite = value === "M" || value === "Mme" ? value : null;
+    setSavingCiviliteId(teacherId);
+    setCiviliteError(null);
+    try {
+      await api.updateMailingCivilite(teacherId, civilite);
+      refresh(campagneId);
+    } catch (e) {
+      setCiviliteError(String(e));
+    } finally {
+      setSavingCiviliteId(null);
     }
   }
 
@@ -220,6 +237,8 @@ export function MailingPage() {
         </div>
       )}
 
+      {civiliteError && <p className="error-text">{civiliteError}</p>}
+
       {sendResult && (
         <div className="import-result">
           <p>
@@ -273,8 +292,25 @@ export function MailingPage() {
                   </td>
                 )}
                 <td>
-                  {r.civilite ?? <span className="hint">—</span>}
-                  {r.civiliteEstimee && <span className="hint"> (estimé)</span>}
+                  {canSend ? (
+                    <div className="row-actions">
+                      <select
+                        value={r.civilite === "M" || r.civilite === "Mme" ? r.civilite : ""}
+                        disabled={savingCiviliteId === r.teacherId}
+                        onChange={(e) => saveCivilite(r.teacherId, e.target.value)}
+                      >
+                        <option value="">(auto)</option>
+                        <option value="M">M</option>
+                        <option value="Mme">Mme</option>
+                      </select>
+                      {r.civiliteEstimee && <span className="hint">estimé</span>}
+                    </div>
+                  ) : (
+                    <>
+                      {r.civilite ?? <span className="hint">—</span>}
+                      {r.civiliteEstimee && <span className="hint"> (estimé)</span>}
+                    </>
+                  )}
                 </td>
                 <td>{r.nom}</td>
                 <td>{formatPrenom(r.prenom)}</td>
