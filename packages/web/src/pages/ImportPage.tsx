@@ -415,7 +415,14 @@ export function ImportPage() {
         {adelResult && (
           <div className="import-result">
             <p>
-              <strong>{adelResult.created}</strong> créés, <strong>{adelResult.updated}</strong> mis à jour.
+              <strong>{adelResult.created}</strong> créés, <strong>{adelResult.updated}</strong> mis à jour
+              {adelResult.deleted > 0 && (
+                <>
+                  , <strong>{adelResult.deleted}</strong> supprimé(s) (ne font plus partie de l'export — parti(e)s du
+                  syndicat)
+                </>
+              )}
+              .
             </p>
             <p>
               Rapprochement : <strong>{adelResult.matching.autoConfirmed}</strong> automatique(s),{" "}
@@ -446,7 +453,14 @@ export function ImportPage() {
         {adherentResult && (
           <div className="import-result">
             <p>
-              <strong>{adherentResult.created}</strong> créés, <strong>{adherentResult.updated}</strong> mis à jour.
+              <strong>{adherentResult.created}</strong> créés, <strong>{adherentResult.updated}</strong> mis à jour
+              {adherentResult.deleted > 0 && (
+                <>
+                  , <strong>{adherentResult.deleted}</strong> supprimé(s) (ne font plus partie du fichier — parti(e)s
+                  du syndicat)
+                </>
+              )}
+              .
             </p>
             <p>
               Rapprochement : <strong>{adherentResult.matching.autoConfirmed}</strong> automatique(s),{" "}

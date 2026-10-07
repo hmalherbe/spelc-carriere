@@ -65,13 +65,13 @@ adelRouter.post("/sync", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(asyn
   try {
     const { buffer } = await scrapeAdelExport(config, type);
     const { records, unmappedFields } = await parseAdherentXlsx(buffer);
-    const { created, updated, matching } = await importAdherentRecords(records);
+    const { created, updated, deleted, matching } = await importAdherentRecords(records);
 
     const log = await prisma.adelSyncLog.create({
       data: { type, status: "SUCCESS", created, updated, triggeredById: req.auth!.userId },
     });
 
-    res.status(201).json({ syncedAt: log.syncedAt, created, updated, unmappedFields, matching });
+    res.status(201).json({ syncedAt: log.syncedAt, created, updated, deleted, unmappedFields, matching });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await prisma.adelSyncLog.create({

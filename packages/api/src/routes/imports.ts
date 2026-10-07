@@ -420,9 +420,9 @@ importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.si
   const { records, unmappedFields } = isXlsx
     ? await parseAdherentXlsx(req.file.buffer)
     : parseAdherentCsv(req.file.buffer.toString("utf-8"));
-  const { created, updated, matching } = await importAdherentRecords(records);
+  const { created, updated, deleted, matching } = await importAdherentRecords(records);
 
-  res.status(201).json({ created, updated, unmappedFields, matching });
+  res.status(201).json({ created, updated, deleted, unmappedFields, matching });
 }));
 
 // Académie staff-directory export (nom/prénom -> adresse mail académique) — used by the mailing

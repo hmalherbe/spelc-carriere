@@ -198,6 +198,8 @@ export interface RectoratImportResult {
 export interface AdherentImportResult {
   created: number;
   updated: number;
+  /** Adherents deleted because they no longer appeared in this import (they left the union). */
+  deleted: number;
   unmappedFields: string[];
   matching: { autoConfirmed: number; pendingReview: number };
 }
@@ -281,6 +283,8 @@ export interface AdelSyncResult {
   syncedAt: string;
   created: number;
   updated: number;
+  /** Adherents deleted because they no longer appeared in this sync (they left the union). */
+  deleted: number;
   unmappedFields: string[];
   matching: { autoConfirmed: number; pendingReview: number };
 }
