@@ -13,14 +13,18 @@ COPY packages/api/package.json packages/api/package.json
 COPY packages/web/package.json packages/web/package.json
 RUN npm ci
 
+# The ADEL scraper (packages/scraper) and the mailing PDF export (packages/api) both need a real
+# Chromium — --with-deps also installs the OS libraries it needs on a bare Debian image (fonts,
+# libnss3, etc.). This only depends on the playwright version npm ci just installed, never on our
+# own source, so it's deliberately placed before the COPY of packages/*/src below: a plain code
+# change (no dependency bump) then hits Docker's layer cache here instead of re-running this ~2min
+# apt install on every single deploy.
+RUN npx playwright install --with-deps chromium
+
 COPY packages/domain packages/domain
 COPY packages/import packages/import
 COPY packages/scraper packages/scraper
 COPY packages/api packages/api
-
-# The ADEL scraper (packages/scraper) needs a real Chromium — --with-deps also installs the OS
-# libraries headless Chromium needs on a bare Debian image (fonts, libnss3, etc.).
-RUN npx playwright install --with-deps chromium
 
 RUN npm run prisma:generate -w @spelc/api
 
