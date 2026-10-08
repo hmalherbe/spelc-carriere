@@ -139,19 +139,18 @@ function buildProchainePromotionFutureBlock(ctx: CcmaModelContext): string {
 }
 
 /** Gain salarial + régularisation financière + prochaine promotion future — affiché pour tout le
- * monde SAUF un candidat BA non retenu (qui n'a, cette fois-ci, aucune promotion à annoncer). */
+ * monde SAUF un candidat BA non retenu (qui n'a, cette fois-ci, aucune promotion à annoncer).
+ * Le modèle Word d'origine montre ce paragraphe dès que Bonification <> "NON_PROMU", sans condition
+ * sur le montant du gain (confirmé sur le document source, champ IF autour du seul `Bonification`)
+ * — ne pas réintroduire de garde-fou sur `gainSalaireNet > 0` ici. */
 function buildGainEtSuiteBlock(ctx: CcmaModelContext): string {
   if (ctx.bonification === "NON_PROMU") return "";
-  const parts: string[] = [];
-  if (ctx.gainSalaireNet > 0) {
-    const dateEffet = formatDateFr(ctx.dateEffetCcm);
-    parts.push(
-      p(
-        `L'écart sur votre traitement de base consécutif à cette promotion pour un temps plein est équivalent à environ <strong>${ctx.gainSalaireNet} € nets</strong> par mois (avant prélèvement à la source).` +
-          (dateEffet ? ` La régularisation financière devrait intervenir au plus tôt en ${monthYearFr(ctx.dateEffetCcm)}.` : ""),
-      ),
-    );
-  }
+  const parts: string[] = [
+    p(
+      `L'écart sur votre traitement de base consécutif à cette promotion pour un temps plein est équivalent à environ <strong>${ctx.gainSalaireNet} € nets</strong> par mois (avant prélèvement à la source).` +
+        ` La régularisation financière devrait intervenir au plus tôt en ${monthYearFr(ctx.dateEffetCcm)}.`,
+    ),
+  ];
   parts.push(buildProchainePromotionFutureBlock(ctx));
   return parts.join("\n");
 }
@@ -188,7 +187,9 @@ function buildComparaisonBaremeBlock(ctx: CcmaModelContext): string {
   if (ctx.bonification === "ANCIENNETE") return "";
   if (ctx.bareme == null || !ctx.dernierPromu) return "";
 
-  const appreciation = AVIS_LABELS[ctx.bareme] ? `(${AVIS_LABELS[ctx.bareme].toLowerCase()} lors de votre dernier rendez-vous de carrière)` : "";
+  // Casse d'origine conservée ("Excellent", "Très satisfaisant"...) — confirmé sur le document
+  // Word source, qui ne met jamais ce label en minuscules.
+  const appreciation = AVIS_LABELS[ctx.bareme] ? `(${AVIS_LABELS[ctx.bareme]} lors de votre dernier rendez-vous de carrière)` : "";
   const parts: string[] = [
     p(`Votre barème : <strong>${ctx.bareme}</strong> ${escapeHtml(appreciation)}`),
     p(`Le barème du dernier promu : <strong>${ctx.dernierPromu.bareme}</strong>`),

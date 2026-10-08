@@ -74,6 +74,12 @@ describe("buildCcmaModelEmail", () => {
     expect(html).not.toContain("l'accélération de carrière d'un an du PPCR");
   });
 
+  it("shows the gain/régularisation paragraph regardless of the actual gain amount, as long as bonification <> NON_PROMU (real Word template has no condition on the amount)", () => {
+    const { html } = buildCcmaModelEmail({ ...BASE, gainSalaireNet: 0 });
+    expect(html).toContain("0 € nets");
+    expect(html).toContain("régularisation financière devrait intervenir au plus tôt en avril 2026");
+  });
+
   it("shows the report d'ancienneté paragraph when typePromotion is RE", () => {
     const withReport = buildCcmaModelEmail({
       ...BASE,
@@ -127,6 +133,19 @@ describe("buildCcmaModelEmail", () => {
     expect(html).toContain("celle-ci a été acceptée");
     expect(html).not.toContain("prévu par les durées du PPCR est acté");
     expect(html).toContain("Votre barème");
+  });
+
+  it("keeps the AVIS_LABELS casing as-is in the appréciation text (real Word template never lowercases it)", () => {
+    const { html } = buildCcmaModelEmail({
+      ...BASE,
+      echelonSuivant: "9",
+      bonification: "BONIFICATION",
+      dateEligibiliteBA: "2026-03-01",
+      bareme: 4,
+      dernierPromu: { bareme: 4, ancienneteGrade: 2, ancienneteEchelon: 2 },
+    });
+    expect(html).toContain("(Excellent lors de votre dernier rendez-vous de carrière)");
+    expect(html).not.toContain("(excellent lors");
   });
 
   it("BA not granted, some promus in the group: shows the computed percentage and comparison, no gain paragraph", () => {
