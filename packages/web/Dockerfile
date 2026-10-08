@@ -10,6 +10,7 @@ COPY packages/api/package.json packages/api/package.json
 COPY packages/web/package.json packages/web/package.json
 RUN npm ci
 
+COPY packages/domain packages/domain
 COPY packages/web packages/web
 RUN npm run build -w @spelc/web
 
