@@ -81,7 +81,7 @@ describe("buildPromotionEmail", () => {
     expect(known).toContain("Cher collègue,");
 
     const { html: unknown } = buildPromotionEmail({ ...BASE, isAdherent: false, civilite: null });
-    expect(unknown).toContain("Cher(e) collègue(e),");
+    expect(unknown).toContain("Cher(e) collègue,");
   });
 
   it("capitalizes the prénom (proper case) in the greeting's name line", () => {

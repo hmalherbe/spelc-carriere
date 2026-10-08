@@ -56,7 +56,7 @@ describe("buildCcmaModelEmail", () => {
     expect(buildCcmaModelEmail({ ...BASE, civilite: "Mme" }).html).toContain("Chère adhérente,");
     expect(buildCcmaModelEmail({ ...BASE, civilite: "M", isAdherent: false }).html).toContain("Cher collègue,");
     expect(buildCcmaModelEmail({ ...BASE, civilite: "Mme", isAdherent: false }).html).toContain("Chère collègue,");
-    expect(buildCcmaModelEmail({ ...BASE, civilite: null, isAdherent: false }).html).toContain("Cher(e) collègue(e),");
+    expect(buildCcmaModelEmail({ ...BASE, civilite: null, isAdherent: false }).html).toContain("Cher(e) collègue,");
   });
 
   it("shows the normal-PPCR passage paragraph when bonification = ANCIENNETE, and nothing BA-related", () => {

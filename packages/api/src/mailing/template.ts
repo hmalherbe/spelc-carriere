@@ -70,7 +70,7 @@ export function buildGreeting(civilite: string | null, isAdherent: boolean, pren
   const c = civilite?.trim().toLowerCase() ?? null;
   const roleM = isAdherent ? "adhérent" : "collègue";
   const roleF = isAdherent ? "adhérente" : "collègue";
-  const roleEpicene = isAdherent ? "adhérent(e)" : "collègue(e)";
+  const roleEpicene = isAdherent ? "adhérent(e)" : "collègue";
   const greeting = c?.startsWith("mme") ? `Chère ${roleF},` : c?.startsWith("m") ? `Cher ${roleM},` : `Cher(e) ${roleEpicene},`;
   return `<p>${greeting}<br>${escapeHtml(formatPrenom(prenom))} ${escapeHtml(nom)}</p>`;
 }
