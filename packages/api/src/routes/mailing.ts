@@ -12,6 +12,7 @@ import { computeFuturePromotion } from "../mailing/futurePromotion.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
 import { renderMailingPdf, isFirstOfBatch } from "../mailing/pdf.js";
+import { computeBaStatus } from "../baStatus.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
 import { loadMailingBranding } from "../mailingBranding.js";
@@ -267,6 +268,10 @@ async function eligibleRecipients(campagneId: string) {
     avisEvaluation: number | null;
     ancienneteGrade: number | null;
     ancienneteEchelon: number | null;
+    // Même règle que la colonne "Éligibilité BA" de DashboardPage (voir baStatus.ts) — affichée ici
+    // aussi, après la colonne "Échelon" (voir MailingPage.tsx).
+    baStatus: "hors_fenetre" | "national" | "promu" | "non_promu" | null;
+    baEchelonDepart: 6 | 8 | null;
   }[] = [];
 
   for (const snap of snapshots) {
@@ -295,6 +300,13 @@ async function eligibleRecipients(campagneId: string) {
       : (academicEmailByName.get(`${normalizeName(snap.nomUsage)}|${normalizeName(snap.prenom)}`) ?? null);
 
     const log = logByTeacherId.get(teacher.id) ?? null;
+    const { baStatus, baEchelonDepart } = computeBaStatus({
+      echelonActuel: snap.echelonActuel,
+      grade: snap.grade,
+      proTypePromotion: snap.proTypePromotion,
+      proConfirmee: snap.proConfirmee,
+      ancienneteEchelon: snap.ancienneteEchelon,
+    });
     result.push({
       teacherId: teacher.id,
       adherentId: adherent?.id ?? null,
@@ -327,6 +339,8 @@ async function eligibleRecipients(campagneId: string) {
       avisEvaluation: snap.avisEvaluation,
       ancienneteGrade: snap.ancienneteGrade,
       ancienneteEchelon: snap.ancienneteEchelon,
+      baStatus,
+      baEchelonDepart,
     });
   }
 

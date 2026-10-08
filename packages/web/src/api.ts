@@ -322,6 +322,9 @@ export interface MailingRecipient {
   lastStatus: "SENT" | "FAILED" | null;
   lastSentAt: string | null;
   lastError: string | null;
+  /** Même règle que la colonne "Éligibilité BA" de DashboardPage — voir baCell() dans MailingPage.tsx. */
+  baStatus: "hors_fenetre" | "national" | "promu" | "non_promu" | null;
+  baEchelonDepart: 6 | 8 | null;
 }
 
 export interface MailingPreview {

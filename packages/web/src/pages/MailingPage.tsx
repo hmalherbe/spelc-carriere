@@ -36,6 +36,19 @@ function formatEchelonLabel(echelon: string): string {
   return Number.isFinite(n) ? String(n) : echelon;
 }
 
+/** Même règle que la colonne "Éligibilité BA" de DashboardPage (voir baCell() là-bas) — reprise ici
+ * à l'identique, sur `echelonDepart` (équivalent de `echelonActuel` côté Dashboard : l'échelon de
+ * départ avant la promotion de cette campagne). */
+function baCell(r: MailingRecipient): { label: string; className: string } {
+  if (r.baStatus === null) return { label: "—", className: "" };
+  const atDepart = r.baEchelonDepart != null && Number(r.echelonDepart) === r.baEchelonDepart;
+  const dep = atDepart ? ` (départ éch. ${r.baEchelonDepart})` : "";
+  if (r.baStatus === "hors_fenetre") return { label: `BA hors fenêtre d'éligibilité${dep}`, className: "badge badge-indetermine" };
+  if (r.baStatus === "national") return { label: `Proposé(e) au ministère à la BA${dep}`, className: "badge badge-indetermine" };
+  if (r.baStatus === "promu") return { label: `Promu BA${dep}`, className: "badge badge-promu_estime" };
+  return { label: `Éligible à la BA - non promu${dep}`, className: "badge badge-non_promu_estime" };
+}
+
 export function MailingPage() {
   const { user } = useAuth();
   const canSend = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
@@ -388,6 +401,7 @@ export function MailingPage() {
               <th>Adhérent</th>
               <th>Grade</th>
               <th>Échelon</th>
+              <th>Éligibilité BA</th>
               <th>Gain net</th>
               <th>
                 {canSend && (
@@ -446,6 +460,12 @@ export function MailingPage() {
                 <td>{r.grade}</td>
                 <td>
                   {r.echelonDepart} → {r.echelonSuivant}
+                </td>
+                <td>
+                  {(() => {
+                    const ba = baCell(r);
+                    return ba.className ? <span className={ba.className}>{ba.label}</span> : ba.label;
+                  })()}
                 </td>
                 <td className={r.gainSalaireNet > 0 ? "gain-positive" : ""}>{euros(r.gainSalaireNet)}</td>
                 <td>
