@@ -21,6 +21,21 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("fr-FR");
 }
 
+/** Numeric-aware échelon ordering — échelon is a free-form string ("06", "6", "A1"...); lettered
+ * échelons (hors-classe/classe exceptionnelle) sort after every numeric one. Same convention as
+ * DashboardPage's own échelon filter. */
+function echelonSortValue(echelon: string): number {
+  const n = Number(echelon);
+  return Number.isFinite(n) ? n : 1000 + echelon.charCodeAt(0);
+}
+
+/** Strips a leading zero for display ("07" -> "7") — échelon is zero-padded as stored/filtered on,
+ * but reads oddly in a dropdown ("07" looks like a different value from "7"). */
+function formatEchelonLabel(echelon: string): string {
+  const n = Number(echelon);
+  return Number.isFinite(n) ? String(n) : echelon;
+}
+
 export function MailingPage() {
   const { user } = useAuth();
   const canSend = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
@@ -45,19 +60,40 @@ export function MailingPage() {
   const [brevoSettings, setBrevoSettings] = useState<BrevoSettings | null>(null);
   const [template, setTemplate] = useState<MailingTemplate>("generique");
   const [civiliteFilter, setCiviliteFilter] = useState<"" | "VIDE" | "M" | "Mme">("");
+  const [gradeFilter, setGradeFilter] = useState<string>("all");
+  const [echelonFilter, setEchelonFilter] = useState<string>("all");
+  const [emailFilter, setEmailFilter] = useState<"" | "VIDE" | "RENSEIGNE">("");
 
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
   const ccmaModelAvailable = selectedCampagne?.type === "CCMA";
+
+  // Options des filtres Grade/Échelon — sur `recipients` (pas `visibleRecipients`) pour que la
+  // liste déroulante ne rétrécisse pas au fur et à mesure qu'on combine plusieurs filtres, comme
+  // pour le filtre grade/échelon de DashboardPage. Échelon = échelon de départ (celui affiché en
+  // premier dans la colonne "Échelon" : "départ → suivant").
+  const grades = useMemo(() => Array.from(new Set(recipients.map((r) => r.grade))).sort(), [recipients]);
+  const echelons = useMemo(
+    () => Array.from(new Set(recipients.map((r) => r.echelonDepart))).sort((a, b) => echelonSortValue(a) - echelonSortValue(b)),
+    [recipients],
+  );
 
   // Filtre sur la civilité telle qu'affichée (estimée ou corrigée, peu importe) — "Vide" retrouve
   // les destinataires dont on n'a aucune civilité du tout (ni déclarée, ni devinée), typiquement à
   // corriger à la main. Affichage uniquement — ne touche pas à `selected` : la case à cocher d'une
   // ligne masquée par le filtre garde son état, exactement comme les filtres de DashboardPage.
   const visibleRecipients = useMemo(() => {
-    if (!civiliteFilter) return recipients;
-    if (civiliteFilter === "VIDE") return recipients.filter((r) => r.civilite == null);
-    return recipients.filter((r) => r.civilite === civiliteFilter);
-  }, [recipients, civiliteFilter]);
+    return recipients.filter((r) => {
+      if (civiliteFilter === "VIDE" && r.civilite != null) return false;
+      if (civiliteFilter === "M" || civiliteFilter === "Mme") {
+        if (r.civilite !== civiliteFilter) return false;
+      }
+      if (gradeFilter !== "all" && r.grade !== gradeFilter) return false;
+      if (echelonFilter !== "all" && r.echelonDepart !== echelonFilter) return false;
+      if (emailFilter === "VIDE" && r.email) return false;
+      if (emailFilter === "RENSEIGNE" && !r.email) return false;
+      return true;
+    });
+  }, [recipients, civiliteFilter, gradeFilter, echelonFilter, emailFilter]);
 
   const missingEmail = useMemo(() => visibleRecipients.filter((r) => !r.email), [visibleRecipients]);
   const missingEmailAllSelected = missingEmail.length > 0 && missingEmail.every((r) => selected.has(r.teacherId));
@@ -300,6 +336,36 @@ export function MailingPage() {
               <option value="VIDE">Vide</option>
               <option value="M">M</option>
               <option value="Mme">Mme</option>
+            </select>
+          </label>
+          <label>
+            Grade
+            <select value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
+              <option value="all">Tous</option>
+              {grades.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Échelon
+            <select value={echelonFilter} onChange={(e) => setEchelonFilter(e.target.value)}>
+              <option value="all">Tous</option>
+              {echelons.map((e) => (
+                <option key={e} value={e}>
+                  {formatEchelonLabel(e)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            E-mail
+            <select value={emailFilter} onChange={(e) => setEmailFilter(e.target.value as typeof emailFilter)}>
+              <option value="">Tous</option>
+              <option value="VIDE">Vide</option>
+              <option value="RENSEIGNE">Renseigné</option>
             </select>
           </label>
         </div>
