@@ -11,7 +11,7 @@ import { loadBaCandidateCountByGroup } from "../mailing/baCandidateStats.js";
 import { computeFuturePromotion } from "../mailing/futurePromotion.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
-import { renderMailingPdf, isFirstOfBatch } from "../mailing/pdf.js";
+import { renderMailingPdf } from "../mailing/pdf.js";
 import { computeBaStatus } from "../baStatus.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
@@ -649,9 +649,11 @@ mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(as
     // The branding logo is a real, non-trivial image (confirmed ~760KB in production) that
     // buildHeader embeds inline on every letter — fine for one self-contained e-mail, but
     // multiplied across a whole campagne's worth of recipients in this one PDF it's what OOM-
-    // killed the api process (see pdf.ts's own comment). Keeping it only on the first page of each
-    // batch bounds that duplication regardless of how many recipients are selected.
-    const recipientShared = isFirstOfBatch(index) ? shared : { ...shared, logoDataUrl: null };
+    // killed the api process, and then (even just once per Chromium-render batch) bloated the
+    // merged file to ~10x the size of the old Word mail-merge equivalent (see pdf.ts's own
+    // comment). Keeping it only on the very first page of the whole export — index 0, never
+    // repeated on any later page, even across a batch boundary — bounds both at once.
+    const recipientShared = index === 0 ? shared : { ...shared, logoDataUrl: null };
     const { subject, html } = buildRecipientEmail(
       recipient,
       { ...campagne, type: campagne.type as "CCMA" | "CCMI" | null },

@@ -52,20 +52,16 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
 // bytes (confirmed ~760KB in production, ~1MB once base64-inflated) get duplicated once per
 // recipient with no bound at all. On a 571-recipient CCMA campagne that's over half a gigabyte of
 // duplicated image bytes alone — it OOM-killed the whole api process in production (V8 heap
-// exhausted) even after introducing batching below, because batching only bounds how much of that
-// duplication Chromium sees in one render call, not the total duplication accumulated in JS
-// strings across the whole run. routes/mailing.ts's /pdf route uses isFirstOfBatch (below) to
-// only keep the logo on the first page of each batch, which is what actually bounds it; batching
-// itself still helps (keeps each individual Chromium render small) and is cheap insurance on a box
-// this tight on memory (confirmed production host: ~1.9GB total, no swap).
+// exhausted). routes/mailing.ts's /pdf route now only keeps the logo on the very first page of
+// the whole export (index 0 among every recipient, not per batch — an earlier version kept one
+// copy per batch, which merely traded the OOM for an equally real problem: each batch is rendered
+// by Chromium as its own independent PDF document, so pdf-lib's copyPages carries over a distinct
+// copy of that embedded logo per batch into the merged file — confirmed as the dominant cause of a
+// 49MB PDF for 571 recipients, ~58 batches of 10, vs. 4.6MB from the old Word mail-merge for the
+// same campagne). Batching itself still helps independently of the logo (keeps each individual
+// Chromium render's own HTML/DOM small) and is cheap insurance on a box this tight on memory
+// (confirmed production host: ~1.9GB total, no swap).
 export const MAILING_PDF_BATCH_SIZE = 10;
-
-/** Whether `index` (0-based position among every recipient in this PDF export) is the first of
- * its batch — see this module's own comment above for why that's the one page allowed to carry
- * the branding logo. */
-export function isFirstOfBatch(index: number): boolean {
-  return index % MAILING_PDF_BATCH_SIZE === 0;
-}
 
 function wrapHtmlDocument(bodyHtml: string): string {
   return `<!DOCTYPE html>

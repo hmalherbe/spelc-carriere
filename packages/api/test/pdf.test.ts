@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PDFParse } from "pdf-parse";
-import { isFirstOfBatch, MAILING_PDF_BATCH_SIZE, renderHtmlToPdf, renderMailingPdf } from "../src/mailing/pdf.js";
+import { renderHtmlToPdf, renderMailingPdf } from "../src/mailing/pdf.js";
 
 describe("renderHtmlToPdf", () => {
   it("renders one PDF page per page-break-after section, each keeping its own text", async () => {
@@ -42,15 +42,4 @@ describe("renderMailingPdf", () => {
     expect(result.pages[20].text).toContain("Destinataire numero 20");
     expect(result.pages[44].text).toContain("Destinataire numero 44");
   }, 60000);
-});
-
-describe("isFirstOfBatch", () => {
-  it("is true only for index 0 and every MAILING_PDF_BATCH_SIZE-th index after it", () => {
-    expect(isFirstOfBatch(0)).toBe(true);
-    expect(isFirstOfBatch(1)).toBe(false);
-    expect(isFirstOfBatch(MAILING_PDF_BATCH_SIZE - 1)).toBe(false);
-    expect(isFirstOfBatch(MAILING_PDF_BATCH_SIZE)).toBe(true);
-    expect(isFirstOfBatch(MAILING_PDF_BATCH_SIZE * 3)).toBe(true);
-    expect(isFirstOfBatch(MAILING_PDF_BATCH_SIZE * 3 + 1)).toBe(false);
-  });
 });
