@@ -27,7 +27,8 @@ describe("buildPromotionEmail", () => {
     const { subject, html } = buildPromotionEmail(BASE);
 
     expect(subject).toContain("2024-2025");
-    expect(html).toContain("Madame ABOUD");
+    expect(html).toContain("Chère adhérente,");
+    expect(html).toContain("Irene ABOUD");
     expect(html).toContain("échelon <strong>5</strong>");
     expect(html).toContain("échelon <strong>6</strong>");
     expect(html).toContain("211 €");
@@ -55,7 +56,7 @@ describe("buildPromotionEmail", () => {
     expect(html).not.toContain("gain mensuel estimé");
   });
 
-  it("falls back to prénom+nom when no civilité is known", () => {
+  it("falls back to the epicène greeting when no civilité is known", () => {
     const { html } = buildPromotionEmail({
       ...BASE,
       civilite: null,
@@ -71,7 +72,21 @@ describe("buildPromotionEmail", () => {
       dateProchainePromotion: "2025-01-01T00:00:00.000Z",
     });
 
-    expect(html).toContain("Marie DUPONT,");
+    expect(html).toContain("Cher(e) adhérent(e),");
+    expect(html).toContain("Marie DUPONT");
+  });
+
+  it("greets a non-adhérent as 'collègue' instead of 'adhérent'", () => {
+    const { html: known } = buildPromotionEmail({ ...BASE, isAdherent: false, civilite: "M" });
+    expect(known).toContain("Cher collègue,");
+
+    const { html: unknown } = buildPromotionEmail({ ...BASE, isAdherent: false, civilite: null });
+    expect(unknown).toContain("Cher(e) collègue(e),");
+  });
+
+  it("capitalizes the prénom (proper case) in the greeting's name line", () => {
+    const { html } = buildPromotionEmail({ ...BASE, prenom: "MARIE-HÉLÈNE" });
+    expect(html).toContain("Marie-Hélène ABOUD");
   });
 
   it("escapes HTML-like content coming from imported nom/prénom/grade fields", () => {

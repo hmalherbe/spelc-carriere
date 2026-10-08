@@ -1,3 +1,5 @@
+import { formatPrenom } from "@spelc/domain";
+
 export interface MailingElu {
   role: "TITULAIRE" | "SUPPLEANT";
   prenom: string;
@@ -57,12 +59,20 @@ export function formatDateFr(iso: string | null): string | null {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 }
 
-export function civilitePrefix(civilite: string | null): string {
-  if (!civilite) return "";
-  const c = civilite.trim().toLowerCase();
-  if (c.startsWith("mme")) return "Madame";
-  if (c.startsWith("m")) return "Monsieur";
-  return escapeHtml(civilite);
+/**
+ * "Cher adhérent,"/"Chère adhérente," (or "collègue" for a non-adhérent) based on the resolved
+ * civilité, falling back to the epicène "Cher(e) ...(e)," form when the civilité couldn't be
+ * resolved — immediately followed by the recipient's own "<Prénom> <NOM>" line (prénom in proper
+ * case, see formatPrenom; NOM kept all-caps, as every source gives it). Replaces the old plain
+ * "<Civilité> <NOM>," salutation.
+ */
+export function buildGreeting(civilite: string | null, isAdherent: boolean, prenom: string, nom: string): string {
+  const c = civilite?.trim().toLowerCase() ?? null;
+  const roleM = isAdherent ? "adhérent" : "collègue";
+  const roleF = isAdherent ? "adhérente" : "collègue";
+  const roleEpicene = isAdherent ? "adhérent(e)" : "collègue(e)";
+  const greeting = c?.startsWith("mme") ? `Chère ${roleF},` : c?.startsWith("m") ? `Cher ${roleM},` : `Cher(e) ${roleEpicene},`;
+  return `<p>${greeting}<br>${escapeHtml(formatPrenom(prenom))} ${escapeHtml(nom)}</p>`;
 }
 
 /**
@@ -178,13 +188,10 @@ export function buildSocialLinks(links: MailingSocialLink[]): string {
 
 export function buildPromotionEmail(ctx: MailingContext): { subject: string; html: string } {
   const dateFr = formatDateFr(ctx.dateProchainePromotion);
-  const civiliteLabel = civilitePrefix(ctx.civilite);
-  const nom = escapeHtml(ctx.nom);
-  const prenom = escapeHtml(ctx.prenom);
   const grade = escapeHtml(ctx.grade);
   const echelonDepart = escapeHtml(ctx.echelonDepart);
   const echelonSuivant = escapeHtml(ctx.echelonSuivant);
-  const salutation = civiliteLabel ? `${civiliteLabel} ${nom},` : `${prenom} ${nom},`;
+  const greeting = buildGreeting(ctx.civilite, ctx.isAdherent, ctx.prenom, ctx.nom);
 
   const subject = `Spelc — Votre changement d'échelon (${ctx.anneeScolaire})`;
 
@@ -209,7 +216,7 @@ export function buildPromotionEmail(ctx: MailingContext): { subject: string; htm
 
   const html = `
     ${header}
-    <p>${salutation}</p>
+    ${greeting}
     <p>Le Spelc a examiné votre situation pour la campagne <strong>${ctx.anneeScolaire}</strong> (grade : ${grade}).</p>
     ${promotionParagraph}
     ${gainParagraph}

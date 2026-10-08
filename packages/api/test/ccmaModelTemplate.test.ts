@@ -41,13 +41,22 @@ describe("buildCcmaModelEmail", () => {
     expect(() => buildCcmaModelEmail({ ...BASE, commission: "CCMI" })).toThrow(CcmaModelUnavailableError);
   });
 
-  it("renders the campaign title, salutation and current-échelon paragraph", () => {
+  it("renders the campaign title, greeting and current-échelon paragraph", () => {
     const { subject, html } = buildCcmaModelEmail(BASE);
     expect(subject).toBe("Spelc Côte d'Azur - CCMA du 25 mars 2026 : avancements");
     expect(html).toContain("CCMA du 25 mars 2026");
-    expect(html).toContain("Elise MORIN,");
+    expect(html).toContain("Cher(e) adhérent(e),");
+    expect(html).toContain("Elise MORIN");
     expect(html).toContain("elise.m83@hotmail.fr");
     expect(html).toContain("Vous étiez à l'échelon <strong>4</strong> de l'échelle de rémunération : AGREGE.");
+  });
+
+  it("greets a known civilité as 'Cher adhérent'/'Chère adhérente', or 'collègue' for a non-adhérent", () => {
+    expect(buildCcmaModelEmail({ ...BASE, civilite: "M" }).html).toContain("Cher adhérent,");
+    expect(buildCcmaModelEmail({ ...BASE, civilite: "Mme" }).html).toContain("Chère adhérente,");
+    expect(buildCcmaModelEmail({ ...BASE, civilite: "M", isAdherent: false }).html).toContain("Cher collègue,");
+    expect(buildCcmaModelEmail({ ...BASE, civilite: "Mme", isAdherent: false }).html).toContain("Chère collègue,");
+    expect(buildCcmaModelEmail({ ...BASE, civilite: null, isAdherent: false }).html).toContain("Cher(e) collègue(e),");
   });
 
   it("shows the normal-PPCR passage paragraph when bonification = ANCIENNETE, and nothing BA-related", () => {

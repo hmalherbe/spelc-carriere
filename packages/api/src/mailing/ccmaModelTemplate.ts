@@ -1,10 +1,10 @@
 import { AVIS_LABELS, formatAnneesDecimalesText, formatDureeEncodedText } from "@spelc/domain";
 import {
   buildElusFooter,
+  buildGreeting,
   buildHeader,
   buildSocialLinks,
   buildUnsubscribeLink,
-  civilitePrefix,
   escapeHtml,
   formatDateFr,
   type MailingElu,
@@ -221,10 +221,7 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
   }
 
   const dateCcmaFr = formatDateFr(ctx.dateCcma) ?? "";
-  const civiliteLabel = civilitePrefix(ctx.civilite);
-  const nom = escapeHtml(ctx.nom);
-  const prenom = escapeHtml(ctx.prenom);
-  const salutation = civiliteLabel ? `${civiliteLabel} ${nom},` : `${prenom} ${nom},`;
+  const greeting = buildGreeting(ctx.civilite, ctx.isAdherent, ctx.prenom, ctx.nom);
 
   const subject = `Spelc Côte d'Azur - CCMA du ${dateCcmaFr} : avancements`;
 
@@ -235,9 +232,8 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
 
   const body = [
     p(`<strong>CCMA du ${dateCcmaFr}</strong>`),
-    p(`${prenom} ${nom},`),
     ctx.email ? p(escapeHtml(ctx.email)) : "",
-    p(salutation),
+    greeting,
     p(
       "La CCMA de ce jour a examiné votre situation d'avancement d'échelon. Le Spelc, syndicat majoritaire et représenté avec 3 sièges sur 5, s'est assuré de la conformité des données étudiées et a le plaisir de vous communiquer votre nouvelle situation :",
     ),
