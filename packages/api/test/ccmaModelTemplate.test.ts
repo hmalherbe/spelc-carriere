@@ -61,7 +61,7 @@ describe("buildCcmaModelEmail", () => {
 
   it("shows the normal-PPCR passage paragraph when bonification = ANCIENNETE, and nothing BA-related", () => {
     const { html } = buildCcmaModelEmail(BASE);
-    expect(html).toContain("prévu par les durées du PPCR est acté au 7 avril 2026");
+    expect(html).toContain("prévu par les durées du PPCR est acté au 07 avril 2026");
     expect(html).not.toContain("bonification d'ancienneté d'un an");
     expect(html).not.toContain("Votre barème");
   });
@@ -70,7 +70,7 @@ describe("buildCcmaModelEmail", () => {
     const { html } = buildCcmaModelEmail(BASE);
     expect(html).toContain("140 € nets");
     expect(html).toContain("régularisation financière devrait intervenir au plus tôt en avril 2026");
-    expect(html).toContain("Votre prochaine promotion dans ce grade est prévue le : 7 octobre 2028.");
+    expect(html).toContain("Votre prochaine promotion dans ce grade est prévue le : 07 octobre 2028.");
     expect(html).not.toContain("l'accélération de carrière d'un an du PPCR");
   });
 

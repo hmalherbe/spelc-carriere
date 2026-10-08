@@ -33,7 +33,7 @@ describe("buildPromotionEmail", () => {
     expect(html).toContain("échelon <strong>6</strong>");
     expect(html).toContain("211 €");
     expect(html).toContain("163 €");
-    expect(html).toContain("1 mars 2025");
+    expect(html).toContain("01 mars 2025");
   });
 
   it("renders a ceiling-échelon message and omits the gain paragraph when there is no next promotion", () => {

@@ -56,7 +56,11 @@ export function escapeHtml(value: string): string {
 
 export function formatDateFr(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  // "2-digit" day (zero-padded, "01 septembre 2024") — confirmed against the real Word mail-merge
+  // output (Lettre_Modele_CCMA_25-03-2026.docx's date picture switch always pads the day; a real
+  // sent letter shows "Au 01 septembre 2024 vous aviez un report..."), not plain "numeric" which
+  // would instead render "1 septembre 2024".
+  return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
 }
 
 /**
