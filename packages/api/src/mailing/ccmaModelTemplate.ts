@@ -176,7 +176,11 @@ function buildNonPromuLines(ctx: CcmaModelContext): string[] {
   }
   const dateEffet = formatDateFr(ctx.dateEffetCcm);
   return [
-    `Malheureusement seuls ${ctx.pourcentagePromusBa} % des promouvables ont obtenu cette accélération de carrière sur la base des évaluations à la suite du rendez-vous de carrière` +
+    // Le "30 %" est un texte fixe dans le document Word source (le quota statutaire de la BA),
+    // jamais un MERGEFIELD — confirmé sur le dump des codes de champs : seul le choix entre cette
+    // phrase et "aucun promu du tout" (juste au-dessus) dépend d'une donnée calculée
+    // (pourcentagePromusBa), jamais le chiffre affiché lui-même.
+    `Malheureusement seuls 30 % des promouvables ont obtenu cette accélération de carrière sur la base des évaluations à la suite du rendez-vous de carrière` +
       (dateEffet
         ? `, la ${escapeHtml(ctx.commission)} de l'année prochaine actera votre passage à l'échelon <strong>${escapeHtml(ctx.echelonSuivant)}</strong> à la date du ${dateEffet}.`
         : "."),

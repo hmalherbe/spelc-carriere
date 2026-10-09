@@ -114,15 +114,10 @@ export function buildElusFooter(commission: MailingContext["commission"], elus: 
       </tr>`,
     )
     .join("");
-  const label = commission ? `Vos élus ${escapeHtml(commission)}` : "Vos élus";
+  const label = commission ? `Vos élu(e)s ${escapeHtml(commission)}` : "Vos élu(e)s";
   return `
     <p style="margin-top: 24px; margin-bottom: 4px;"><strong>${label} :</strong></p>
     <table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse; margin-top: 0; font-size: 0.9rem;">
-      <tr>
-        <th align="left" style="padding: 4px 16px 4px 0; border-bottom: 1px solid #cccccc;">Prénom NOM</th>
-        <th align="left" style="padding: 4px 16px 4px 0; border-bottom: 1px solid #cccccc;">Mobile</th>
-        <th align="left" style="padding: 4px 0 4px 0; border-bottom: 1px solid #cccccc;">Mail</th>
-      </tr>
       ${rows}
     </table>`;
 }

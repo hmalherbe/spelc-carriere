@@ -141,11 +141,9 @@ describe("buildPromotionEmail", () => {
         { role: "SUPPLEANT", prenom: "Sophie", nom: "DURAND", telephone: null, email: null },
       ],
     });
-    expect(html).toContain("Vos élus CCMA");
-    expect(html).toContain("<th align=\"left\"");
-    expect(html).toContain(">Prénom NOM<");
-    expect(html).toContain(">Mobile<");
-    expect(html).toContain(">Mail<");
+    expect(html).toContain("Vos élu(e)s CCMA");
+    expect(html).not.toContain("<th align=\"left\"");
+    expect(html).not.toContain(">Prénom NOM<");
     expect(html).toContain(">Julien MARTIN<");
     expect(html).toContain(">06 00 00 00 00<");
     expect(html).toContain(">julien@spelc.example<");
