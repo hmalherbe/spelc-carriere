@@ -53,19 +53,38 @@ campagnesRouter.post("/", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res)
   res.status(201).json(campagne);
 });
 
-const updateCampagneTypeSchema = z.object({ type: z.enum(["CCMA", "CCMI", "HC", "EXC"]) });
+// Every field but all optional — a PATCH only updates whatever it includes, so the same route
+// serves both "set the commission on a legacy campagne" (just `type`) and "fix a campagne's own
+// dates after creation" (e.g. a wrong dateCcma that was only noticed once mailings referencing it
+// had already gone out — see MailingPage/ccmaModelTemplate.ts, which read dateCcma straight from
+// the campagne with no other way to correct it short of this endpoint).
+const updateCampagneSchema = z.object({
+  anneeScolaire: z.string().min(1).optional(),
+  periodeDebut: z.string().datetime().or(z.string().date()).optional(),
+  periodeFin: z.string().datetime().or(z.string().date()).optional(),
+  dateCcma: z.string().datetime().or(z.string().date()).optional(),
+  type: z.enum(["CCMA", "CCMI", "HC", "EXC"]).optional(),
+});
 
-/** The only field editable after creation — lets an admin retroactively set the commission on a
- * campagne created before this field existed. */
 campagnesRouter.patch("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
-  const parsed = updateCampagneTypeSchema.safeParse(req.body);
+  const parsed = updateCampagneSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
   }
   const existing = await prisma.campagne.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "Campagne introuvable" });
 
-  const campagne = await prisma.campagne.update({ where: { id: req.params.id }, data: { type: parsed.data.type } });
+  const { anneeScolaire, periodeDebut, periodeFin, dateCcma, type } = parsed.data;
+  const campagne = await prisma.campagne.update({
+    where: { id: req.params.id },
+    data: {
+      ...(anneeScolaire !== undefined ? { anneeScolaire } : {}),
+      ...(periodeDebut !== undefined ? { periodeDebut: new Date(periodeDebut) } : {}),
+      ...(periodeFin !== undefined ? { periodeFin: new Date(periodeFin) } : {}),
+      ...(dateCcma !== undefined ? { dateCcma: new Date(dateCcma) } : {}),
+      ...(type !== undefined ? { type } : {}),
+    },
+  });
   res.json(campagne);
 });
 

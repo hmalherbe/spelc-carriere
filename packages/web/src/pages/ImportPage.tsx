@@ -54,6 +54,25 @@ export function ImportPage() {
 
   const selectedCampagne = campagnes.find((c) => c.id === campagneId) ?? null;
 
+  const [showEditDates, setShowEditDates] = useState(false);
+  const [editDates, setEditDates] = useState({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: "" });
+  const [savingDates, setSavingDates] = useState(false);
+
+  // Repopule le formulaire d'édition sur la campagne réellement sélectionnée à chaque ouverture —
+  // sinon il garderait les valeurs d'une précédente ouverture si l'utilisateur change de campagne
+  // entre-temps sans jamais rouvrir le formulaire.
+  useEffect(() => {
+    if (showEditDates && selectedCampagne) {
+      setEditDates({
+        anneeScolaire: selectedCampagne.anneeScolaire,
+        periodeDebut: selectedCampagne.periodeDebut.slice(0, 10),
+        periodeFin: selectedCampagne.periodeFin.slice(0, 10),
+        dateCcma: selectedCampagne.dateCcma.slice(0, 10),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showEditDates, selectedCampagne?.id]);
+
   const [rectoratFiles, setRectoratFiles] = useState<File[]>([]);
   const [rectoratBusy, setRectoratBusy] = useState(false);
   const [rectoratResults, setRectoratResults] = useState<{ fileName: string; result?: RectoratImportResult; error?: string }[]>([]);
@@ -127,6 +146,22 @@ export function ImportPage() {
       setCampagneError(String(e));
     } finally {
       setSavingCampagneType(false);
+    }
+  }
+
+  async function saveDates(e: React.FormEvent) {
+    e.preventDefault();
+    if (!campagneId) return;
+    setSavingDates(true);
+    setCampagneError(null);
+    try {
+      await api.updateCampagne(campagneId, editDates);
+      setShowEditDates(false);
+      refreshCampagnes(campagneId);
+    } catch (e) {
+      setCampagneError(String(e));
+    } finally {
+      setSavingDates(false);
     }
   }
 
@@ -225,7 +260,51 @@ export function ImportPage() {
           <button type="button" className="secondary" onClick={() => setShowNewCampagne((v) => !v)}>
             {showNewCampagne ? "Annuler" : "Nouvelle campagne"}
           </button>
+          {selectedCampagne && (
+            <button type="button" className="secondary" onClick={() => setShowEditDates((v) => !v)}>
+              {showEditDates ? "Annuler" : "Modifier les dates"}
+            </button>
+          )}
         </div>
+
+        {showEditDates && selectedCampagne && (
+          <form className="inline-form" onSubmit={saveDates}>
+            <label>
+              Année scolaire
+              <input
+                required
+                value={editDates.anneeScolaire}
+                onChange={(e) => setEditDates((s) => ({ ...s, anneeScolaire: e.target.value }))}
+              />
+            </label>
+            <label>
+              Début de période
+              <input
+                required
+                type="date"
+                value={editDates.periodeDebut}
+                onChange={(e) => setEditDates((s) => ({ ...s, periodeDebut: e.target.value }))}
+              />
+            </label>
+            <label>
+              Fin de période
+              <input
+                required
+                type="date"
+                value={editDates.periodeFin}
+                onChange={(e) => setEditDates((s) => ({ ...s, periodeFin: e.target.value }))}
+              />
+            </label>
+            <label>
+              Date CCMA
+              <input required type="date" value={editDates.dateCcma} onChange={(e) => setEditDates((s) => ({ ...s, dateCcma: e.target.value }))} />
+            </label>
+            <button type="submit" disabled={savingDates}>
+              {savingDates ? "Enregistrement..." : "Enregistrer"}
+            </button>
+            {campagneError && <p className="error-text">{campagneError}</p>}
+          </form>
+        )}
 
         {selectedCampagne && !selectedCampagne.type && (
           <p className="hint error-text">

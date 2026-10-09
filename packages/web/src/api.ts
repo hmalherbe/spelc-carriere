@@ -523,6 +523,10 @@ export const api = {
   }) => request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
   updateCampagneType: (id: string, type: "CCMA" | "CCMI" | "HC" | "EXC") =>
     request<Campagne>(`/campagnes/${id}`, { method: "PATCH", body: JSON.stringify({ type }) }),
+  updateCampagne: (
+    id: string,
+    data: Partial<{ anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }>,
+  ) => request<Campagne>(`/campagnes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
   updateAncienneteADeduire: (teacherId: string, ancienneteADeduire: string | null, ancienneteADeduireNote: string | null) =>
     request<{ ancienneteADeduire: string | null; ancienneteADeduireNote: string | null; warnings: string[] }>(
