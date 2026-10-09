@@ -102,6 +102,9 @@ Règles impératives pour la requête SQL à générer :
 - Une seule instruction SELECT (pas de CTE / WITH, pas de commentaires SQL).
 - N'utilise que les tables et colonnes listées ci-dessus, avec les noms exacts entre guillemets doubles.
 - Ne modifie jamais de données (pas de INSERT/UPDATE/DELETE/DROP/etc.) — lecture seule uniquement.
+- N'écris jamais toi-même de clause LIMIT : le résultat est de toute façon automatiquement limité à
+  200 lignes. Un LIMIT placé dans une branche d'UNION/UNION ALL sans parenthèses autour de chaque
+  sous-requête est une erreur de syntaxe SQL — ne pas en écrire évite complètement ce piège.
 - Si la question ne peut pas raisonnablement être répondue avec ces tables, réponds exactement :
   SELECT 'Question hors du périmètre des données disponibles.' AS message
 `.trim();
