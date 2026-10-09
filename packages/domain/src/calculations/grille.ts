@@ -85,6 +85,16 @@ export function deriveNumericEchelonAliases(
  * "A3" and "B1" lead to "B2" in EXC_AGR) — ambiguous from the projection value alone, this returns
  * whichever of the two comes first in the grille's own row order. The "vivier 2" track (B1/B2/B3)
  * predates the current PPCR rules, so this shouldn't affect a teacher on a current-cycle export.
+ *
+ * Excludes a grille's own ceiling row from the search: its `duree === "MAX"` row always has
+ * `echelonSuivant === echelon` (a self-loop — there's no échelon beyond it), which would otherwise
+ * also satisfy `echelonSuivant === target` for a projection landing ON that ceiling and could be
+ * matched instead of the real predecessor depending on row order — confirmed as a real production
+ * bug (HC_PROFS's échelon 7 ceiling: a teacher genuinely promoted 6 -> 7 this cycle, with "PROJET
+ * D'AVANCEMENT ECHELON : 07", was derived back to échelonActuel "07" instead of "06" whenever the
+ * grille rows weren't returned in ascending échelon order — e.g. loadLiveGrilles' unordered
+ * `prisma.grille.findMany`, where DB row order isn't guaranteed — silently reporting them as having
+ * already reached the grille's ceiling instead of the promotion they were actually getting this CCMA).
  */
 export function deriveEchelonActuelFromProjection(
   grille: GrilleCode,
@@ -92,7 +102,9 @@ export function deriveEchelonActuelFromProjection(
   grilles: Record<GrilleCode, EchelonRow[]> = GRILLES,
 ): EchelonCode {
   const target = normalizeEchelonKey(projectionEchelon);
-  const predecessor = grilles[grille].find((r) => normalizeEchelonKey(r.echelonSuivant) === target);
+  const predecessor = grilles[grille].find(
+    (r) => normalizeEchelonKey(r.echelonSuivant) === target && normalizeEchelonKey(r.echelon) !== target,
+  );
   if (!predecessor) {
     throw new Error(`Aucun échelon de la grille ${grille} n'a pour échelon suivant "${projectionEchelon}"`);
   }

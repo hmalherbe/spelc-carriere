@@ -103,4 +103,22 @@ describe("deriveEchelonActuelFromProjection", () => {
     const overridden = { AGR: [{ echelon: 5, echelonSuivant: 6, indice: 999, duree: 2.5 }] };
     expect(deriveEchelonActuelFromProjection("AGR", "6", overridden as never)).toBe(5);
   });
+
+  it("still resolves the ceiling's self-referencing row correctly when it's returned BEFORE the real predecessor", () => {
+    // Real production bug: loadLiveGrilles (packages/api/src/liveGrilles.ts) loads a grille's rows
+    // via `prisma.grille.findMany({ include: { rows: true } })` with no `orderBy` — Postgres gives no
+    // ordering guarantee without one, and DID return a grille's ceiling row before its predecessor in
+    // production (HC_PROFS: échelon 7 is the ceiling, duree "MAX", echelonSuivant 7 — a self-loop).
+    // The old "first match in array order wins" logic silently depended on ascending échelon order to
+    // prefer the real predecessor (6) over the self-loop (7) — reversed order instead derived échelon
+    // "07" as its own départ (no correction applied at all), reporting every teacher genuinely
+    // promoted 6 -> 7 this cycle as already sitting at the grille's ceiling with no promotion to show.
+    const reversed = {
+      AGR: [
+        { echelon: 11, echelonSuivant: 11, indice: 1, duree: "MAX" as const },
+        { echelon: 10, echelonSuivant: 11, indice: 1, duree: 2 },
+      ],
+    };
+    expect(deriveEchelonActuelFromProjection("AGR", "11", reversed as never)).toBe(10);
+  });
 });
