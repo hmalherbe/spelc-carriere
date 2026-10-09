@@ -10,7 +10,7 @@ import {
   type MailingTemplate,
 } from "../api.js";
 import { useAuth } from "../AuthContext.js";
-import { formatPrenom } from "../format.js";
+import { formatPrenom, formatEchelonLabel } from "../format.js";
 
 function euros(n: number): string {
   return `${n >= 0 ? "+" : ""}${n} €`;
@@ -27,13 +27,6 @@ function formatDate(iso: string | null): string {
 function echelonSortValue(echelon: string): number {
   const n = Number(echelon);
   return Number.isFinite(n) ? n : 1000 + echelon.charCodeAt(0);
-}
-
-/** Strips a leading zero for display ("07" -> "7") — échelon is zero-padded as stored/filtered on,
- * but reads oddly in a dropdown ("07" looks like a different value from "7"). */
-function formatEchelonLabel(echelon: string): string {
-  const n = Number(echelon);
-  return Number.isFinite(n) ? String(n) : echelon;
 }
 
 /** Même règle que la colonne "Éligibilité BA" de DashboardPage (voir baCell() là-bas) — reprise ici
@@ -464,7 +457,7 @@ export function MailingPage() {
                 </td>
                 <td>{r.grade}</td>
                 <td>
-                  {r.echelonDepart} → {r.echelonSuivant}
+                  {formatEchelonLabel(r.echelonDepart)} → {formatEchelonLabel(r.echelonSuivant)}
                 </td>
                 <td>
                   {(() => {

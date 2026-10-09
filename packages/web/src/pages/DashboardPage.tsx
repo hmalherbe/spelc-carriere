@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Campagne, type TeacherListItem } from "../api.js";
 import { useAuth } from "../AuthContext.js";
-import { formatPrenom } from "../format.js";
+import { formatPrenom, formatEchelonLabel } from "../format.js";
 
 const MATCHING_LABEL: Record<string, string> = {
   AUTO_CONFIRMED: "Adhérent (auto)",
@@ -35,14 +35,6 @@ function isLinkedToAdherent(t: TeacherListItem): boolean {
 function echelonSortValue(echelon: string): number {
   const n = Number(echelon);
   return Number.isFinite(n) ? n : 1000 + echelon.charCodeAt(0);
-}
-
-/** Strips a leading zero for display ("07" -> "7") — échelon is zero-padded as stored/filtered on,
- * but reads oddly in a dropdown ("07" looks like a different value from "7"). Lettered échelons
- * (hors-classe/classe exceptionnelle codes like "A1") pass through unchanged. */
-function formatEchelonLabel(echelon: string): string {
-  const n = Number(echelon);
-  return Number.isFinite(n) ? String(n) : echelon;
 }
 
 // La règle BA parle d'échelon 6 ou 8 (rendez-vous de carrière durant la 2e année du 6e échelon /

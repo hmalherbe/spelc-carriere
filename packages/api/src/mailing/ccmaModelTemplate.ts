@@ -1,4 +1,4 @@
-import { AVIS_LABELS, formatAnneesDecimalesText, formatDureeEncodedText } from "@spelc/domain";
+import { AVIS_LABELS, formatAnneesDecimalesText, formatDureeEncodedText, formatEchelonLabel } from "@spelc/domain";
 import {
   buildElusFooter,
   buildGreeting,
@@ -101,7 +101,7 @@ function buildPassageNormalBlock(ctx: CcmaModelContext): string {
   const dateEffet = formatDateFr(ctx.dateEffetCcm);
   if (!dateEffet) return "";
   return p(
-    `Votre passage à l'échelon <strong>${escapeHtml(ctx.echelonSuivant)}</strong>, prévu par les durées du PPCR est acté au ${dateEffet}.`,
+    `Votre passage à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong>, prévu par les durées du PPCR est acté au ${dateEffet}.`,
   );
 }
 
@@ -111,7 +111,7 @@ function buildPromouvableBaBlock(ctx: CcmaModelContext): string {
   const dateEligibilite = formatDateFr(ctx.dateEligibiliteBA);
   if (!dateEligibilite) return "";
   return p(
-    `À la date du ${dateEligibilite} vous étiez promouvable à l'échelon <strong>${escapeHtml(ctx.echelonSuivant)}</strong> avec une bonification d'ancienneté d'un an.`,
+    `À la date du ${dateEligibilite} vous étiez promouvable à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong> avec une bonification d'ancienneté d'un an.`,
   );
 }
 
@@ -120,7 +120,7 @@ function buildBonificationAccordeeBlock(ctx: CcmaModelContext): string {
   const dateEligibilite = formatDateFr(ctx.dateEligibiliteBA);
   if (!dateEligibilite) return "";
   return p(
-    `Nous avons le plaisir de vous annoncer que celle-ci a été acceptée. Vous passez à l'échelon <strong>${escapeHtml(ctx.echelonSuivant)}</strong> à la date du ${dateEligibilite}.`,
+    `Nous avons le plaisir de vous annoncer que celle-ci a été acceptée. Vous passez à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong> à la date du ${dateEligibilite}.`,
   );
 }
 
@@ -182,7 +182,7 @@ function buildNonPromuLines(ctx: CcmaModelContext): string[] {
     // (pourcentagePromusBa), jamais le chiffre affiché lui-même.
     `Malheureusement seuls 30 % des promouvables ont obtenu cette accélération de carrière sur la base des évaluations à la suite du rendez-vous de carrière` +
       (dateEffet
-        ? `, la ${escapeHtml(ctx.commission)} de l'année prochaine actera votre passage à l'échelon <strong>${escapeHtml(ctx.echelonSuivant)}</strong> à la date du ${dateEffet}.`
+        ? `, la ${escapeHtml(ctx.commission)} de l'année prochaine actera votre passage à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong> à la date du ${dateEffet}.`
         : "."),
     "Les critères discriminants appliqués pour deux appréciations équivalentes sont l'ancienneté dans le grade et ensuite l'ancienneté dans l'échelon.",
   ];
@@ -247,7 +247,7 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
     p(
       "La CCMA de ce jour a examiné votre situation d'avancement d'échelon. Le Spelc, syndicat majoritaire et représenté avec 3 sièges sur 5, s'est assuré de la conformité des données étudiées et a le plaisir de vous communiquer votre nouvelle situation :",
     ),
-    p(`Vous étiez à l'échelon <strong>${escapeHtml(ctx.echelonDepart)}</strong> de l'échelle de rémunération : ${escapeHtml(ctx.grade)}.`),
+    p(`Vous étiez à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonDepart))}</strong> de l'échelle de rémunération : ${escapeHtml(ctx.grade)}.`),
     buildReportAncienneteBlock(ctx),
     buildPassageNormalBlock(ctx),
     buildPromouvableBaBlock(ctx),

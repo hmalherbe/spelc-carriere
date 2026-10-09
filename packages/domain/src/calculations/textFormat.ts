@@ -49,3 +49,15 @@ export function formatAnneesDecimalesText(years: number | null | undefined): str
 export function formatPrenom(prenom: string): string {
   return prenom.toLowerCase().replace(/(^|[ '-])([a-zà-ÿ])/g, (_, sep, letter) => sep + letter.toUpperCase());
 }
+
+/**
+ * Strips a leading zero for display ("07" -> "7") — échelon is zero-padded as stored/filtered on
+ * everywhere in the app (sorting, matching against the rectorat export, GRADE_MAPPINGS lookups...),
+ * but reads oddly to a human as "07" instead of "7". Lettered échelons (hors-classe/classe
+ * exceptionnelle codes like "A1") pass through unchanged. Shared by the web UI (every table/page
+ * showing an échelon) and the mailing templates (every letter) — one place, so both stay in sync.
+ */
+export function formatEchelonLabel(echelon: string): string {
+  const n = Number(echelon);
+  return Number.isFinite(n) ? String(n) : echelon;
+}

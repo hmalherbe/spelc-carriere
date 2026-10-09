@@ -1,4 +1,4 @@
-import { formatPrenom } from "@spelc/domain";
+import { formatPrenom, formatEchelonLabel } from "@spelc/domain";
 
 export interface MailingElu {
   role: "TITULAIRE" | "SUPPLEANT";
@@ -188,8 +188,8 @@ export function buildSocialLinks(links: MailingSocialLink[]): string {
 export function buildPromotionEmail(ctx: MailingContext): { subject: string; html: string } {
   const dateFr = formatDateFr(ctx.dateProchainePromotion);
   const grade = escapeHtml(ctx.grade);
-  const echelonDepart = escapeHtml(ctx.echelonDepart);
-  const echelonSuivant = escapeHtml(ctx.echelonSuivant);
+  const echelonDepart = escapeHtml(formatEchelonLabel(ctx.echelonDepart));
+  const echelonSuivant = escapeHtml(formatEchelonLabel(ctx.echelonSuivant));
   const greeting = buildGreeting(ctx.civilite, ctx.isAdherent, ctx.prenom, ctx.nom);
 
   const subject = `Spelc — Votre changement d'échelon (${ctx.anneeScolaire})`;
