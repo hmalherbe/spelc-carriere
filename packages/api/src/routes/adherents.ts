@@ -9,9 +9,21 @@ adherentsRouter.use(requireAuth);
 /**
  * Every adherent due (CCMA/CCMI-eligible) for the given campagne — independent of matching status,
  * unlike /matches which only ever lists PENDING_REVIEW candidates. Flags whether each one is
- * actually backed by a rectorat snapshot for THIS campagne (`nonPresentDansRectorat`): a confirmed
- * or auto-confirmed link to a teacher isn't enough on its own if that teacher's own rectorat data
- * doesn't cover this specific campagne (e.g. matched years ago, not re-imported since).
+ * actually backed by a rectorat snapshot for THIS campagne (`nonPresentDansRectorat`): a linked
+ * teacher isn't enough on its own if that teacher's own rectorat data doesn't cover this specific
+ * campagne (e.g. matched years ago, not re-imported since).
+ *
+ * A PENDING_REVIEW match still counts as "present" here as long as it carries a real teacherId with
+ * a snapshot for this campagne — PENDING_REVIEW only means a human hasn't rubber-stamped the fuzzy
+ * match yet, not that the underlying teacher link is wrong or that the rectorat doesn't have this
+ * person. Real bug found this way: ABOUKASSEM Raghda (PLP, genuinely in the rectorat file) was
+ * reported as absent from it purely because her match was still PENDING_REVIEW — an older version
+ * of this check required CONFIRMED/AUTO_CONFIRMED, conflating "match reviewed by a human" with
+ * "teacher present in the rectorat", and wrongly flagged the large majority of eligible adherents as
+ * absent on a real campagne where most matches simply hadn't been manually reviewed yet. Only
+ * REJECTED (a human explicitly declared the link wrong) is excluded — matches.ts's reject handler
+ * sets that status without clearing teacherId, so it must be checked explicitly rather than inferred
+ * from teacherId alone.
  */
 adherentsRouter.get("/eligibles", async (req, res) => {
   const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
@@ -35,7 +47,8 @@ adherentsRouter.get("/eligibles", async (req, res) => {
       if (!eligibility.eligible) return null;
 
       const presentDansRectorat =
-        (a.matchCandidate?.status === "CONFIRMED" || a.matchCandidate?.status === "AUTO_CONFIRMED") &&
+        a.matchCandidate?.status !== "REJECTED" &&
+        a.matchCandidate?.teacherId != null &&
         (a.matchCandidate.teacher?.snapshots.length ?? 0) > 0;
 
       return {
