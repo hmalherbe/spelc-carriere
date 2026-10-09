@@ -47,6 +47,8 @@ export function AdherentsEligiblesPage() {
     return adherents.filter((a) => a.nonPresentDansRectorat === wantNonPresent);
   }, [adherents, presenceFilter]);
 
+  const nonPresentCount = useMemo(() => adherents.filter((a) => a.nonPresentDansRectorat).length, [adherents]);
+
   if (error) return <p className="error-text">{error}</p>;
 
   return (
@@ -67,6 +69,15 @@ export function AdherentsEligiblesPage() {
         Adhérents dont la prochaine promotion d'échelon (date de dernier changement + durée de l'échelon) tombe dans
         la période de cette campagne — qu'ils soient déjà rapprochés d'un enseignant ou non.
       </p>
+      {!loading && (
+        <p className="hint">
+          Non présents dans les fichiers du rectorat de cette campagne :{" "}
+          <strong>
+            {nonPresentCount} / {adherents.length}
+          </strong>{" "}
+          adhérents éligibles.
+        </p>
+      )}
       {loading ? (
         <p>Chargement...</p>
       ) : visible.length === 0 ? (
