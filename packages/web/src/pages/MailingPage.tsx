@@ -134,7 +134,13 @@ export function MailingPage() {
 
   useEffect(() => {
     if (campagneId) refresh(campagneId);
-    setTemplate("generique");
+    // Le modèle CCMA (reconstruit à partir du vrai courrier du syndicat) est le bon choix par
+    // défaut dès qu'il est disponible — sans ça, rebasculer silencieusement sur "Modèle générique"
+    // à chaque changement de campagne faisait repartir une campagne CCMA sans aucun contenu lié à
+    // la BA (bonification d'ancienneté) tant que l'admin ne re-sélectionnait pas le bon modèle à la
+    // main, un piège facile à manquer avant un envoi réel.
+    setTemplate(selectedCampagne?.type === "CCMA" ? "ccma_avancement" : "generique");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campagneId]);
 
   function toggle(teacherId: string) {
