@@ -7,7 +7,7 @@
 export class MistralConfigError extends Error {}
 
 export interface MistralChatMessage {
-  role: "system" | "user";
+  role: "system" | "user" | "assistant";
   content: string;
 }
 

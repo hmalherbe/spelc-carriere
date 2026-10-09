@@ -4,7 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { decryptSecret } from "../crypto.js";
-import { callMistralChat, MistralConfigError } from "../aiAssistant/mistralClient.js";
+import { callMistralChat, MistralConfigError, type MistralChatMessage } from "../aiAssistant/mistralClient.js";
 import { assertSafeSelect, UnsafeSqlError } from "../aiAssistant/sqlSafety.js";
 import { SCHEMA_DESCRIPTION } from "../aiAssistant/schemaDescription.js";
 
@@ -66,6 +66,16 @@ async function runReadOnlySelect(sql: string): Promise<Record<string, unknown>[]
 
 const askSchema = z.object({ question: z.string().min(3).max(1000) });
 
+// A generated query can be rejected by assertSafeSelect (disallowed construct) or fail at execution
+// (genuine SQL syntax/semantics error — e.g. a LIMIT inside an unparenthesized UNION branch, or
+// ORDER BY inside a DISTINCT aggregate referencing a different column — both real cases seen in
+// practice). Rather than only ever patching the system prompt one Postgres gotcha at a time as new
+// ones surface, feed the actual error back to the model and let it correct its own query — same
+// idea as a human iterating in a SQL console. Capped at a few rounds: a model that can't fix its own
+// mistake after being told exactly what Postgres said about it isn't going to on a 5th try either,
+// and every round costs a real API call.
+const MAX_SQL_ATTEMPTS = 3;
+
 aiAssistantRouter.post(
   "/ask",
   asyncHandler(async (req, res) => {
@@ -82,34 +92,61 @@ aiAssistantRouter.post(
       throw err;
     }
 
-    let rawSql: string;
-    try {
-      rawSql = await callMistralChat(mistral.apiKey, mistral.model, [
-        { role: "system", content: SCHEMA_DESCRIPTION },
-        { role: "user", content: parsed.data.question },
-      ]);
-    } catch (err) {
-      return res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
-    }
+    const messages: MistralChatMessage[] = [
+      { role: "system", content: SCHEMA_DESCRIPTION },
+      { role: "user", content: parsed.data.question },
+    ];
 
-    let safeSql: string;
-    try {
-      safeSql = assertSafeSelect(rawSql);
-    } catch (err) {
-      if (err instanceof UnsafeSqlError) {
-        return res.status(422).json({ error: `La requête générée n'a pas pu être exécutée en toute sécurité : ${err.message}` });
+    let safeSql: string | undefined;
+    let rows: Record<string, unknown>[] | undefined;
+    let lastErrorMessage = "Échec inconnu";
+
+    for (let attempt = 1; attempt <= MAX_SQL_ATTEMPTS; attempt++) {
+      let rawSql: string;
+      try {
+        rawSql = await callMistralChat(mistral.apiKey, mistral.model, messages);
+      } catch (err) {
+        return res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
       }
-      throw err;
+      messages.push({ role: "assistant", content: rawSql });
+
+      try {
+        safeSql = assertSafeSelect(rawSql);
+      } catch (err) {
+        if (!(err instanceof UnsafeSqlError)) throw err;
+        lastErrorMessage = err.message;
+        if (attempt === MAX_SQL_ATTEMPTS) {
+          return res.status(422).json({ error: `La requête générée n'a pas pu être exécutée en toute sécurité : ${err.message}` });
+        }
+        messages.push({
+          role: "user",
+          content: `Cette requête n'est pas autorisée : ${err.message}\nCorrige-la et réponds à nouveau UNIQUEMENT avec la requête SQL corrigée, en respectant les mêmes règles qu'au départ.`,
+        });
+        continue;
+      }
+
+      try {
+        rows = serializeRows(await runReadOnlySelect(safeSql));
+        break;
+      } catch (err) {
+        lastErrorMessage = err instanceof Error ? err.message : String(err);
+        if (attempt === MAX_SQL_ATTEMPTS) {
+          return res.status(422).json({
+            error: `La requête générée a échoué à l'exécution : ${lastErrorMessage}`,
+            sql: safeSql,
+          });
+        }
+        messages.push({
+          role: "user",
+          content: `Cette requête a échoué à l'exécution avec l'erreur Postgres suivante : ${lastErrorMessage}\nCorrige-la et réponds à nouveau UNIQUEMENT avec la requête SQL corrigée, en respectant les mêmes règles qu'au départ.`,
+        });
+      }
     }
 
-    let rows: Record<string, unknown>[];
-    try {
-      rows = serializeRows(await runReadOnlySelect(safeSql));
-    } catch (err) {
-      return res.status(422).json({
-        error: `La requête générée a échoué à l'exécution : ${err instanceof Error ? err.message : String(err)}`,
-        sql: safeSql,
-      });
+    if (!safeSql || !rows) {
+      // Unreachable in practice (every loop exit above either returns or sets both) — satisfies
+      // TypeScript's control-flow analysis without a non-null assertion.
+      return res.status(422).json({ error: lastErrorMessage });
     }
 
     let summary: string;
