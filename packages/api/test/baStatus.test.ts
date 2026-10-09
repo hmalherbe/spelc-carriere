@@ -69,7 +69,7 @@ describe("computeBaStatus", () => {
     expect(result.baStatus).toBe("promu");
   });
 
-  it("computes baStatus 'promu'/'non_promu' for an agrégé exactly like any other grade — their BA is decided directly at académie level, no national ministry step (confirmed by the union 2026-10-09; real case: Yann ADAM, AGREGE, échelon 6, 'Pro BA.' confirmed, ancienneté 1.442)", () => {
+  it("computes baStatus 'promu'/'non_promu' for an agrégé exactly like any other grade — their BA is decided directly at académie level, no national ministry step (confirmed by the union 2026-10-09)", () => {
     const confirmed = computeBaStatus({
       echelonActuel: "06",
       grade: "AGREGE",
@@ -87,6 +87,24 @@ describe("computeBaStatus", () => {
       ancienneteEchelon: 1.5,
     });
     expect(notConfirmed.baStatus).toBe("non_promu");
+  });
+
+  // Real case: Yann ADAM, AGREGE, échelon 6 — the rectorat file for the campagne du 25 mars 2026
+  // carries NO "Pro BA." marker for him at all (proConfirmee=false), yet the union's real sent
+  // letter shows him promu: he was granted the échelon via the "reliquat" mechanism (leftover
+  // rounding on the 30% quota) AFTER the rectorat file was established, which never gets a marker
+  // in that file. reliquatPromu is how the union records that decision — counts exactly like
+  // proConfirmee=true.
+  it("computes baStatus 'promu' for a BA candidate not confirmed by the rectorat but granted via reliquat (real case, Yann ADAM)", () => {
+    const result = computeBaStatus({
+      echelonActuel: "06",
+      grade: "AGREGE",
+      proTypePromotion: "BA",
+      proConfirmee: false,
+      ancienneteEchelon: 1.442,
+      reliquatPromu: true,
+    });
+    expect(result.baStatus).toBe("promu");
   });
 
   it("computes baStatus 'hors_fenetre' for a BA marker outside the ancienneté window, when NOT confirmed", () => {

@@ -7,6 +7,7 @@ import { importAdherentRecords, matchUnresolvedAdherents } from "../adherentImpo
 import { computeEtStockerBaremeExc } from "../hcExcComputation.js";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { recomputeAndStorePromotionState } from "../promotionState.js";
+import { loadReliquatPromotionsByCampagne } from "../reliquats.js";
 import {
   deriveEchelonActuelFromProjection,
   deriveNumericEchelonAliases,
@@ -77,6 +78,11 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   // Loaded once per import, not per row: an admin's edited indices / revalorised valeur du point
   // (see routes/grilles.ts) must be reflected in newly computed promotions.
   const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
+
+  // A reimport of this campagne's grade files must not silently drop a reliquat promotion's
+  // "promu" status from the stored ComputedPromotionState.baStatus column (see schema.prisma's
+  // ReliquatPromotion) — fetched once here, checked per record below.
+  const reliquatTeacherIds = await loadReliquatPromotionsByCampagne(campagneId);
 
   // Build a (name, grade) -> teacherId lookup from every snapshot ever imported (any campagne), so
   // a teacher re-appearing in a later campaign — or in another grade block of THIS SAME file, for a
@@ -248,6 +254,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
           proTypePromotion: record.proTypePromotion,
           proConfirmee: record.proConfirmee,
           ancienneteEchelon: record.ancienneteEchelon,
+          reliquatPromu: reliquatTeacherIds.has(teacherId),
           liveGrilles,
           liveValeurDuPoint,
         });

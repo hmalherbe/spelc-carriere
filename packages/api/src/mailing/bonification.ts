@@ -13,12 +13,17 @@ import type { BonificationState } from "./ccmaModelTemplate.js";
  * gets 99.4% (334/336) — the 2 remaining are BA grants confirmed at the CCMA meeting itself, later
  * than this file's own "PROJET D'AVANCEMENT" export date, so genuinely not decidable from this file
  * alone (see ccmaModelTemplate.ts's CCMA-only guard for the same kind of unavoidable data gap).
+ *
+ * reliquatPromu (see schema.prisma's ReliquatPromotion) counts exactly like proConfirmee=true — a
+ * BA granted via the union's own "reliquat" mechanism after the rectorat file was established,
+ * never carrying a "Pro BA." marker at all (real case: Yann ADAM, 25 mars 2026 campagne).
  */
 export function deriveBonification(snap: {
   typePromotion: string | null;
   proTypePromotion: string | null;
   proConfirmee: boolean;
+  reliquatPromu?: boolean;
 }): BonificationState {
-  if (snap.proConfirmee) return snap.proTypePromotion === "BA" ? "BONIFICATION" : "ANCIENNETE";
+  if (snap.proConfirmee || snap.reliquatPromu) return snap.proTypePromotion === "BA" ? "BONIFICATION" : "ANCIENNETE";
   return snap.typePromotion === "BA" || snap.proTypePromotion === "BA" ? "NON_PROMU" : "ANCIENNETE";
 }

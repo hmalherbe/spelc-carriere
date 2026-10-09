@@ -33,4 +33,14 @@ describe("deriveBonification", () => {
   it("ANCIENNETE: no candidacy signal anywhere, nothing confirmed", () => {
     expect(deriveBonification({ typePromotion: null, proTypePromotion: null, proConfirmee: false })).toBe("ANCIENNETE");
   });
+
+  // Real case (Yann ADAM): the rectorat file never carries a "Pro BA." marker for a BA granted via
+  // the union's own "reliquat" mechanism (leftover rounding on the 30% quota, decided after the
+  // file is established) — reliquatPromu is how the union records that decision manually, and it
+  // must count exactly like proConfirmee=true.
+  it("BONIFICATION: BA candidate, not confirmed by the rectorat, but promu via reliquat (real case, Yann ADAM)", () => {
+    expect(deriveBonification({ typePromotion: "BA", proTypePromotion: "BA", proConfirmee: false, reliquatPromu: true })).toBe(
+      "BONIFICATION",
+    );
+  });
 });

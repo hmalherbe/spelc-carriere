@@ -13,6 +13,7 @@ import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { sendBrevoEmail, BrevoConfigError, type BrevoConfig } from "../mailing/brevo.js";
 import { renderMailingPdf } from "../mailing/pdf.js";
 import { computeBaStatus } from "../baStatus.js";
+import { loadReliquatPromotionsByCampagne, loadReliquatCountByGroup } from "../reliquats.js";
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
 import { loadMailingBranding } from "../mailingBranding.js";
@@ -80,16 +81,18 @@ interface CcmaModelExtras {
   valeurDuPoint: number;
   dernierPromuByGroup: Map<string, DernierPromuBa>;
   candidateCountByGroup: Map<string, number>;
+  reliquatCountByGroup: Map<string, number>;
 }
 
 async function loadCcmaModelExtras(campagneId: string): Promise<CcmaModelExtras> {
-  const [grilles, valeurDuPoint, dernierPromuByGroup, candidateCountByGroup] = await Promise.all([
+  const [grilles, valeurDuPoint, dernierPromuByGroup, candidateCountByGroup, reliquatCountByGroup] = await Promise.all([
     loadLiveGrilles(),
     loadCurrentValeurDuPoint(),
     loadDernierPromuBaByGroup(campagneId),
     loadBaCandidateCountByGroup(campagneId),
+    loadReliquatCountByGroup(campagneId),
   ]);
-  return { grilles, valeurDuPoint, dernierPromuByGroup, candidateCountByGroup };
+  return { grilles, valeurDuPoint, dernierPromuByGroup, candidateCountByGroup, reliquatCountByGroup };
 }
 
 function buildCcmaModelContext(
@@ -103,16 +106,43 @@ function buildCcmaModelContext(
   const dernierPromu = extras.dernierPromuByGroup.get(groupKey) ?? null;
 
   const candidateCount = extras.candidateCountByGroup.get(groupKey) ?? 0;
+  // Une promotion par reliquat n'a jamais de marqueur "Pro BA." dans le fichier rectorat, donc
+  // jamais comptée dans TeacherSnapshot.nombrePromusBaSection (le propre décompte du rectorat) —
+  // ajoutée ici au numérateur pour que le pourcentage montré aux collègues non retenus du même
+  // groupe reflète la réalité plutôt que de sous-compter les promus.
+  const reliquatCountInGroup = extras.reliquatCountByGroup.get(groupKey) ?? 0;
+  const promusBaCount = (recipient.nombrePromusBaSection ?? 0) + reliquatCountInGroup;
   const pourcentagePromusBa =
-    candidateCount > 0 && recipient.nombrePromusBaSection != null
-      ? Math.round((recipient.nombrePromusBaSection / candidateCount) * 100)
+    candidateCount > 0 && (recipient.nombrePromusBaSection != null || reliquatCountInGroup > 0)
+      ? Math.round((promusBaCount / candidateCount) * 100)
       : null;
 
-  const future = recipient.dateProchainePromotion
+  // Only meaningful when this cycle was actually BA-related (bonification !== "ANCIENNETE",
+  // computed above via the same rule as deriveBonification — checking typePromotion alone here
+  // missed real BONIFICATION cases where the base marker says "AN" but proTypePromotion is the
+  // pending/confirmed "BA" decision). The rectorat's "Pro TYPE.date" marker fires for plain AN/CL
+  // confirmations too (see MOLENAT Marion, a "RE." report-d'ancienneté record confirmed "Pro AN."
+  // — her dateProchainePromotionRectorat is set but has nothing to do with a bonification).
+  const dateEligibiliteBA =
+    bonification !== "ANCIENNETE" && recipient.dateProchainePromotionRectorat ? recipient.dateProchainePromotionRectorat.toISOString() : null;
+
+  // For a reliquat promotion, there is no rectorat-computed "date d'effet" at all (the whole
+  // TeacherComputedState.dateProchainePromotion this recipient's state carries was computed BEFORE
+  // the reliquat decision, treating them as non-promu) — reuse dateEligibiliteBA (the date they
+  // were already shown as "promouvable" at, see buildPromouvableBaBlock) for every date-dependent
+  // sentence instead: "vous passez à l'échelon... à la date du", "la régularisation financière...",
+  // and "votre prochaine promotion...".
+  const dateEffetCcm = recipient.reliquatPromu
+    ? dateEligibiliteBA
+    : recipient.dateProchainePromotion
+      ? recipient.dateProchainePromotion.toISOString()
+      : null;
+
+  const future = dateEffetCcm
     ? computeFuturePromotion({
         grille: recipient.grilleCode as GrilleCode,
         echelonApresCettePromotion: recipient.echelonSuivant,
-        dateEffetCettePromotion: recipient.dateProchainePromotion.toISOString(),
+        dateEffetCettePromotion: dateEffetCcm,
         grilles: extras.grilles,
         valeurDuPoint: extras.valeurDuPoint,
       })
@@ -135,20 +165,11 @@ function buildCcmaModelContext(
     echelonSuivant: recipient.echelonSuivant,
     gainSalaireNet: recipient.gainSalaireNet,
     dateAccesEchelonActuel: recipient.dateAccesEchelon.toISOString(),
-    dateEffetCcm: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
+    dateEffetCcm,
     typePromotion: recipient.typePromotion,
     dureeRestanteEncoded: recipient.dureeRestante,
     bonification,
-    // Only meaningful when this cycle was actually BA-related (bonification !== "ANCIENNETE",
-    // computed above via the same rule as deriveBonification — checking typePromotion alone here
-    // missed real BONIFICATION cases where the base marker says "AN" but proTypePromotion is the
-    // pending/confirmed "BA" decision). The rectorat's "Pro TYPE.date" marker fires for plain AN/CL
-    // confirmations too (see MOLENAT Marion, a "RE." report-d'ancienneté record confirmed "Pro AN."
-    // — her dateProchainePromotionRectorat is set but has nothing to do with a bonification).
-    dateEligibiliteBA:
-      bonification !== "ANCIENNETE" && recipient.dateProchainePromotionRectorat
-        ? recipient.dateProchainePromotionRectorat.toISOString()
-        : null,
+    dateEligibiliteBA,
     pourcentagePromusBa,
     bareme: recipient.avisEvaluation,
     ancienneteGrade: recipient.ancienneteGrade,
@@ -221,6 +242,8 @@ async function eligibleRecipients(campagneId: string) {
     },
   });
 
+  const reliquatTeacherIds = await loadReliquatPromotionsByCampagne(campagneId);
+
   const academicEmails = await prisma.academicEmail.findMany();
   const academicEmailByName = new Map<string, string>();
   for (const a of academicEmails) {
@@ -272,6 +295,9 @@ async function eligibleRecipients(campagneId: string) {
     // aussi, après la colonne "Échelon" (voir MailingPage.tsx).
     baStatus: "hors_fenetre" | "promu" | "non_promu" | null;
     baEchelonDepart: 6 | 8 | null;
+    /** Promu via le mécanisme de reliquat du syndicat (page Reliquats) — voir schema.prisma's
+     * ReliquatPromotion et reliquats.ts. */
+    reliquatPromu: boolean;
   }[] = [];
 
   for (const snap of snapshots) {
@@ -300,12 +326,14 @@ async function eligibleRecipients(campagneId: string) {
       : (academicEmailByName.get(`${normalizeName(snap.nomUsage)}|${normalizeName(snap.prenom)}`) ?? null);
 
     const log = logByTeacherId.get(teacher.id) ?? null;
+    const reliquatPromu = reliquatTeacherIds.has(teacher.id);
     const { baStatus, baEchelonDepart } = computeBaStatus({
       echelonActuel: snap.echelonActuel,
       grade: snap.grade,
       proTypePromotion: snap.proTypePromotion,
       proConfirmee: snap.proConfirmee,
       ancienneteEchelon: snap.ancienneteEchelon,
+      reliquatPromu,
     });
     result.push({
       teacherId: teacher.id,
@@ -341,6 +369,7 @@ async function eligibleRecipients(campagneId: string) {
       ancienneteEchelon: snap.ancienneteEchelon,
       baStatus,
       baEchelonDepart,
+      reliquatPromu,
     });
   }
 

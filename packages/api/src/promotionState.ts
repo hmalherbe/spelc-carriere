@@ -20,6 +20,9 @@ export interface RecomputePromotionStateInput {
   proTypePromotion: string | null;
   proConfirmee: boolean;
   ancienneteEchelon: number | null;
+  /** Manually promoted via the union's own "reliquat" mechanism (schema.prisma's
+   * ReliquatPromotion) — see baStatus.ts's own doc comment. Defaults to false. */
+  reliquatPromu?: boolean;
   liveGrilles: Record<GrilleCode, EchelonRow[]>;
   liveValeurDuPoint: number;
 }
@@ -62,6 +65,7 @@ export async function recomputeAndStorePromotionState(
       proTypePromotion: input.proTypePromotion,
       proConfirmee: input.proConfirmee,
       ancienneteEchelon: input.ancienneteEchelon,
+      reliquatPromu: input.reliquatPromu,
     });
 
     const data = {

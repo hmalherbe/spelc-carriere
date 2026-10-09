@@ -6,6 +6,11 @@ export interface BaStatusInput {
   proTypePromotion: string | null;
   proConfirmee: boolean;
   ancienneteEchelon: number | null;
+  /** Manually promoted via the union's own "reliquat" mechanism (leftover rounding on the 30%
+   * quota, decided AFTER the rectorat file — see schema.prisma's ReliquatPromotion) — treated
+   * exactly like proConfirmee=true for baStatus purposes, since it's just as final a decision, the
+   * rectorat file simply never carries a marker for it. Defaults to false. */
+  reliquatPromu?: boolean;
 }
 
 export interface BaStatusResult {
@@ -56,9 +61,15 @@ export function computeBaStatus(snap: BaStatusInput): BaStatusResult {
   // fichier départemental) — confirmed obsolete by the union (2026-10-09): la BA des agrégés se
   // décide désormais directement au niveau académique, comme pour tout autre grade, sans remontée
   // nationale. Le marqueur "Pro BA." du rectorat tranche donc promu/non-promu pour eux aussi.
+  //
+  // reliquatPromu compte exactement comme proConfirmee ici — une promotion par reliquat est une
+  // décision tout aussi définitive, simplement absente du fichier rectorat (voir le commentaire du
+  // champ lui-même). Real case: Yann ADAM, AGREGE, échelon 6, pas de "Pro BA." dans le fichier
+  // rectorat du 25 mars 2026, promu quand même par reliquat.
+  const isConfirmedOrReliquat = snap.proConfirmee || snap.reliquatPromu === true;
   const baStatus: BaStatusResult["baStatus"] = !isBaCandidate
     ? null
-    : snap.proConfirmee
+    : isConfirmedOrReliquat
       ? "promu"
       : baEligible !== true
         ? "hors_fenetre"

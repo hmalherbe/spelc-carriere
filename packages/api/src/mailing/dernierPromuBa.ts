@@ -1,4 +1,5 @@
 import { prisma } from "../db.js";
+import { loadReliquatPromotionsByCampagne } from "../reliquats.js";
 
 export interface DernierPromuBa {
   bareme: number;
@@ -20,11 +21,17 @@ function isLower(a: DernierPromuBa, b: DernierPromuBa): boolean {
  * This reuses the exact tie-break order the deleted baThreshold.ts (git history, commit caa40a1's
  * parent) inferred a selection cutoff from — but unlike that removed code, it never estimates
  * anyone's status: it only reports the real barème/ancienneté of a peer the rectorat has already
- * confirmed promoted ("Pro BA."), for transparency in the letter to someone who wasn't.
+ * confirmed promoted ("Pro BA."), or manually promoted via reliquat (schema.prisma's
+ * ReliquatPromotion — a reliquat promu is just as real a "dernier promu" peer, the rectorat file
+ * simply never carries a marker for it), for transparency in the letter to someone who wasn't.
  */
 export async function loadDernierPromuBaByGroup(campagneId: string): Promise<Map<string, DernierPromuBa>> {
+  const reliquatTeacherIds = await loadReliquatPromotionsByCampagne(campagneId);
   const promus = await prisma.teacherSnapshot.findMany({
-    where: { campagneId, proTypePromotion: "BA", proConfirmee: true },
+    where: {
+      campagneId,
+      OR: [{ proTypePromotion: "BA", proConfirmee: true }, ...(reliquatTeacherIds.size > 0 ? [{ teacherId: { in: [...reliquatTeacherIds] } }] : [])],
+    },
     select: { grade: true, echelonActuel: true, avisEvaluation: true, ancienneteGrade: true, ancienneteEchelon: true },
   });
 

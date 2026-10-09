@@ -413,6 +413,32 @@ interface GenreBreakdown {
   indetermine: { n: number; pct: number };
 }
 
+/** Un candidat BA (échelon 6 ou 8) que le fichier rectorat seul laisse "non promu" — `selected`
+ * porte le véritable état de reliquat (voir schema.prisma's ReliquatPromotion) ; la liste elle-même
+ * reste stable une fois une personne sélectionnée (voir reliquats.ts côté API) plutôt que de la
+ * faire disparaître au moment où elle devient "promu". */
+export interface ReliquatCandidate {
+  teacherId: string;
+  nom: string;
+  prenom: string;
+  bareme: number | null;
+  ancienneteGrade: number | null;
+  ancienneteEchelon: number | null;
+  dateEligibiliteBA: string | null;
+  selected: boolean;
+}
+
+export interface ReliquatGroup {
+  grade: string;
+  echelon: 6 | 8;
+  candidates: ReliquatCandidate[];
+}
+
+export interface ReliquatCandidates {
+  campagneId: string;
+  groups: ReliquatGroup[];
+}
+
 export interface CampagneStats {
   /** Tous les grades présents dans la campagne — indépendant du filtre `grade` éventuellement
    * appliqué à cette même réponse, pour que le menu qui le pilote ne se réduise pas à une option
@@ -574,6 +600,11 @@ export const api = {
     }),
   createValeurDuPoint: (valeur: number, applicableA: string) =>
     request<ValeurDuPointApi>("/grilles/valeur-du-point", { method: "POST", body: JSON.stringify({ valeur, applicableA }) }),
+  reliquatCandidates: (campagneId: string) => request<ReliquatCandidates>(`/reliquats/${campagneId}`),
+  selectReliquat: (campagneId: string, teacherId: string) =>
+    request<{ ok: true }>("/reliquats", { method: "POST", body: JSON.stringify({ campagneId, teacherId }) }),
+  unselectReliquat: (campagneId: string, teacherId: string) =>
+    request<{ ok: true }>(`/reliquats/${campagneId}/${teacherId}`, { method: "DELETE" }),
   adelSettings: () => request<AdelSettings>("/settings/adel"),
   updateAdelSettings: (data: { loginUrl: string; username: string; password?: string; spelcName: string }) =>
     request<AdelSettings>("/settings/adel", { method: "PUT", body: JSON.stringify(data) }),

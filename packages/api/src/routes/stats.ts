@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth/middleware.js";
 import { computeBaStatus } from "../baStatus.js";
+import { loadReliquatPromotionsByCampagne } from "../reliquats.js";
 import { civiliteFromPrenom } from "@spelc/import";
 
 export const statsRouter = Router();
@@ -55,6 +56,7 @@ statsRouter.get("/", async (req, res) => {
   // dropdown that drives it doesn't collapse to one option once a grade is selected.
   const grades = Array.from(new Set(allSnapshots.map((s) => s.grade))).sort();
   const snapshots = grade ? allSnapshots.filter((s) => s.grade === grade) : allSnapshots;
+  const reliquatTeacherIds = await loadReliquatPromotionsByCampagne(campagneId);
 
   const seenTeacherIds = new Set<string>();
   let baPromus = 0;
@@ -69,7 +71,7 @@ statsRouter.get("/", async (req, res) => {
     if (seenTeacherIds.has(teacher.id)) continue; // a duplicate reimport could leave >1 snapshot for the same teacher
     seenTeacherIds.add(teacher.id);
 
-    const { baStatus, arrivedThisEchelon } = computeBaStatus(snap);
+    const { baStatus, arrivedThisEchelon } = computeBaStatus({ ...snap, reliquatPromu: reliquatTeacherIds.has(teacher.id) });
 
     const candidate = teacher.matchCandidate;
     const isAdherent = candidate != null && (candidate.status === "AUTO_CONFIRMED" || candidate.status === "CONFIRMED");

@@ -101,11 +101,12 @@ model Campagne {
   type          CampagneType?
   createdAt     DateTime      @default(now())
 
-  imports          RectoratImport[]
-  teacherSnapshots TeacherSnapshot[]
-  hcExcSnapshots   HcExcSnapshot[]
-  contingents      Contingent[]
-  mailingLogs      MailingLog[]
+  imports            RectoratImport[]
+  teacherSnapshots   TeacherSnapshot[]
+  hcExcSnapshots     HcExcSnapshot[]
+  contingents        Contingent[]
+  mailingLogs        MailingLog[]
+  reliquatPromotions ReliquatPromotion[]
 }
 
 model RectoratImport {
@@ -311,11 +312,12 @@ model Teacher {
   // and also covers a non-adhérent, who has no Adherent row to put it on.
   civiliteCorrigee String?
 
-  snapshots      TeacherSnapshot[]
-  hcExcSnapshots HcExcSnapshot[]
-  matchCandidate MatchCandidate?
-  computedStates ComputedPromotionState[]
-  mailingLogs    MailingLog[]
+  snapshots          TeacherSnapshot[]
+  hcExcSnapshots     HcExcSnapshot[]
+  matchCandidate     MatchCandidate?
+  computedStates     ComputedPromotionState[]
+  mailingLogs        MailingLog[]
+  reliquatPromotions ReliquatPromotion[]
 }
 
 // ---------------------------------------------------------------------------
@@ -407,19 +409,42 @@ model ComputedPromotionState {
   gainSalaireNet         Int
   dateProchainePromotion DateTime?
   // The teacher's BA (bonification d'ancienneté) status for this campagne, mirroring baStatus.ts's
-  // computeBaStatus() exactly — "hors_fenetre" | "national" | "promu" | "non_promu", null if not a
-  // BA candidate this cycle. Renamed from a dead "baEstimate" column (a ranking/estimation approach
-  // tried and abandoned — see git history around "Simplifie l'affichage BA" — that was never wired
-  // up again after being removed, yet stayed described to the AI assistant as the way to determine
-  // BA status: every SQL query it wrote against the always-NULL column silently returned zero rows,
+  // computeBaStatus() exactly — "hors_fenetre" | "promu" | "non_promu", null if not a BA candidate
+  // this cycle. Renamed from a dead "baEstimate" column (a ranking/estimation approach tried and
+  // abandoned — see git history around "Simplifie l'affichage BA" — that was never wired up again
+  // after being removed, yet stayed described to the AI assistant as the way to determine BA
+  // status: every SQL query it wrote against the always-NULL column silently returned zero rows,
   // e.g. "combien de promouvables à la BA ?" always answering "aucun" however many there really
   // were). computeBaStatus() itself stays the single source of truth (routes/teachers.ts's live
   // list, routes/stats.ts's aggregates) — this column exists only so the AI assistant's read-only
   // SQL access has a real, reliable field to query instead of re-deriving the same priority-ordered
-  // rule (proConfirmee/isAgrege checked before the ancienneté window) by hand in SQL.
+  // rule (proConfirmee/reliquatPromu checked before the ancienneté window) by hand in SQL.
   baStatus               String?
 
   @@unique([teacherId, campagneId])
+}
+
+// ---------------------------------------------------------------------------
+// Reliquats — a BA (bonification d'ancienneté) promotion granted AFTER the rectorat's own file was
+// established, from leftover rounding on the 30%-of-promouvables quota ("mécanisme de reliquat").
+// The rectorat file never carries a "Pro BA." marker for these — confirmed on two real cases from
+// the campagne du 25 mars 2026 (Yann ADAM, échelon 6, AGREGE) — so computeBaStatus()/
+// deriveBonification() alone always resolve them to "non_promu", correctly reflecting the rectorat
+// file but not the union's actual real-world decision. This table is the union's own manual record
+// of who got a reliquat promotion, per campagne, letting the Mailing/Enseignants pages and the sent
+// mail show "promu" for them despite the rectorat data.
+// ---------------------------------------------------------------------------
+
+model ReliquatPromotion {
+  id          String   @id @default(cuid())
+  campagne    Campagne @relation(fields: [campagneId], references: [id])
+  campagneId  String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  teacherId   String
+  createdAt   DateTime @default(now())
+  createdById String? // free-text/email, kept even if the User row is later deleted (same pattern as RectoratImport.importedBy)
+
+  @@unique([campagneId, teacherId])
 }
 
 // ---------------------------------------------------------------------------

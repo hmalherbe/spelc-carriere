@@ -40,12 +40,26 @@ teachersRouter.get("/", async (req, res) => {
 
   const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
 
+  // One or many campagnes depending on whether campagneId was given — a Map keyed by campagneId
+  // keeps reliquatPromu lookups correct either way (see schema.prisma's ReliquatPromotion).
+  const campagneIds = [...new Set(snapshots.map((s) => s.campagneId))];
+  const reliquats = await prisma.reliquatPromotion.findMany({
+    where: { campagneId: { in: campagneIds } },
+    select: { campagneId: true, teacherId: true },
+  });
+  const reliquatByCampagne = new Map<string, Set<string>>();
+  for (const r of reliquats) {
+    if (!reliquatByCampagne.has(r.campagneId)) reliquatByCampagne.set(r.campagneId, new Set());
+    reliquatByCampagne.get(r.campagneId)!.add(r.teacherId);
+  }
+
   const result = snapshots.map((snap) => {
     const state = snap.teacher.computedStates[0];
+    const reliquatPromu = reliquatByCampagne.get(snap.campagneId)?.has(snap.teacherId) ?? false;
 
     // BA candidacy/status/arrival — extracted to baStatus.ts (long rationale kept there) so
     // routes/stats.ts can aggregate over the exact same rule without re-deriving it.
-    const { baEchelonDepart, baEligible, isBaCandidate, baStatus, arrivedThisEchelon } = computeBaStatus(snap);
+    const { baEchelonDepart, baEligible, isBaCandidate, baStatus, arrivedThisEchelon } = computeBaStatus({ ...snap, reliquatPromu });
 
     const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === snap.grade);
 
@@ -184,7 +198,12 @@ async function recomputeAllSnapshotsForTeacher(
   corrections: { ancienneteADeduire: string | null; ancienneteAReporter: string | null },
 ): Promise<string[]> {
   const snapshots = await prisma.teacherSnapshot.findMany({ where: { teacherId } });
-  const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
+  const [liveGrilles, liveValeurDuPoint, reliquats] = await Promise.all([
+    loadLiveGrilles(),
+    loadCurrentValeurDuPoint(),
+    prisma.reliquatPromotion.findMany({ where: { teacherId }, select: { campagneId: true } }),
+  ]);
+  const reliquatCampagneIds = new Set(reliquats.map((r) => r.campagneId));
   const warnings: string[] = [];
   for (const snap of snapshots) {
     const { warning } = await recomputeAndStorePromotionState({
@@ -200,6 +219,7 @@ async function recomputeAllSnapshotsForTeacher(
       proTypePromotion: snap.proTypePromotion,
       proConfirmee: snap.proConfirmee,
       ancienneteEchelon: snap.ancienneteEchelon,
+      reliquatPromu: reliquatCampagneIds.has(snap.campagneId),
       liveGrilles,
       liveValeurDuPoint,
     });
