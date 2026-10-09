@@ -101,7 +101,7 @@ function buildPassageNormalBlock(ctx: CcmaModelContext): string {
   const dateEffet = formatDateFr(ctx.dateEffetCcm);
   if (!dateEffet) return "";
   return p(
-    `Votre passage à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong>, prévu par les durées du PPCR est acté au ${dateEffet}.`,
+    `Votre passage à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong>, prévu par les durées du PPCR est acté au <strong>${dateEffet}</strong>.`,
   );
 }
 

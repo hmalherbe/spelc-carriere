@@ -61,7 +61,7 @@ describe("buildCcmaModelEmail", () => {
 
   it("shows the normal-PPCR passage paragraph when bonification = ANCIENNETE, and nothing BA-related", () => {
     const { html } = buildCcmaModelEmail(BASE);
-    expect(html).toContain("prévu par les durées du PPCR est acté au 07 avril 2026");
+    expect(html).toContain("prévu par les durées du PPCR est acté au <strong>07 avril 2026</strong>");
     expect(html).not.toContain("bonification d'ancienneté d'un an");
     expect(html).not.toContain("Votre barème");
   });
