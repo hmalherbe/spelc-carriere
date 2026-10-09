@@ -59,7 +59,6 @@ statsRouter.get("/", async (req, res) => {
   const seenTeacherIds = new Set<string>();
   let baPromus = 0;
   let baNonPromus = 0;
-  let baNational = 0;
   let baHorsFenetre = 0;
   const baGenre = emptyGenreCounts(); // among BA promouvables (promus + non promus) only
   let totalPromus = 0;
@@ -79,17 +78,15 @@ statsRouter.get("/", async (req, res) => {
     const sexe = resolveSexe(declaredCivilite, prenom);
 
     // "BA" here means the promouvables population per product decision: a promu/non_promu call is
-    // only ever made for these two statuses — "national" (agrégé, decided at ministry level) and
-    // "hors_fenetre" (anomaly) are surfaced as separate counts for context, not folded into either
-    // the promouvables total or the genre breakdown, since neither is a real promu/non-promu call.
+    // only ever made for these two statuses — "hors_fenetre" (anomaly) is surfaced as a separate
+    // count for context, not folded into either the promouvables total or the genre breakdown,
+    // since it isn't a real promu/non-promu call.
     if (baStatus === "promu" || baStatus === "non_promu") {
       if (baStatus === "promu") baPromus++;
       else baNonPromus++;
       if (sexe === "M") baGenre.hommes++;
       else if (sexe === "F") baGenre.femmes++;
       else baGenre.indetermine++;
-    } else if (baStatus === "national") {
-      baNational++;
     } else if (baStatus === "hors_fenetre") {
       baHorsFenetre++;
     }
@@ -113,7 +110,6 @@ statsRouter.get("/", async (req, res) => {
       nonPromus: baNonPromus,
       promouvables: baPromouvables,
       pctPromus: baPromouvables > 0 ? Math.round((baPromus / baPromouvables) * 1000) / 10 : 0,
-      national: baNational,
       horsFenetre: baHorsFenetre,
       genre: withPct(baGenre, baPromouvables),
     },

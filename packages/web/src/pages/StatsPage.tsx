@@ -119,12 +119,8 @@ export function StatsPage() {
                 <div className="stat-label">% BA promus / promouvables</div>
               </div>
             </div>
-            {(stats.ba.national > 0 || stats.ba.horsFenetre > 0) && (
-              <p className="hint">
-                Hors calcul ci-dessus : {stats.ba.national} agrégé(s) candidat(s) BA (décision ministérielle, promu/non
-                promu non déterminable ici)
-                {stats.ba.horsFenetre > 0 && <>, {stats.ba.horsFenetre} anomalie(s) hors fenêtre d'éligibilité</>}.
-              </p>
+            {stats.ba.horsFenetre > 0 && (
+              <p className="hint">Hors calcul ci-dessus : {stats.ba.horsFenetre} anomalie(s) hors fenêtre d'éligibilité.</p>
             )}
 
             <h3>Répartition hommes / femmes parmi les BA (promouvables)</h3>

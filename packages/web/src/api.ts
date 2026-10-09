@@ -138,14 +138,13 @@ export interface TeacherListItem {
    * colonne BA. null = non applicable. */
   baEchelonDepart: 6 | 8 | null;
   /** "hors_fenetre" = candidat BA (marqueur "BA." présent) mais ancienneté hors de la fenêtre
-   * officielle — anomalie à vérifier. "national" = agrégé, candidat BA dans la fenêtre — la
-   * promotion se décide au niveau national, non déterminable depuis ce fichier, donc seule la
-   * candidature est affichée. "promu" / "non_promu" = candidat BA d'un autre grade, dans la
-   * fenêtre, statut donné directement par le marqueur "Pro" du rectorat ("Pro BA." = promu, "BA."
-   * seul = éligible mais pas promu). null = pas candidat BA ce cycle (pas de marqueur "BA."),
-   * quel que soit baEligible — un enseignant suivi sur un autre mécanisme (AN/CL/RE) ce tour-ci,
-   * ou hors-classe/classe-exceptionnelle, n'a simplement rien à voir avec la BA. */
-  baStatus: "hors_fenetre" | "national" | "promu" | "non_promu" | null;
+   * officielle — anomalie à vérifier. "promu" / "non_promu" = candidat BA, dans la fenêtre, statut
+   * donné directement par le marqueur "Pro" du rectorat ("Pro BA." = promu, "BA." seul = éligible
+   * mais pas promu) — y compris pour les agrégés, dont la BA se décide directement au niveau
+   * académique (pas de remontée nationale). null = pas candidat BA ce cycle (pas de marqueur
+   * "BA."), quel que soit baEligible — un enseignant suivi sur un autre mécanisme (AN/CL/RE) ce
+   * tour-ci, ou hors-classe/classe-exceptionnelle, n'a simplement rien à voir avec la BA. */
+  baStatus: "hors_fenetre" | "promu" | "non_promu" | null;
   /** null = not applicable (mauvais échelon, ou données d'ancienneté manquantes) — pas "non éligible". */
   baEligible: boolean | null;
   horsClasseEligible: boolean | null;
@@ -323,7 +322,7 @@ export interface MailingRecipient {
   lastSentAt: string | null;
   lastError: string | null;
   /** Même règle que la colonne "Éligibilité BA" de DashboardPage — voir baCell() dans MailingPage.tsx. */
-  baStatus: "hors_fenetre" | "national" | "promu" | "non_promu" | null;
+  baStatus: "hors_fenetre" | "promu" | "non_promu" | null;
   baEchelonDepart: 6 | 8 | null;
 }
 
@@ -422,11 +421,10 @@ export interface CampagneStats {
   ba: {
     promus: number;
     nonPromus: number;
-    /** promus + nonPromus — agrégés ("national", décision ministérielle) et anomalies
-     * ("hors_fenetre") en sont exclus, faute d'un vrai appel promu/non-promu pour eux. */
+    /** promus + nonPromus — les anomalies ("hors_fenetre") en sont exclues, faute d'un vrai appel
+     * promu/non-promu pour elles. */
     promouvables: number;
     pctPromus: number;
-    national: number;
     horsFenetre: number;
     genre: GenreBreakdown;
   };

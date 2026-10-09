@@ -15,7 +15,7 @@ export interface BaStatusResult {
    * baEligible, which is window-only per the union's rule. Exposed for callers that still need to
    * gate other BA-specific logic (e.g. the échelon-display correction in routes/teachers.ts). */
   isBaCandidate: boolean;
-  baStatus: "hors_fenetre" | "national" | "promu" | "non_promu" | null;
+  baStatus: "hors_fenetre" | "promu" | "non_promu" | null;
   /** Did this record actually ARRIVE at a new échelon this cycle? Always false for a BA candidate
    * (confirmed or not) — see the long comment in routes/teachers.ts this was extracted from. */
   arrivedThisEchelon: boolean;
@@ -40,12 +40,10 @@ export function computeBaStatus(snap: BaStatusInput): BaStatusResult {
       : null;
 
   const isBaCandidate = baEchelonDepart !== null && snap.proTypePromotion === "BA";
-  const isAgrege = snap.grade.startsWith("AGREGE");
 
-  // proConfirmee ("Pro BA." on the record) and isAgrege (décision nationale, jamais tranchée par ce
-  // fichier départemental) are both checked BEFORE baEligible — per the same "Pro BA. is final, not
-  // an estimate to second-guess" rule this module's own doc comment states, never overridden by our
-  // own window estimate. baEligible only decides between "hors_fenetre"/"non_promu" for a candidate
+  // proConfirmee ("Pro BA." on the record) is checked BEFORE baEligible — per this module's own
+  // "Pro BA. is final, not an estimate to second-guess" rule, never overridden by our own window
+  // estimate. baEligible only decides between "hors_fenetre"/"non_promu" for a candidate
   // NOT (yet) confirmed. Real cases from the CCMA campaign of 25 mars 2026 (BRUNO, NIZET, MELVIN,
   // OLIVIERI, PARRA, BOTTON, EYMARD, BEZAC — all CERTIFIE, échelon 6, "Pro BA." confirmed) all carry
   // an ancienneté of 2.0 to 2.85 years at the point their promotion is confirmed — outside the [1, 2)
@@ -53,15 +51,18 @@ export function computeBaStatus(snap: BaStatusInput): BaStatusResult {
   // candidacy estimate, not something a genuine rectorat confirmation should ever be discarded for:
   // gating "promu" behind baEligible made every one of these real, already-decided promotions show
   // as "hors_fenetre" instead.
+  //
+  // Agrégés used to be forced to "national" here (BA décidée au ministère, jamais tranchable par ce
+  // fichier départemental) — confirmed obsolete by the union (2026-10-09): la BA des agrégés se
+  // décide désormais directement au niveau académique, comme pour tout autre grade, sans remontée
+  // nationale. Le marqueur "Pro BA." du rectorat tranche donc promu/non-promu pour eux aussi.
   const baStatus: BaStatusResult["baStatus"] = !isBaCandidate
     ? null
-    : isAgrege
-      ? "national"
-      : snap.proConfirmee
-        ? "promu"
-        : baEligible !== true
-          ? "hors_fenetre"
-          : "non_promu";
+    : snap.proConfirmee
+      ? "promu"
+      : baEligible !== true
+        ? "hors_fenetre"
+        : "non_promu";
 
   const arrivedThisEchelon = isBaCandidate ? false : snap.proConfirmee;
 

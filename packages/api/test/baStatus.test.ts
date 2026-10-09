@@ -69,15 +69,24 @@ describe("computeBaStatus", () => {
     expect(result.baStatus).toBe("promu");
   });
 
-  it("computes baStatus 'national' for an agrégé BA candidate in-window, regardless of proConfirmee", () => {
-    const result = computeBaStatus({
+  it("computes baStatus 'promu'/'non_promu' for an agrégé exactly like any other grade — their BA is decided directly at académie level, no national ministry step (confirmed by the union 2026-10-09; real case: Yann ADAM, AGREGE, échelon 6, 'Pro BA.' confirmed, ancienneté 1.442)", () => {
+    const confirmed = computeBaStatus({
+      echelonActuel: "06",
+      grade: "AGREGE",
+      proTypePromotion: "BA",
+      proConfirmee: true,
+      ancienneteEchelon: 1.442,
+    });
+    expect(confirmed.baStatus).toBe("promu");
+
+    const notConfirmed = computeBaStatus({
       echelonActuel: "06",
       grade: "AGREGE",
       proTypePromotion: "BA",
       proConfirmee: false,
-      ancienneteEchelon: 1.442,
+      ancienneteEchelon: 1.5,
     });
-    expect(result.baStatus).toBe("national");
+    expect(notConfirmed.baStatus).toBe("non_promu");
   });
 
   it("computes baStatus 'hors_fenetre' for a BA marker outside the ancienneté window, when NOT confirmed", () => {

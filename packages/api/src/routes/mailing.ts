@@ -270,7 +270,7 @@ async function eligibleRecipients(campagneId: string) {
     ancienneteEchelon: number | null;
     // Même règle que la colonne "Éligibilité BA" de DashboardPage (voir baStatus.ts) — affichée ici
     // aussi, après la colonne "Échelon" (voir MailingPage.tsx).
-    baStatus: "hors_fenetre" | "national" | "promu" | "non_promu" | null;
+    baStatus: "hors_fenetre" | "promu" | "non_promu" | null;
     baEchelonDepart: 6 | 8 | null;
   }[] = [];
 
