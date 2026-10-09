@@ -28,7 +28,13 @@ export interface ImportAdherentRecordsResult {
  * than left sitting in the review queue. Retrying costs nothing when nothing's changed.
  *
  * A CONFIRMED or REJECTED candidate is never touched here — those are final, human-made decisions.
- * A same-grade PENDING_REVIEW suggestion is also left alone — a legitimate low-confidence match
+ * AUTO_CONFIRMED is different: it's the algorithm's own call (an unambiguous name match, nobody
+ * ever reviewed it), so it's just as eligible for the same staleness retry as PENDING_REVIEW — real
+ * case: ABOUKASSEM Raghda (PLP), AUTO_CONFIRMED to a Teacher row that had since lost every snapshot
+ * (the same duplicate-identity situation the ATAYAN Lianna case below already handles, just never
+ * reachable for her because the query here used to only pick up PENDING_REVIEW/null, leaving her
+ * stuck on a dead link forever — no review queue entry either, since AUTO_CONFIRMED never appears
+ * there). A same-grade PENDING_REVIEW suggestion is left alone — a legitimate low-confidence match
  * genuinely awaiting review must never be silently swapped out from under whoever's looking at it.
  *
  * `adherentIds`, when given, restricts the retry to that set (used right after an adherent file
@@ -40,7 +46,11 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
   const candidates = await prisma.adherent.findMany({
     where: {
       ...(adherentIds ? { id: { in: adherentIds } } : {}),
-      OR: [{ matchCandidate: null }, { matchCandidate: { status: "PENDING_REVIEW" } }],
+      OR: [
+        { matchCandidate: null },
+        { matchCandidate: { status: "PENDING_REVIEW" } },
+        { matchCandidate: { status: "AUTO_CONFIRMED" } },
+      ],
     },
     select: {
       id: true,
