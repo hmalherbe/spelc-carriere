@@ -5,7 +5,7 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { encryptSecret } from "../crypto.js";
-import { loadMailingBranding } from "../mailingBranding.js";
+import { loadMailingBranding, resizeLogo } from "../mailingBranding.js";
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
@@ -178,10 +178,11 @@ settingsRouter.post(
     if (!req.file.mimetype.startsWith("image/")) {
       return res.status(400).json({ error: "Le fichier doit être une image (PNG, JPEG, SVG...)" });
     }
+    const { buffer, contentType } = await resizeLogo(req.file.buffer);
     await prisma.mailingBranding.upsert({
       where: { id: SINGLETON_ID },
-      create: { id: SINGLETON_ID, logoData: req.file.buffer, logoContentType: req.file.mimetype, updatedById: req.auth!.userId },
-      update: { logoData: req.file.buffer, logoContentType: req.file.mimetype, updatedById: req.auth!.userId },
+      create: { id: SINGLETON_ID, logoData: buffer, logoContentType: contentType, updatedById: req.auth!.userId },
+      update: { logoData: buffer, logoContentType: contentType, updatedById: req.auth!.userId },
     });
     res.json(await loadMailingBranding());
   }),

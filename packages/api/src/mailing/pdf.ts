@@ -47,20 +47,17 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
 }
 
 // Each letter section repeats the org logo inline as a data: URI (see mailing/template.ts's
-// buildHeader) — a real campagne-wide export can mean hundreds of recipients, and concatenating
-// every one of them into a single HTML document before handing it to Chromium means that logo's
-// bytes (confirmed ~760KB in production, ~1MB once base64-inflated) get duplicated once per
-// recipient with no bound at all. On a 571-recipient CCMA campagne that's over half a gigabyte of
-// duplicated image bytes alone — it OOM-killed the whole api process in production (V8 heap
-// exhausted). routes/mailing.ts's /pdf route now only keeps the logo on the very first page of
-// the whole export (index 0 among every recipient, not per batch — an earlier version kept one
-// copy per batch, which merely traded the OOM for an equally real problem: each batch is rendered
-// by Chromium as its own independent PDF document, so pdf-lib's copyPages carries over a distinct
-// copy of that embedded logo per batch into the merged file — confirmed as the dominant cause of a
-// 49MB PDF for 571 recipients, ~58 batches of 10, vs. 4.6MB from the old Word mail-merge for the
-// same campagne). Batching itself still helps independently of the logo (keeps each individual
-// Chromium render's own HTML/DOM small) and is cheap insurance on a box this tight on memory
-// (confirmed production host: ~1.9GB total, no swap).
+// buildHeader). A real campagne-wide export can mean hundreds of recipients, and each batch is
+// rendered by Chromium as its own independent PDF document, so pdf-lib's copyPages below carries
+// over a distinct copy of that embedded logo per batch into the merged file — this used to be the
+// dominant cause of a 49MB PDF for a 571-recipient campagne (~58 batches of 10, arbitrary
+// admin-uploaded logo confirmed ~760KB/~1MB base64-inflated), on top of OOM-killing the api process
+// outright when the logo wasn't bounded to even one copy per recipient at all. Now that
+// mailingBranding.ts's resizeLogo shrinks every uploaded logo down to its real display size at
+// upload time (1-2 orders of magnitude smaller), the per-batch duplication this comment used to
+// warn about is no longer a real size/memory risk. Batching itself still helps independently of the
+// logo (keeps each individual Chromium render's own HTML/DOM small) and is cheap insurance on a box
+// this tight on memory (confirmed production host: ~1.9GB total, no swap).
 export const MAILING_PDF_BATCH_SIZE = 10;
 
 function wrapHtmlDocument(bodyHtml: string): string {

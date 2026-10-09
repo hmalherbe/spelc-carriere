@@ -674,20 +674,19 @@ mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(as
   const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
   const ccmaExtras = template === "ccma_avancement" ? await loadCcmaModelExtras(campagneId) : null;
 
-  const pages = targets.map((recipient, index) => {
-    // The branding logo is a real, non-trivial image (confirmed ~760KB in production) that
-    // buildHeader embeds inline on every letter — fine for one self-contained e-mail, but
-    // multiplied across a whole campagne's worth of recipients in this one PDF it's what OOM-
-    // killed the api process, and then (even just once per Chromium-render batch) bloated the
-    // merged file to ~10x the size of the old Word mail-merge equivalent (see pdf.ts's own
-    // comment). Keeping it only on the very first page of the whole export — index 0, never
-    // repeated on any later page, even across a batch boundary — bounds both at once.
-    const recipientShared = index === 0 ? shared : { ...shared, logoDataUrl: null };
+  const pages = targets.map((recipient) => {
+    // The branding logo used to be kept only on the very first page of the whole export: an
+    // arbitrary admin-uploaded image (confirmed ~760KB in production) repeated across a whole
+    // campagne's worth of recipients OOM-killed the api process, and even just once per Chromium-
+    // render batch bloated the merged file to ~10x the size of the old Word mail-merge equivalent
+    // (see pdf.ts's own comment). Now that resizeLogo (mailingBranding.ts) shrinks every uploaded
+    // logo down to its real display size at upload time — 1-2 orders of magnitude smaller — it's
+    // safe to embed on every letter again.
     const { subject, html } = buildRecipientEmail(
       recipient,
       { ...campagne, type: campagne.type as "CCMA" | "CCMI" | null },
       template,
-      recipientShared,
+      shared,
       ccmaExtras,
     );
     const to = recipient.email ?? "aucune adresse connue";
