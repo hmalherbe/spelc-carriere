@@ -27,15 +27,28 @@ export interface ImportAdherentRecordsResult {
  * that's not a borderline call for a human to weigh, it's simply wrong, so it's cleared here rather
  * than left sitting in the review queue. Retrying costs nothing when nothing's changed.
  *
- * A CONFIRMED or REJECTED candidate is never touched here — those are final, human-made decisions.
- * AUTO_CONFIRMED is different: it's the algorithm's own call (an unambiguous name match, nobody
- * ever reviewed it), so it's just as eligible for the same staleness retry as PENDING_REVIEW — real
- * case: ABOUKASSEM Raghda (PLP), AUTO_CONFIRMED to a Teacher row that had since lost every snapshot
- * (the same duplicate-identity situation the ATAYAN Lianna case below already handles, just never
- * reachable for her because the query here used to only pick up PENDING_REVIEW/null, leaving her
- * stuck on a dead link forever — no review queue entry either, since AUTO_CONFIRMED never appears
- * there). A same-grade PENDING_REVIEW suggestion is left alone — a legitimate low-confidence match
- * genuinely awaiting review must never be silently swapped out from under whoever's looking at it.
+ * A CONFIRMED candidate is never touched here — a human positively identified this as the right
+ * teacher, which must never be silently swapped out from under them. AUTO_CONFIRMED is different:
+ * it's the algorithm's own call (an unambiguous name match, nobody ever reviewed it), so it's just
+ * as eligible for the same staleness retry as PENDING_REVIEW — real case: ABOUKASSEM Raghda (PLP),
+ * AUTO_CONFIRMED to a Teacher row that had since lost every snapshot (the same duplicate-identity
+ * situation the ATAYAN Lianna case below already handles, just never reachable for her because the
+ * query here used to only pick up PENDING_REVIEW/null, leaving her stuck on a dead link forever — no
+ * review queue entry either, since AUTO_CONFIRMED never appears there). A same-grade PENDING_REVIEW
+ * suggestion is left alone — a legitimate low-confidence match genuinely awaiting review must never
+ * be silently swapped out from under whoever's looking at it.
+ *
+ * REJECTED is retried too, always (not just when stale) — it records "this specific teacher wasn't
+ * the right one", not "never match this adherent again": the enum's own doc comment says as much
+ * ("adherent has no linked teacher yet"). Real case found this way: on one campagne, 75 of 171
+ * eligible adherents were REJECTED, almost all of them the exact same duplicate-Teacher-row pattern
+ * as ABOUKASSEM Raghda above, just one step further — a human had already looked at the stale
+ * suggestion and (correctly, at the time) said "not this one", which then made the status permanent
+ * and invisible to every later reimport that created the teacher's real, current Teacher row. Still
+ * never silently re-establishes the SAME rejected pairing, though: `rejectedTeacherIdByAdherent`
+ * below downgrades a fresh result back to "no match" if it would just propose the identical teacherId
+ * a human already rejected, forcing a human decision again (via the review queue) rather than
+ * overriding them automatically.
  *
  * `adherentIds`, when given, restricts the retry to that set (used right after an adherent file
  * import — only the just-touched rows can possibly need it yet); omitted, it reconsiders every
@@ -50,6 +63,7 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
         { matchCandidate: null },
         { matchCandidate: { status: "PENDING_REVIEW" } },
         { matchCandidate: { status: "AUTO_CONFIRMED" } },
+        { matchCandidate: { status: "REJECTED" } },
       ],
     },
     select: {
@@ -59,6 +73,7 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
       grade: true,
       matchCandidate: {
         select: {
+          status: true,
           teacherId: true,
           teacher: { select: { snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" }, select: { grade: true } } } },
         },
@@ -68,7 +83,9 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
 
   const toRetry = candidates.filter((a) => {
     const candidate = a.matchCandidate;
-    if (!candidate || !candidate.teacherId) return true; // never attempted, or attempted and found nothing
+    if (!candidate) return true; // never attempted
+    if (candidate.status === "REJECTED") return true; // always worth a fresh attempt — see doc comment above
+    if (!candidate.teacherId) return true; // attempted and found nothing
     const suggestedGrade = candidate.teacher?.snapshots[0]?.grade;
     // The suggested teacher has no snapshot at all anymore — e.g. a corrected rectorat re-import
     // wholesale-replaced their (campagne, grade)'s fiches and the new file no longer lists them.
@@ -84,6 +101,15 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
   if (toRetry.length === 0) return { autoConfirmed: 0, pendingReview: 0 };
 
   const retryIds = new Set(toRetry.map((a) => a.id));
+
+  // The specific teacherId each REJECTED adherent was explicitly told "not this one" about — a
+  // fresh match result must never silently re-propose exactly this pairing (see doc comment above).
+  const rejectedTeacherIdByAdherent = new Map<string, string>();
+  for (const a of toRetry) {
+    if (a.matchCandidate?.status === "REJECTED" && a.matchCandidate.teacherId) {
+      rejectedTeacherIdByAdherent.set(a.id, a.matchCandidate.teacherId);
+    }
+  }
 
   // A teacher can only ever be linked to one adherent (MatchCandidate.teacherId is unique in the
   // DB) — exclude anyone already claimed by an existing candidate outside this retry batch
@@ -149,17 +175,23 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
   let autoConfirmed = 0;
   let pendingReview = 0;
   for (const m of matchResults) {
+    // Re-finding the exact teacher a human already rejected for this adherent is never a new
+    // decision to auto-apply — fall back to "no match", same shape matchAdherents() itself uses,
+    // so it surfaces in the review queue for an actual human call instead.
+    const rejectedTeacherId = rejectedTeacherIdByAdherent.get(m.adherentId);
+    const result = rejectedTeacherId && m.teacherId === rejectedTeacherId ? { teacherId: null, confidence: 0, autoConfirmable: false } : m;
+
     const data = {
-      teacherId: m.teacherId,
-      confidence: m.confidence,
-      status: (m.autoConfirmable ? "AUTO_CONFIRMED" : "PENDING_REVIEW") as "AUTO_CONFIRMED" | "PENDING_REVIEW",
+      teacherId: result.teacherId,
+      confidence: result.confidence,
+      status: (result.autoConfirmable ? "AUTO_CONFIRMED" : "PENDING_REVIEW") as "AUTO_CONFIRMED" | "PENDING_REVIEW",
     };
     await prisma.matchCandidate.upsert({
       where: { adherentId: m.adherentId },
       create: { adherentId: m.adherentId, ...data },
       update: data,
     });
-    if (m.autoConfirmable) autoConfirmed++;
+    if (result.autoConfirmable) autoConfirmed++;
     else pendingReview++;
   }
 
