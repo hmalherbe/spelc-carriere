@@ -161,55 +161,60 @@ function monthYearFr(iso: string | null): string {
 }
 
 /** Message pour un candidat BA non retenu cette fois-ci — explique s'il n'y a eu aucun promu du
- * tout dans ce groupe, ou donne le taux de réussite réel (calculé, pas saisi à la main). */
-function buildNonPromuBlock(ctx: CcmaModelContext): string {
-  if (ctx.bonification !== "NON_PROMU") return "";
+ * tout dans ce groupe, ou donne le taux de réussite réel (calculé, pas saisi à la main).
+ *
+ * Renvoie des LIGNES brutes (pas de <p> ici) — dans le document Word source, ce message et le bloc
+ * de comparaison barème/ancienneté qui le suit (buildComparaisonBaremeLines) vivent dans une seule
+ * suite ininterrompue de paragraphes Word (aucun paragraphe vide entre les deux, confirmé sur le
+ * XML du document) ; buildCcmaModelEmail les regroupe donc dans un seul <p> (lignes séparées par
+ * <br>), sans quoi chaque ligne aurait sa propre marge de paragraphe et créerait un espace que le
+ * vrai courrier n'a pas. */
+function buildNonPromuLines(ctx: CcmaModelContext): string[] {
+  if (ctx.bonification !== "NON_PROMU") return [];
   if (ctx.pourcentagePromusBa == null || ctx.pourcentagePromusBa === 0) {
-    return p(
-      "Malheureusement il n'y a eu aucun promu à la bonification d'ancienneté car il n'y avait pas suffisamment de promouvables.",
-    );
+    return ["Malheureusement il n'y a eu aucun promu à la bonification d'ancienneté car il n'y avait pas suffisamment de promouvables."];
   }
   const dateEffet = formatDateFr(ctx.dateEffetCcm);
   return [
-    p(
-      `Malheureusement seuls ${ctx.pourcentagePromusBa} % des promouvables ont obtenu cette accélération de carrière sur la base des évaluations à la suite du rendez-vous de carrière` +
-        (dateEffet
-          ? `, la ${escapeHtml(ctx.commission)} de l'année prochaine actera votre passage à l'échelon <strong>${escapeHtml(ctx.echelonSuivant)}</strong> à la date du ${dateEffet}.`
-          : "."),
-    ),
-    p("Les critères discriminants appliqués pour deux appréciations équivalentes sont l'ancienneté dans le grade et ensuite l'ancienneté dans l'échelon."),
-  ].join("\n");
+    `Malheureusement seuls ${ctx.pourcentagePromusBa} % des promouvables ont obtenu cette accélération de carrière sur la base des évaluations à la suite du rendez-vous de carrière` +
+      (dateEffet
+        ? `, la ${escapeHtml(ctx.commission)} de l'année prochaine actera votre passage à l'échelon <strong>${escapeHtml(ctx.echelonSuivant)}</strong> à la date du ${dateEffet}.`
+        : "."),
+    "Les critères discriminants appliqués pour deux appréciations équivalentes sont l'ancienneté dans le grade et ensuite l'ancienneté dans l'échelon.",
+  ];
 }
 
 /** Comparaison barème / ancienneté avec le dernier promu du même groupe — transparence sur le
- * départage, jamais affichée pour quelqu'un qui n'était même pas candidat BA (bonification=ANCIENNETE). */
-function buildComparaisonBaremeBlock(ctx: CcmaModelContext): string {
-  if (ctx.bonification === "ANCIENNETE") return "";
-  if (ctx.bareme == null || !ctx.dernierPromu) return "";
+ * départage, jamais affichée pour quelqu'un qui n'était même pas candidat BA (bonification=ANCIENNETE).
+ * Renvoie des lignes brutes — voir le commentaire de buildNonPromuLines sur le regroupement en un
+ * seul <p>. */
+function buildComparaisonBaremeLines(ctx: CcmaModelContext): string[] {
+  if (ctx.bonification === "ANCIENNETE") return [];
+  if (ctx.bareme == null || !ctx.dernierPromu) return [];
 
   // Casse d'origine conservée ("Excellent", "Très satisfaisant"...) — confirmé sur le document
   // Word source, qui ne met jamais ce label en minuscules.
   const appreciation = AVIS_LABELS[ctx.bareme] ? `(${AVIS_LABELS[ctx.bareme]} lors de votre dernier rendez-vous de carrière)` : "";
-  const parts: string[] = [
-    p(`Votre barème : <strong>${ctx.bareme}</strong> ${escapeHtml(appreciation)}`),
-    p(`Le barème du dernier promu : <strong>${ctx.dernierPromu.bareme}</strong>`),
+  const lines: string[] = [
+    `Votre barème : <strong>${ctx.bareme}</strong> ${escapeHtml(appreciation)}`,
+    `Le barème du dernier promu : <strong>${ctx.dernierPromu.bareme}</strong>`,
   ];
 
-  if (ctx.bareme !== ctx.dernierPromu.bareme || ctx.ancienneteGrade == null) return parts.join("\n");
+  if (ctx.bareme !== ctx.dernierPromu.bareme || ctx.ancienneteGrade == null) return lines;
 
   const ancGradeTexte = formatAnneesDecimalesText(ctx.ancienneteGrade);
   const ancGradeDernierTexte = formatAnneesDecimalesText(ctx.dernierPromu.ancienneteGrade);
-  parts.push(p(`Votre ancienneté dans le grade : <strong>${ancGradeTexte}</strong>`));
-  parts.push(p(`Ancienneté dans le grade du dernier promu : <strong>${ancGradeDernierTexte}</strong>`));
+  lines.push(`Votre ancienneté dans le grade : <strong>${ancGradeTexte}</strong>`);
+  lines.push(`Ancienneté dans le grade du dernier promu : <strong>${ancGradeDernierTexte}</strong>`);
 
-  if (ctx.ancienneteGrade !== ctx.dernierPromu.ancienneteGrade || ctx.ancienneteEchelon == null) return parts.join("\n");
+  if (ctx.ancienneteGrade !== ctx.dernierPromu.ancienneteGrade || ctx.ancienneteEchelon == null) return lines;
 
   const ancEchelonTexte = formatAnneesDecimalesText(ctx.ancienneteEchelon);
   const ancEchelonDernierTexte = formatAnneesDecimalesText(ctx.dernierPromu.ancienneteEchelon);
-  parts.push(p(`Votre ancienneté dans l'échelon : <strong>${ancEchelonTexte}</strong>`));
-  parts.push(p(`Ancienneté dans l'échelon du dernier promu : <strong>${ancEchelonDernierTexte}</strong>`));
+  lines.push(`Votre ancienneté dans l'échelon : <strong>${ancEchelonTexte}</strong>`);
+  lines.push(`Ancienneté dans l'échelon du dernier promu : <strong>${ancEchelonDernierTexte}</strong>`);
 
-  return parts.join("\n");
+  return lines;
 }
 
 export class CcmaModelUnavailableError extends Error {}
@@ -244,13 +249,18 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
     buildPromouvableBaBlock(ctx),
     buildBonificationAccordeeBlock(ctx),
     buildGainEtSuiteBlock(ctx),
-    buildNonPromuBlock(ctx),
-    buildComparaisonBaremeBlock(ctx),
+    // Le message "non promu" et la comparaison barème/ancienneté se suivent, dans le document Word
+    // source, sans paragraphe vide entre les deux (confirmé sur le XML) — regroupés ici dans un
+    // seul <p> (lignes séparées par <br>) pour ne pas leur donner chacun leur propre marge de
+    // paragraphe, ce qui créerait un espace que le vrai courrier n'a pas.
+    (() => {
+      const lines = [...buildNonPromuLines(ctx), ...buildComparaisonBaremeLines(ctx)];
+      return lines.length > 0 ? p(lines.join("<br>")) : "";
+    })(),
     p(
       "La commission consultative n'émet qu'un avis consultatif en attendant la décision officielle de l'administration qui vous sera notifiée prochainement par la voie hiérarchique.",
     ),
     p("Nous sommes à votre disposition pour de plus amples informations."),
-    p("Bien cordialement,<br>Le Spelc"),
   ]
     .filter((block) => block !== "")
     .join("\n");

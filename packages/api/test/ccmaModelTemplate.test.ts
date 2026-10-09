@@ -167,6 +167,53 @@ describe("buildCcmaModelEmail", () => {
     expect(html).toContain("Votre ancienneté dans l'échelon");
   });
 
+  it("groups the 'non promu' message and the barème/ancienneté comparison into a single tight paragraph (<br>-joined), not one <p> per line — confirmed against the real Word document's own paragraph structure (zero blank paragraphs between them)", () => {
+    const { html } = buildCcmaModelEmail({
+      ...BASE,
+      echelonSuivant: "9",
+      bonification: "NON_PROMU",
+      gainSalaireNet: 0,
+      pourcentagePromusBa: 30,
+      bareme: 2,
+      ancienneteGrade: 2,
+      ancienneteEchelon: 2,
+      dernierPromu: { bareme: 2, ancienneteGrade: 2, ancienneteEchelon: 2 },
+    });
+    const match = html.match(/<p>Malheureusement seuls[\s\S]*?<\/p>/);
+    expect(match).not.toBeNull();
+    const block = match![0];
+    // Every line from "Malheureusement..." through to the last ancienneté-échelon line lives in
+    // this one <p>, <br>-separated — no closing </p> appears before "Votre ancienneté dans l'échelon".
+    expect(block).toContain("Les critères discriminants");
+    expect(block).toContain("Votre barème");
+    expect(block).toContain("Votre ancienneté dans l'échelon");
+    // 2 "non promu" lines + 6 barème/ancienneté lines = 8 lines -> 7 line breaks, all inside one <p>.
+    expect(block.match(/<br>/g)?.length).toBe(7);
+  });
+
+  it("keeps the barème comparison in a single tight paragraph even without a 'non promu' message (BA granted case)", () => {
+    const { html } = buildCcmaModelEmail({
+      ...BASE,
+      echelonSuivant: "9",
+      bonification: "BONIFICATION",
+      dateEligibiliteBA: "2026-03-01",
+      bareme: 4,
+      ancienneteGrade: 2,
+      ancienneteEchelon: 1.442,
+      dernierPromu: { bareme: 4, ancienneteGrade: 2, ancienneteEchelon: 1.442 },
+    });
+    const match = html.match(/<p>Votre barème[\s\S]*?<\/p>/);
+    expect(match).not.toBeNull();
+    const block = match![0];
+    expect(block).toContain("Votre ancienneté dans l'échelon");
+    expect(block.match(/<br>/g)?.length).toBe(5);
+  });
+
+  it("never appends a closing salutation — the real Word document has none after 'Nous sommes à votre disposition...'", () => {
+    const { html } = buildCcmaModelEmail(BASE);
+    expect(html).not.toContain("cordialement");
+  });
+
   it("BA not granted, nobody promoted in the group: shows the 'aucun promu' message, no percentage", () => {
     const { html } = buildCcmaModelEmail({
       ...BASE,
