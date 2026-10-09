@@ -105,6 +105,10 @@ Règles impératives pour la requête SQL à générer :
 - N'écris jamais toi-même de clause LIMIT : le résultat est de toute façon automatiquement limité à
   200 lignes. Un LIMIT placé dans une branche d'UNION/UNION ALL sans parenthèses autour de chaque
   sous-requête est une erreur de syntaxe SQL — ne pas en écrire évite complètement ce piège.
+- N'utilise jamais ORDER BY à l'intérieur d'un agrégat (STRING_AGG, ARRAY_AGG...) combiné à DISTINCT
+  (ex: STRING_AGG(DISTINCT x, ', ' ORDER BY y) où y diffère de x) — Postgres l'interdit sauf si
+  l'expression du ORDER BY fait partie des arguments de l'agrégat. Omets simplement le ORDER BY dans
+  ce cas plutôt que de risquer l'erreur.
 - Si la question ne peut pas raisonnablement être répondue avec ces tables, réponds exactement :
   SELECT 'Question hors du périmètre des données disponibles.' AS message
 `.trim();
