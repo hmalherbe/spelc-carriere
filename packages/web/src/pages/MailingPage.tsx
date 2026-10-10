@@ -56,6 +56,8 @@ export function MailingPage() {
   const [sendResult, setSendResult] = useState<MailingSendResult | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [generatingText, setGeneratingText] = useState(false);
+  const [textError, setTextError] = useState<string | null>(null);
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [emailDraft, setEmailDraft] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
@@ -245,6 +247,20 @@ export function MailingPage() {
     }
   }
 
+  async function generateText() {
+    if (!campagneId || selected.size === 0) return;
+    setGeneratingText(true);
+    setTextError(null);
+    try {
+      const blob = await api.mailingText(campagneId, Array.from(selected), template);
+      downloadBlob(blob, `mailing-${selectedCampagne?.anneeScolaire ?? campagneId}.txt`);
+    } catch (e) {
+      setTextError(String(e));
+    } finally {
+      setGeneratingText(false);
+    }
+  }
+
   if (error && recipients.length === 0) return <p className="error-text">{error}</p>;
 
   return (
@@ -310,6 +326,10 @@ export function MailingPage() {
             {generatingPdf ? "Génération en cours..." : "Générer PDF"}
           </button>
           {pdfError && <span className="error-text">{pdfError}</span>}
+          <button type="button" className="secondary" onClick={generateText} disabled={selected.size === 0 || generatingText}>
+            {generatingText ? "Génération en cours..." : "Exporter en texte"}
+          </button>
+          {textError && <span className="error-text">{textError}</span>}
         </div>
       )}
 

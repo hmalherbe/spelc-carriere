@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPromotionEmail, type MailingContext } from "../src/mailing/template.js";
+import { buildPromotionEmail, htmlToPlainText, type MailingContext } from "../src/mailing/template.js";
 
 const BASE: MailingContext = {
   civilite: "Mme",
@@ -196,5 +196,34 @@ describe("buildPromotionEmail", () => {
     expect(iconOf(fbHtml)).not.toBe(iconOf(twHtml));
     expect(iconOf(twHtml)).not.toBe(iconOf(siteHtml));
     expect(iconOf(fbHtml)).not.toBe(iconOf(siteHtml));
+  });
+});
+
+describe("htmlToPlainText", () => {
+  it("turns <br> and block tags into line breaks, strips everything else", () => {
+    const html = "<p>Chère collègue,<br>Jean MARTIN</p><p>Deuxième paragraphe.</p>";
+    expect(htmlToPlainText(html)).toBe("Chère collègue,\nJean MARTIN\nDeuxième paragraphe.");
+  });
+
+  it("collapses the source template literal's own line wrapping/indentation into one sentence", () => {
+    const html = `<p>Vous passerez de l'échelon 5 à
+       l'échelon 6 à compter du
+       01 mars 2026.</p>`;
+    expect(htmlToPlainText(html)).toBe("Vous passerez de l'échelon 5 à l'échelon 6 à compter du 01 mars 2026.");
+  });
+
+  it("expands a link to 'label (url)' and decodes HTML entities", () => {
+    const html = '<a href="https://example.com">Notre site</a> &amp; <strong>vous</strong> &#39;informe&#39;';
+    expect(htmlToPlainText(html)).toBe("Notre site (https://example.com) & vous 'informe'");
+  });
+
+  it("renders a table's cells tab-separated, one row per line", () => {
+    const html = "<table><tr><td>Julien MARTIN</td><td>06 00 00 00 00</td></tr><tr><td>Sophie DURAND</td><td></td></tr></table>";
+    expect(htmlToPlainText(html)).toBe("Julien MARTIN\t06 00 00 00 00\nSophie DURAND");
+  });
+
+  it("collapses 3+ consecutive blank lines down to a single blank line", () => {
+    const html = "<p>Un</p><br><br><br><p>Deux</p>";
+    expect(htmlToPlainText(html)).toBe("Un\n\nDeux");
   });
 });

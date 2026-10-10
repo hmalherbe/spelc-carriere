@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
-import { buildPromotionEmail, escapeHtml, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
+import { buildPromotionEmail, escapeHtml, htmlToPlainText, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
 import { buildCcmaModelEmail, CcmaModelUnavailableError, type CcmaModelContext } from "../mailing/ccmaModelTemplate.js";
 import { deriveBonification } from "../mailing/bonification.js";
 import { loadDernierPromuBaByGroup, type DernierPromuBa } from "../mailing/dernierPromuBa.js";
@@ -640,31 +640,29 @@ const pdfSchema = z.object({
 });
 
 /**
- * One PDF with one page per selected recipient's letter — the exact content /send would e-mail
- * them (via buildRecipientEmail, shared with that route), for an admin to archive or proofread
- * offline. Purely a read-only export: unlike /send, it never touches MailingLog and is completely
- * unaffected by test mode (the "À :" line always shows the real address on file, never the test
- * redirect — this file is meant to show what WOULD be sent, not what test mode did with it).
+ * Builds the exact letters /send would e-mail (via buildRecipientEmail, shared with that route) for
+ * a selected set of recipients — the shared groundwork behind both read-only exports below (/pdf
+ * and /text), which only differ in how they render these same {to, subject, html} triples.
  */
-mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
-  const parsed = pdfSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
-  }
+async function buildMailingLetters(
+  body: unknown,
+): Promise<{ status: number; error: string } | { campagne: { anneeScolaire: string }; letters: { to: string; subject: string; html: string }[] }> {
+  const parsed = pdfSchema.safeParse(body);
+  if (!parsed.success) return { status: 400, error: "Corps de requête invalide" };
   const { campagneId, teacherIds, template = "generique" } = parsed.data;
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
-  if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
+  if (!campagne) return { status: 404, error: "Campagne introuvable" };
   if (campagne.type === "HC" || campagne.type === "EXC") {
-    return res.status(400).json({ error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." });
+    return { status: 400, error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." };
   }
   if (template === "ccma_avancement" && campagne.type !== "CCMA") {
-    return res.status(400).json({ error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." });
+    return { status: 400, error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." };
   }
 
   const all = await eligibleRecipients(campagneId);
   const targets = all.filter((r) => teacherIds.includes(r.teacherId));
-  if (targets.length === 0) return res.status(400).json({ error: "Aucun destinataire sélectionné." });
+  if (targets.length === 0) return { status: 400, error: "Aucun destinataire sélectionné." };
 
   const [branding, elusByCommission, socialLinks] = await Promise.all([
     loadMailingBranding(),
@@ -674,14 +672,7 @@ mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(as
   const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
   const ccmaExtras = template === "ccma_avancement" ? await loadCcmaModelExtras(campagneId) : null;
 
-  const pages = targets.map((recipient) => {
-    // The branding logo used to be kept only on the very first page of the whole export: an
-    // arbitrary admin-uploaded image (confirmed ~760KB in production) repeated across a whole
-    // campagne's worth of recipients OOM-killed the api process, and even just once per Chromium-
-    // render batch bloated the merged file to ~10x the size of the old Word mail-merge equivalent
-    // (see pdf.ts's own comment). Now that resizeLogo (mailingBranding.ts) shrinks every uploaded
-    // logo down to its real display size at upload time — 1-2 orders of magnitude smaller — it's
-    // safe to embed on every letter again.
+  const letters = targets.map((recipient) => {
     const { subject, html } = buildRecipientEmail(
       recipient,
       { ...campagne, type: campagne.type as "CCMA" | "CCMI" | null },
@@ -689,17 +680,61 @@ mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(as
       shared,
       ccmaExtras,
     );
-    const to = recipient.email ?? "aucune adresse connue";
-    return `<section style="page-break-after: always;">
+    return { to: recipient.email ?? "aucune adresse connue", subject, html };
+  });
+
+  return { campagne, letters };
+}
+
+/**
+ * One PDF with one page per selected recipient's letter — the exact content /send would e-mail
+ * them, for an admin to archive or proofread offline. Purely a read-only export: unlike /send, it
+ * never touches MailingLog and is completely unaffected by test mode (the "À :" line always shows
+ * the real address on file, never the test redirect — this file is meant to show what WOULD be
+ * sent, not what test mode did with it).
+ */
+mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
+  const result = await buildMailingLetters(req.body);
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  const { campagne, letters } = result;
+
+  const pages = letters.map(
+    // The branding logo used to be kept only on the very first page of the whole export: an
+    // arbitrary admin-uploaded image (confirmed ~760KB in production) repeated across a whole
+    // campagne's worth of recipients OOM-killed the api process, and even just once per Chromium-
+    // render batch bloated the merged file to ~10x the size of the old Word mail-merge equivalent
+    // (see pdf.ts's own comment). Now that resizeLogo (mailingBranding.ts) shrinks every uploaded
+    // logo down to its real display size at upload time — 1-2 orders of magnitude smaller — it's
+    // safe to embed on every letter again.
+    ({ to, subject, html }) => `<section style="page-break-after: always;">
         <p style="font-size: 0.75rem; color: #666666; border-bottom: 1px solid #cccccc; padding-bottom: 8px; margin-bottom: 16px;">
           À : ${escapeHtml(to)} — Sujet : ${escapeHtml(subject)}
         </p>
         ${html}
-      </section>`;
-  });
+      </section>`,
+  );
 
   const pdf = await renderMailingPdf(pages);
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="mailing-${campagne.anneeScolaire}.pdf"`);
   res.send(pdf);
+}));
+
+/**
+ * The same letters as /pdf, as one plain-text file instead — no Chromium render at all, so it's
+ * near-instant even for a whole campagne, and the output is directly diffable/greppable (handy to
+ * compare a campagne's letters against another source, e.g. a previous system's own export, without
+ * first having to extract text back out of a PDF).
+ */
+mailingRouter.post("/text", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
+  const result = await buildMailingLetters(req.body);
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  const { campagne, letters } = result;
+
+  const separator = `\n\n${"=".repeat(70)}\n\n`;
+  const text = letters.map(({ to, subject, html }) => `À : ${to} — Sujet : ${subject}\n\n${htmlToPlainText(html)}`).join(separator) + "\n";
+
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="mailing-${campagne.anneeScolaire}.txt"`);
+  res.send(text);
 }));

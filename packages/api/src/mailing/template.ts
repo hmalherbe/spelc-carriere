@@ -54,6 +54,49 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * Converts one rendered email's HTML back to readable plain text, for the "exporter en texte"
+ * mailing feature (a lighter, faster alternative to the PDF export — no Chromium render at all —
+ * and handy for diffing a campagne's letters against another source, as done manually several
+ * times this session by extracting text from a PDF with pdftotext/pypdf). Not a general-purpose
+ * HTML-to-text renderer: just enough to undo exactly what this module's own templates produce
+ * (headings/paragraphs, <br>, <table> rows for the élus list, <a href>, <strong>/<em>).
+ */
+export function htmlToPlainText(html: string): string {
+  const withLinksExpanded = html.replace(/<a\s[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => `${label} (${href})`);
+
+  // A real line break (NUL, never a byte that occurs in rendered text) is kept distinct from this
+  // source's own incidental whitespace — the multi-line template literals in this file wrap their
+  // HTML across several indented lines purely for readability in the source, which otherwise
+  // reads back as mid-sentence line breaks once the tags are stripped (e.g. "vous passerez de
+  // l'échelon 5 à\nl'échelon 6" instead of one sentence).
+  // Neither marker is whitespace, so both survive the \s+ collapse below untouched — a real tab
+  // inserted directly for a <td>/<th> would just get collapsed away as "incidental" whitespace
+  // along with it.
+  const LINE_BREAK = "\u0000";
+  const CELL_SEP = "\u0001";
+  const text = withLinksExpanded
+    .replace(/<br\s*\/?>/gi, LINE_BREAK)
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, LINE_BREAK)
+    .replace(/<th\b[^>]*>/gi, CELL_SEP)
+    .replace(/<td\b[^>]*>/gi, CELL_SEP)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " "); // collapse all real whitespace (incl. the source's own line wrapping) to single spaces
+
+  return text
+    .split(LINE_BREAK)
+    .map((line) => line.replaceAll(CELL_SEP, "\t").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function formatDateFr(iso: string | null): string | null {
   if (!iso) return null;
   // "2-digit" day (zero-padded, "01 septembre 2024") — confirmed against the real Word mail-merge

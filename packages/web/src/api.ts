@@ -591,6 +591,10 @@ export const api = {
   /** One PDF, one page per selected recipient's letter — the same content /send would e-mail them. */
   mailingPdf: (campagneId: string, teacherIds: string[], template?: MailingTemplate) =>
     requestBlob("/mailing/pdf", { method: "POST", body: JSON.stringify({ campagneId, teacherIds, template }) }),
+  /** Same letters as mailingPdf, as one plain-text file — faster (no PDF render) and directly
+   * diffable/greppable. */
+  mailingText: (campagneId: string, teacherIds: string[], template?: MailingTemplate) =>
+    requestBlob("/mailing/text", { method: "POST", body: JSON.stringify({ campagneId, teacherIds, template }) }),
   updateMailingEmail: (teacherId: string, email: string) =>
     request<{ email: string }>(`/mailing/${teacherId}/email`, { method: "PUT", body: JSON.stringify({ email }) }),
   /** null clears the override, reverting to the declared/estimated civilité. */
