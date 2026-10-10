@@ -98,6 +98,7 @@ async function recomputeAfterReliquatChange(teacherId: string, campagneId: strin
     ancienneteAReporterManualRaw: teacher?.ancienneteAReporter ?? null,
     proTypePromotion: snap.proTypePromotion,
     proConfirmee: snap.proConfirmee,
+    dateProchainePromotionRectorat: snap.dateProchainePromotionRectorat,
     ancienneteEchelon: snap.ancienneteEchelon,
     reliquatPromu,
     liveGrilles,

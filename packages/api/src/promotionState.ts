@@ -19,6 +19,11 @@ export interface RecomputePromotionStateInput {
   ancienneteAReporterManualRaw: string | null;
   proTypePromotion: string | null;
   proConfirmee: boolean;
+  /** The rectorat's own confirmed date for this échelon change ("Pro AN./Pro BA.<date>" marker —
+   * see TeacherSnapshot.dateProchainePromotionRectorat's own doc comment), when present. Always
+   * takes priority over the date computeEchelonPromotion derives below — see this function's own
+   * doc comment for why. */
+  dateProchainePromotionRectorat: Date | null;
   ancienneteEchelon: number | null;
   /** Manually promoted via the union's own "reliquat" mechanism (schema.prisma's
    * ReliquatPromotion) — see baStatus.ts's own doc comment. Defaults to false. */
@@ -34,6 +39,22 @@ export interface RecomputePromotionStateInput {
  * Teacher's ancienneteADeduire or ancienneteAReporter correction (see those fields' doc comments):
  * without this, either correction would silently only take effect on the NEXT rectorat reimport,
  * not immediately.
+ *
+ * The stored dateProchainePromotion always prefers the rectorat's own confirmed date
+ * (dateProchainePromotionRectorat) over computeEchelonPromotion's own projection, for EVERY track
+ * (AN/CL/RE/BA alike) — per explicit product decision (2026-10-10): the rectorat's own figure is
+ * ground truth whenever it's stated, our own date math is only ever a placeholder for a record the
+ * rectorat hasn't confirmed yet. Real case that forced this: Claudine BAUD (CERTIFIE EXC, échelon 4,
+ * "RE. 00a11m05j" report d'ancienneté) — the rectorat's own "Pro AN.01/09/2025" is one real day
+ * later than what computeEchelonPromotion derives (31/08/2025) from the same inputs. That 1-day gap
+ * traces to an inherent mismatch between the 360-day "banking year" this engine uses for échelon
+ * durations and the real Gregorian calendar the rectorat's own system presumably counts in — NOT a
+ * one-line arithmetic bug: two OTHER real report-d'ancienneté cases from this exact campaign (Elise
+ * MORIN, Charlotte BOURGEON — see ancienneteReportee.test.ts) already match the rectorat exactly
+ * with the current formula, and every alternative order of operations tried to fix BAUD's case
+ * broke one of those two instead. Rather than chase an approximation that can never be exact for
+ * every case, this simply defers to the rectorat's own stated date whenever it has one — the other
+ * computed fields (échelon suivant, indices, gain) are unaffected and stay exactly as computed.
  */
 export async function recomputeAndStorePromotionState(
   input: RecomputePromotionStateInput,
@@ -76,7 +97,7 @@ export async function recomputeAndStorePromotionState(
       futurIndice: promotion.futurIndice,
       gainSalaireBrut: promotion.gainSalaireBrut,
       gainSalaireNet: promotion.gainSalaireNet,
-      dateProchainePromotion: promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+      dateProchainePromotion: input.dateProchainePromotionRectorat ?? (promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null),
       baStatus,
     };
 

@@ -253,6 +253,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
           ancienneteAReporterManualRaw: manualCorrectionsByTeacherId.get(teacherId)?.ancienneteAReporter ?? null,
           proTypePromotion: record.proTypePromotion,
           proConfirmee: record.proConfirmee,
+          dateProchainePromotionRectorat: record.dateProchainePromotionRectorat ? new Date(record.dateProchainePromotionRectorat) : null,
           ancienneteEchelon: record.ancienneteEchelon,
           reliquatPromu: reliquatTeacherIds.has(teacherId),
           liveGrilles,

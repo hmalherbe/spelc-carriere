@@ -59,7 +59,7 @@ teachersRouter.get("/", async (req, res) => {
 
     // BA candidacy/status/arrival — extracted to baStatus.ts (long rationale kept there) so
     // routes/stats.ts can aggregate over the exact same rule without re-deriving it.
-    const { baEchelonDepart, baEligible, isBaCandidate, baStatus, arrivedThisEchelon } = computeBaStatus({ ...snap, reliquatPromu });
+    const { baEchelonDepart, baEligible, baStatus, arrivedThisEchelon } = computeBaStatus({ ...snap, reliquatPromu });
 
     const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === snap.grade);
 
@@ -110,17 +110,12 @@ teachersRouter.get("/", async (req, res) => {
           futurIndice: promotion.futurIndice,
           gainSalaireBrut: promotion.gainSalaireBrut,
           gainSalaireNet: promotion.gainSalaireNet,
-          // For a BA candidate, the rectorat's own file already states the échéance date next to
-          // the "BA."/"Pro BA." marker (dateProchainePromotionRectorat) — that's the real date,
-          // not something to re-derive from a generic duration-from-départ calculation. Prefer it
-          // whenever the file provided one; fall back to our own computed projection only if it
-          // didn't (should not normally happen for a genuine BA record).
-          dateProchainePromotion:
-            isBaCandidate && snap.dateProchainePromotionRectorat
-              ? snap.dateProchainePromotionRectorat
-              : promotion.dateProchainePromotion
-                ? new Date(promotion.dateProchainePromotion)
-                : null,
+          // The rectorat's own file always wins over our own date math when it states one
+          // (dateProchainePromotionRectorat, from the "Pro AN./CL./RE./BA.<date>" marker) — per
+          // explicit product decision (2026-10-10, see promotionState.ts's own doc comment for the
+          // real case that forced it), systematically, for every track, not just BA. Falls back to
+          // computeEchelonPromotion's own projection only when the rectorat hasn't confirmed one yet.
+          dateProchainePromotion: snap.dateProchainePromotionRectorat ?? (promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null),
         };
       } catch {
         // Échelon introuvable dans la grille (donnée aberrante) — on garde l'affichage d'origine
@@ -218,6 +213,7 @@ async function recomputeAllSnapshotsForTeacher(
       ancienneteAReporterManualRaw: corrections.ancienneteAReporter,
       proTypePromotion: snap.proTypePromotion,
       proConfirmee: snap.proConfirmee,
+      dateProchainePromotionRectorat: snap.dateProchainePromotionRectorat,
       ancienneteEchelon: snap.ancienneteEchelon,
       reliquatPromu: reliquatCampagneIds.has(snap.campagneId),
       liveGrilles,
