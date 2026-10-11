@@ -239,9 +239,25 @@ export function DashboardPage() {
     }
     const value = field === "ancienneteADeduire" ? t.ancienneteADeduire : t.ancienneteAReporter;
     const note = field === "ancienneteADeduire" ? t.ancienneteADeduireNote : t.ancienneteAReporterNote;
+    // Pour "ancienneté à reporter" uniquement : la figure brute indiquée par le rectorat
+    // (marqueur AN./CL./RE., voir TeacherListItem.ancienneteAReporterRectorat) — purement
+    // informative, jamais la valeur réellement utilisée pour le calcul de date, mais utile pour
+    // comprendre pourquoi cette colonne est vide pour la plupart des enseignants (aucune correction
+    // manuelle n'est normalement nécessaire). Affichée seulement quand aucune correction manuelle
+    // n'est en place ; une fois une correction saisie, elle remplace entièrement la dérivation
+    // automatique (voir ancienneteReportee.ts) et c'est elle seule qui compte.
+    const rectoratValue = field === "ancienneteAReporter" ? t.ancienneteAReporterRectorat : null;
     return (
       <div className="row-actions">
-        <span title={note ?? undefined}>{value ?? "—"}</span>
+        <span title={note ?? undefined}>
+          {value ?? (rectoratValue ? (
+            <span style={{ color: "var(--muted, #888)", fontStyle: "italic" }} title="Indication brute du rectorat, non utilisée pour le calcul tant qu'aucune correction manuelle n'est saisie">
+              {rectoratValue} (rectorat)
+            </span>
+          ) : (
+            "—"
+          ))}
+        </span>
         {canEdit && (
           <button type="button" className="secondary" onClick={() => startEditCorrection(t, field)}>
             {value ? "Modifier" : "Ajouter"}

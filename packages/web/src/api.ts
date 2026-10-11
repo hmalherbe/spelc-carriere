@@ -157,6 +157,11 @@ export interface TeacherListItem {
    * marqueur RE./CL. du rectorat) — "AAaMMmJJj", ou null si aucune correction n'est en place. */
   ancienneteAReporter: string | null;
   ancienneteAReporterNote: string | null;
+  /** Figure brute "report d'ancienneté" telle qu'indiquée par le rectorat (marqueur AN./CL./RE.),
+   * à titre informatif uniquement — n'est jamais la valeur utilisée pour le calcul de date quand
+   * ancienneteAReporter (la correction manuelle ci-dessus) est vide ; formatée en texte lisible
+   * ("3 mois 16 jours"), ou null si le rectorat n'en indique aucune. */
+  ancienneteAReporterRectorat: string | null;
 }
 
 export interface MatchCandidate {

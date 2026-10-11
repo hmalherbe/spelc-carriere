@@ -6,6 +6,7 @@ import {
   isEligibleClasseExceptionnelle,
   computeEchelonPromotion,
   parseAncienneteText,
+  formatDureeEncodedText,
   GRADE_MAPPINGS,
   type GrilleCode,
 } from "@spelc/domain";
@@ -17,6 +18,23 @@ import { deriveAncienneteAReporter } from "../ancienneteReportee.js";
 export const teachersRouter = Router();
 
 teachersRouter.use(requireAuth);
+
+/**
+ * The rectorat's own "report d'ancienneté" figure, as literally stated by its "AN./CL./RE." marker
+ * (TeacherSnapshot.typePromotion + dureeRestante) — purely informational here, NOT the value
+ * actually fed into the date calculation (see ancienneteReportee.ts's deriveAncienneteAReporter,
+ * which deliberately only subtracts it from the date for RE./CL., never AN.). Same gating as
+ * ccmaModelTemplate.ts's buildReportAncienneteBlock (real cases: Elise MORIN "CL.", Charlotte
+ * BOURGEON "RE.", Benjamin BUYSSCHAERT "AN." — see that function's own doc comment), kept here only
+ * to surface this raw figure on the Dashboard next to the "Anc. à reporter" MANUAL correction column
+ * (Teacher.ancienneteAReporter), which overrides this automatic derivation when set but is otherwise
+ * empty for the vast majority of teachers since no override is normally needed.
+ */
+function formatRectoratReportAncienneteText(typePromotion: string | null, dureeRestante: string | null): string | null {
+  if (typePromotion !== "RE" && typePromotion !== "CL" && typePromotion !== "AN") return null;
+  if (dureeRestante === "00a00m00j") return null;
+  return formatDureeEncodedText(dureeRestante);
+}
 
 /**
  * List teachers for a campagne, joined with their latest snapshot, computed promotion state,
@@ -163,6 +181,9 @@ teachersRouter.get("/", async (req, res) => {
       ancienneteADeduireNote: snap.teacher.ancienneteADeduireNote,
       ancienneteAReporter: snap.teacher.ancienneteAReporter,
       ancienneteAReporterNote: snap.teacher.ancienneteAReporterNote,
+      // Figure brute du rectorat (voir formatRectoratReportAncienneteText) — affichée à titre
+      // informatif à côté de la correction manuelle ci-dessus, jamais utilisée comme valeur de repli.
+      ancienneteAReporterRectorat: formatRectoratReportAncienneteText(snap.typePromotion, snap.dureeRestante),
     };
   });
 
