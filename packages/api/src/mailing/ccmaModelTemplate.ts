@@ -79,11 +79,18 @@ function p(html: string): string {
 }
 
 /** Bloc "Report d'ancienneté" — affiché quand le rectorat a marqué ce record "RE." (report
- * d'ancienneté) ou "CL." (reclassement, même mécanisme : voir Elise MORIN, cas réel de la campagne
+ * d'ancienneté), "CL." (reclassement, même mécanisme : voir Elise MORIN, cas réel de la campagne
  * du 25 mars 2026 — "CL. 01a04m24j" — dont le texte figure bien dans le vrai courrier ; voir aussi
- * formatDureeEncodedText et son commentaire, confirmé sur un autre cas réel, MOLENAT Marion). */
+ * formatDureeEncodedText et son commentaire, confirmé sur un autre cas réel, MOLENAT Marion), ou
+ * "AN." (passage normal) — ce dernier cas est purement informatif et ne doit JAMAIS être transmis à
+ * ancienneteAReporter (voir ancienneteReportee.ts, qui exclut "AN" à raison : le crédit n'entre pas
+ * dans le calcul de la date). Cas réel validant "AN." : Benjamin BUYSSCHAERT (PEPS, échelon 5→6,
+ * "AN. 00a03m16j" au 15/05/2024) — sa date de passage (29/07/2026) et toutes les dates qui en
+ * découlent sont identiques entre les deux systèmes SANS appliquer ce report au calcul, alors que la
+ * phrase "Au 15 mai 2024 vous aviez un report d'ancienneté de 3 mois 16 jours." figure bien, telle
+ * quelle, dans le vrai courrier. "BA." reste exclu : aucun cas réel ne le justifie. */
 function buildReportAncienneteBlock(ctx: CcmaModelContext): string {
-  if (ctx.typePromotion !== "RE" && ctx.typePromotion !== "CL") return "";
+  if (ctx.typePromotion !== "RE" && ctx.typePromotion !== "CL" && ctx.typePromotion !== "AN") return "";
   // "00a00m00j" is a real, common value (no report at all) — formatDureeEncodedText renders it as
   // "0 jour" rather than null, but the real letter omits the whole sentence when there's nothing to
   // report, so that literal-zero case must be filtered out here rather than trusted as truthy.

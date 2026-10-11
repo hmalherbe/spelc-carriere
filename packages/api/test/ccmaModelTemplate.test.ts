@@ -100,11 +100,30 @@ describe("buildCcmaModelEmail", () => {
     expect(html).toContain("vous aviez un report d'ancienneté de 1 an 4 mois 24 jours");
   });
 
-  it("omits the report d'ancienneté paragraph when typePromotion is RE/CL but the duration is literally zero (real case)", () => {
+  it("omits the report d'ancienneté paragraph when typePromotion is RE/CL/AN but the duration is literally zero (real case)", () => {
     expect(buildCcmaModelEmail({ ...BASE, typePromotion: "RE", dureeRestanteEncoded: "00a00m00j" }).html).not.toContain(
       "report d'ancienneté",
     );
     expect(buildCcmaModelEmail({ ...BASE, typePromotion: "CL", dureeRestanteEncoded: "00a00m00j" }).html).not.toContain(
+      "report d'ancienneté",
+    );
+    expect(buildCcmaModelEmail({ ...BASE, typePromotion: "AN", dureeRestanteEncoded: "00a00m00j" }).html).not.toContain(
+      "report d'ancienneté",
+    );
+  });
+
+  it("also shows the report d'ancienneté paragraph when typePromotion is AN (passage normal) — real case, Benjamin BUYSSCHAERT", () => {
+    const html = buildCcmaModelEmail({
+      ...BASE,
+      typePromotion: "AN",
+      dureeRestanteEncoded: "00a03m16j",
+      dateAccesEchelonActuel: "2024-05-15",
+    }).html;
+    expect(html).toContain("Au 15 mai 2024 vous aviez un report d'ancienneté de 3 mois 16 jours.");
+  });
+
+  it("does NOT show the report d'ancienneté paragraph when typePromotion is BA — no real case justifies it", () => {
+    expect(buildCcmaModelEmail({ ...BASE, typePromotion: "BA", dureeRestanteEncoded: "01a00m00j" }).html).not.toContain(
       "report d'ancienneté",
     );
   });
