@@ -225,7 +225,7 @@ describe("buildCcmaModelEmail", () => {
     expect(html).not.toContain("des promouvables ont obtenu");
   });
 
-  it("shows 'prochaine promotion dans ce grade' even for a BA candidate not retained this cycle — real case: Elodie BRANCA", () => {
+  it("does NOT show 'prochaine promotion dans ce grade' for a BA candidate genuinely not retained this cycle — verified against 68 real non-promu letters, none of which carry this sentence", () => {
     const { html } = buildCcmaModelEmail({
       ...BASE,
       echelonSuivant: "9",
@@ -235,7 +235,7 @@ describe("buildCcmaModelEmail", () => {
       dateFuturePromotion: "2030-03-01",
       dateFuturePromotionSiBA: null,
     });
-    expect(html).toContain("Votre prochaine promotion dans ce grade est prévue le : 01 mars 2030.");
+    expect(html).not.toContain("Votre prochaine promotion dans ce grade");
   });
 
   it("comparison stops at barème when the two barèmes differ", () => {
