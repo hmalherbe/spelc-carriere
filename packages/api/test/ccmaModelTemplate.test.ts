@@ -225,6 +225,19 @@ describe("buildCcmaModelEmail", () => {
     expect(html).not.toContain("des promouvables ont obtenu");
   });
 
+  it("shows 'prochaine promotion dans ce grade' even for a BA candidate not retained this cycle — real case: Elodie BRANCA", () => {
+    const { html } = buildCcmaModelEmail({
+      ...BASE,
+      echelonSuivant: "9",
+      bonification: "NON_PROMU",
+      gainSalaireNet: 0,
+      pourcentagePromusBa: 30,
+      dateFuturePromotion: "2030-03-01",
+      dateFuturePromotionSiBA: null,
+    });
+    expect(html).toContain("Votre prochaine promotion dans ce grade est prévue le : 01 mars 2030.");
+  });
+
   it("comparison stops at barème when the two barèmes differ", () => {
     const { html } = buildCcmaModelEmail({
       ...BASE,

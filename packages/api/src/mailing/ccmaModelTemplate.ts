@@ -138,21 +138,22 @@ function buildProchainePromotionFutureBlock(ctx: CcmaModelContext): string {
   );
 }
 
-/** Gain salarial + régularisation financière + prochaine promotion future — affiché pour tout le
- * monde SAUF un candidat BA non retenu (qui n'a, cette fois-ci, aucune promotion à annoncer).
- * Le modèle Word d'origine montre ce paragraphe dès que Bonification <> "NON_PROMU", sans condition
- * sur le montant du gain (confirmé sur le document source, champ IF autour du seul `Bonification`)
- * — ne pas réintroduire de garde-fou sur `gainSalaireNet > 0` ici. */
+/** Gain salarial + régularisation financière — affiché pour tout le monde SAUF un candidat BA non
+ * retenu (qui n'a, cette fois-ci, aucune promotion à annoncer). Le modèle Word d'origine montre ce
+ * paragraphe dès que Bonification <> "NON_PROMU", sans condition sur le montant du gain (confirmé
+ * sur le document source, champ IF autour du seul `Bonification`) — ne pas réintroduire de
+ * garde-fou sur `gainSalaireNet > 0` ici.
+ *
+ * "Votre prochaine promotion dans ce grade..." (buildProchainePromotionFutureBlock) n'est PAS inclus
+ * ici : elle doit s'afficher même pour un candidat BA non retenu (cas réel : Elodie BRANCA, dont le
+ * courrier annonce bien sa prochaine promotion normale malgré la BA non obtenue cette fois) — voir
+ * son appel séparé dans buildCcmaModelEmail. */
 function buildGainEtSuiteBlock(ctx: CcmaModelContext): string {
   if (ctx.bonification === "NON_PROMU") return "";
-  const parts: string[] = [
-    p(
-      `L'écart sur votre traitement de base consécutif à cette promotion pour un temps plein est équivalent à environ <strong>${ctx.gainSalaireNet} € nets</strong> par mois (avant prélèvement à la source).` +
-        ` La régularisation financière devrait intervenir au plus tôt en ${monthYearFr(ctx.dateEffetCcm)}.`,
-    ),
-  ];
-  parts.push(buildProchainePromotionFutureBlock(ctx));
-  return parts.join("\n");
+  return p(
+    `L'écart sur votre traitement de base consécutif à cette promotion pour un temps plein est équivalent à environ <strong>${ctx.gainSalaireNet} € nets</strong> par mois (avant prélèvement à la source).` +
+      ` La régularisation financière devrait intervenir au plus tôt en ${monthYearFr(ctx.dateEffetCcm)}.`,
+  );
 }
 
 function monthYearFr(iso: string | null): string {
@@ -253,6 +254,7 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
     buildPromouvableBaBlock(ctx),
     buildBonificationAccordeeBlock(ctx),
     buildGainEtSuiteBlock(ctx),
+    buildProchainePromotionFutureBlock(ctx),
     // Le message "non promu" et la comparaison barème/ancienneté se suivent, dans le document Word
     // source, sans paragraphe vide entre les deux (confirmé sur le XML) — regroupés ici dans un
     // seul <p> (lignes séparées par <br>) pour ne pas leur donner chacun leur propre marge de
