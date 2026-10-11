@@ -128,7 +128,12 @@ export function DashboardPage() {
 
   function startEditCorrection(t: TeacherListItem, field: ManualCorrectionField) {
     setEditingCorrection({ teacherId: t.teacherId, field });
-    setCorrectionDraft((field === "ancienneteADeduire" ? t.ancienneteADeduire : t.ancienneteAReporter) ?? "");
+    // Pour "ancienneté à reporter" : si aucune correction manuelle n'est encore en place, on
+    // pré-remplit avec la figure brute du rectorat (même encodage "AAaMMmJJj") plutôt que de partir
+    // d'un champ vide — l'admin n'a alors qu'à l'ajuster plutôt que la ressaisir de zéro.
+    const manualValue = field === "ancienneteADeduire" ? t.ancienneteADeduire : t.ancienneteAReporter;
+    const rectoratValue = field === "ancienneteAReporter" ? t.ancienneteAReporterRectorat : null;
+    setCorrectionDraft(manualValue ?? rectoratValue ?? "");
     setCorrectionNoteDraft((field === "ancienneteADeduire" ? t.ancienneteADeduireNote : t.ancienneteAReporterNote) ?? "");
     setCorrectionError(null);
   }
@@ -251,8 +256,11 @@ export function DashboardPage() {
       <div className="row-actions">
         <span title={note ?? undefined}>
           {value ?? (rectoratValue ? (
-            <span style={{ color: "var(--muted, #888)", fontStyle: "italic" }} title="Indication brute du rectorat, non utilisée pour le calcul tant qu'aucune correction manuelle n'est saisie">
-              {rectoratValue} (rectorat)
+            <span
+              style={{ color: "var(--muted, #888)", fontStyle: "italic" }}
+              title="Indication brute du rectorat, non utilisée pour le calcul tant qu'aucune correction manuelle n'est saisie"
+            >
+              {rectoratValue}
             </span>
           ) : (
             "—"
@@ -260,7 +268,7 @@ export function DashboardPage() {
         </span>
         {canEdit && (
           <button type="button" className="secondary" onClick={() => startEditCorrection(t, field)}>
-            {value ? "Modifier" : "Ajouter"}
+            {value || rectoratValue ? "Modifier" : "Ajouter"}
           </button>
         )}
       </div>
