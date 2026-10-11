@@ -306,6 +306,17 @@ main {
   color: var(--accent-dark);
 }
 
+/* Figée en haut lors du défilement, en-tête en gras — utilisée sur les tableaux longs
+ * ("Enseignants promouvables", "Mailing") où garder les noms de colonnes visibles aide à la
+ * lecture. `.data-table th` a déjà un fond opaque (#fafbfc), nécessaire pour masquer le contenu qui
+ * défile sous l'en-tête figé. */
+.data-table.sticky-header th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-weight: 700;
+}
+
 .gain-positive {
   color: var(--success);
   font-weight: 600;

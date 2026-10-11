@@ -409,7 +409,7 @@ export function MailingPage() {
       ) : visibleRecipients.length === 0 ? (
         <p className="hint">Aucun destinataire ne correspond à ce filtre.</p>
       ) : (
-        <table className="data-table">
+        <table className="data-table sticky-header">
           <thead>
             <tr>
               {canSend && <th></th>}

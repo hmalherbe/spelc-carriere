@@ -229,7 +229,6 @@ export function DashboardPage() {
           <input
             value={correctionNoteDraft}
             onChange={(e) => setCorrectionNoteDraft(e.target.value)}
-            placeholder="Motif (ex. disponibilité 2018-2020)"
             style={{ width: "16em" }}
           />
           <button type="button" disabled={savingCorrection} onClick={saveCorrection}>
@@ -365,7 +364,7 @@ export function DashboardPage() {
       {loading ? (
         <p>Chargement...</p>
       ) : (
-        <table className="data-table">
+        <table className="data-table sticky-header">
           <thead>
             <tr>
               <th className="sortable" onClick={() => toggleSort("nom")}>
