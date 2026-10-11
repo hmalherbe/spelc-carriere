@@ -226,11 +226,6 @@ export function DashboardPage() {
             style={{ width: "10em" }}
             autoFocus
           />
-          <input
-            value={correctionNoteDraft}
-            onChange={(e) => setCorrectionNoteDraft(e.target.value)}
-            style={{ width: "16em" }}
-          />
           <button type="button" disabled={savingCorrection} onClick={saveCorrection}>
             {savingCorrection ? "..." : "Enregistrer"}
           </button>

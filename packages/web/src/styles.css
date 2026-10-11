@@ -309,12 +309,40 @@ main {
 /* Figée en haut lors du défilement, en-tête en gras — utilisée sur les tableaux longs
  * ("Enseignants promouvables", "Mailing") où garder les noms de colonnes visibles aide à la
  * lecture. `.data-table th` a déjà un fond opaque (#fafbfc), nécessaire pour masquer le contenu qui
- * défile sous l'en-tête figé. */
+ * défile sous l'en-tête figé.
+ *
+ * `overflow: hidden` du `.data-table` de base (juste pour arrondir les coins) fait de la TABLE
+ * elle-même le conteneur de défilement le plus proche au sens CSS — un `position: sticky` à
+ * l'intérieur reste alors figé à l'intérieur de cette boîte, qui ne défile jamais (la table entière
+ * défile avec la page, mais ça se passe EN DEHORS de son propre contexte d'overflow), donc l'en-tête
+ * ne colle jamais au viewport. Annulé ici (`overflow: visible`) pour que le conteneur de défilement
+ * redevienne la page elle-même ; les coins arrondis sont recréés cellule par cellule plutôt que par
+ * découpe globale. */
+.data-table.sticky-header {
+  overflow: visible;
+}
+
 .data-table.sticky-header th {
   position: sticky;
   top: 0;
   z-index: 1;
   font-weight: 700;
+}
+
+.data-table.sticky-header thead th:first-child {
+  border-top-left-radius: var(--radius);
+}
+
+.data-table.sticky-header thead th:last-child {
+  border-top-right-radius: var(--radius);
+}
+
+.data-table.sticky-header tbody tr:last-child td:first-child {
+  border-bottom-left-radius: var(--radius);
+}
+
+.data-table.sticky-header tbody tr:last-child td:last-child {
+  border-bottom-right-radius: var(--radius);
 }
 
 .gain-positive {
