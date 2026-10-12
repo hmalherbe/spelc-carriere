@@ -65,7 +65,6 @@ export function MailingPage() {
   const [savingCiviliteId, setSavingCiviliteId] = useState<string | null>(null);
   const [civiliteError, setCiviliteError] = useState<string | null>(null);
   const [brevoSettings, setBrevoSettings] = useState<BrevoSettings | null>(null);
-  const [template, setTemplate] = useState<MailingTemplate>("generique");
   const [civiliteFilter, setCiviliteFilter] = useState<"" | "VIDE" | "M" | "Mme">("");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
   const [departementFilter, setDepartementFilter] = useState<string>("all");
@@ -73,7 +72,11 @@ export function MailingPage() {
   const [emailFilter, setEmailFilter] = useState<"" | "VIDE" | "RENSEIGNE">("");
 
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
-  const ccmaModelAvailable = selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI";
+  // Un seul modèle possible par commission, plus de choix exposé à l'admin (per product decision) :
+  // CCMA -> "Modèle CCMA", CCMI -> "Modèle CCMI" (même template, texte adapté — voir
+  // ccmaModelTemplate.ts), le modèle générique ne reste qu'un filet de sécurité pour une campagne
+  // pas encore classée CCMA/CCMI (bannière "définir maintenant..." plus haut dans ce cas).
+  const template: MailingTemplate = selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI" ? "ccma_avancement" : "generique";
 
   // Options des filtres Grade/Échelon — sur `recipients` (pas `visibleRecipients`) pour que la
   // liste déroulante ne rétrécisse pas au fur et à mesure qu'on combine plusieurs filtres, comme
@@ -136,13 +139,6 @@ export function MailingPage() {
 
   useEffect(() => {
     if (campagneId) refresh(campagneId);
-    // Le modèle CCMA/CCMI (reconstruit à partir du vrai courrier du syndicat) est le bon choix par
-    // défaut dès qu'il est disponible — sans ça, rebasculer silencieusement sur "Modèle générique"
-    // à chaque changement de campagne faisait repartir une campagne CCMA/CCMI sans aucun contenu lié
-    // à la BA (bonification d'ancienneté) tant que l'admin ne re-sélectionnait pas le bon modèle à
-    // la main, un piège facile à manquer avant un envoi réel.
-    setTemplate(selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI" ? "ccma_avancement" : "generique");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campagneId]);
 
   function toggle(teacherId: string) {
@@ -281,12 +277,6 @@ export function MailingPage() {
                 {c.type ?? "?"} {c.anneeScolaire}
               </option>
             ))}
-          </select>
-        )}
-        {ccmaModelAvailable && (
-          <select value={template} onChange={(e) => setTemplate(e.target.value as MailingTemplate)}>
-            <option value="generique">Modèle générique</option>
-            <option value="ccma_avancement">Modèle {selectedCampagne?.type} (avancement d'échelon)</option>
           </select>
         )}
       </div>
