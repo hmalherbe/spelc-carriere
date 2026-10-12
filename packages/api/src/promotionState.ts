@@ -40,11 +40,11 @@ export interface RecomputePromotionStateInput {
  * without this, either correction would silently only take effect on the NEXT rectorat reimport,
  * not immediately.
  *
- * The stored dateProchainePromotion always prefers the rectorat's own confirmed date
- * (dateProchainePromotionRectorat) over computeEchelonPromotion's own projection, for EVERY track
- * (AN/CL/RE/BA alike) — per explicit product decision (2026-10-10): the rectorat's own figure is
- * ground truth whenever it's stated, our own date math is only ever a placeholder for a record the
- * rectorat hasn't confirmed yet. Real case that forced this: Claudine BAUD (CERTIFIE EXC, échelon 4,
+ * The stored dateProchainePromotion prefers the rectorat's own confirmed date
+ * (dateProchainePromotionRectorat) over computeEchelonPromotion's own projection, for every AN/CL/RE
+ * track — per explicit product decision (2026-10-10): the rectorat's own figure is ground truth
+ * whenever it's stated, our own date math is only ever a placeholder for a record the rectorat
+ * hasn't confirmed yet. Real case that forced this: Claudine BAUD (CERTIFIE EXC, échelon 4,
  * "RE. 00a11m05j" report d'ancienneté) — the rectorat's own "Pro AN.01/09/2025" is one real day
  * later than what computeEchelonPromotion derives (31/08/2025) from the same inputs. That 1-day gap
  * traces to an inherent mismatch between the 360-day "banking year" this engine uses for échelon
@@ -55,7 +55,30 @@ export interface RecomputePromotionStateInput {
  * broke one of those two instead. Rather than chase an approximation that can never be exact for
  * every case, this simply defers to the rectorat's own stated date whenever it has one — the other
  * computed fields (échelon suivant, indices, gain) are unaffected and stay exactly as computed.
+ *
+ * BA (bonification d'ancienneté) is the one exception to "always prefer the rectorat's date": a BA
+ * candidate not (yet) granted it — computeBaStatus's "non_promu"/"hors_fenetre" — only has a
+ * dateProchainePromotionRectorat because the rectorat prints the HYPOTHETICAL accelerated date right
+ * next to its raw, unconfirmed "BA.<date>" marker. That date is not this teacher's real next
+ * promotion: without the bonification, they stay on the grille's normal (non-accelerated) PPCR
+ * schedule — computeEchelonPromotion's own projection, which is what's used here instead. Real case
+ * that forced this: a CCMI non-promu BA candidate shown "promouvable" (eligible) at 05/02/2026 whose
+ * letter nonetheless said their actual next promotion was also 05/02/2026, identical to the
+ * eligibility date, when it should fall exactly 1 year later (05/02/2027) — the whole point of the
+ * "bonification d'ancienneté d'un an" is that it's a full year ahead of the normal schedule, so
+ * without it the normal schedule applies. A granted BA (proConfirmee or reliquatPromu — baStatus
+ * "promu") keeps using the rectorat's own date as before: that one IS real, the accelerated date
+ * having actually been decided.
  */
+export function resolveDateProchainePromotion(
+  baStatus: ReturnType<typeof computeBaStatus>["baStatus"],
+  dateProchainePromotionRectorat: Date | null,
+  computedDate: Date | null,
+): Date | null {
+  const baNotGranted = baStatus === "non_promu" || baStatus === "hors_fenetre";
+  return !baNotGranted && dateProchainePromotionRectorat ? dateProchainePromotionRectorat : computedDate;
+}
+
 export async function recomputeAndStorePromotionState(
   input: RecomputePromotionStateInput,
 ): Promise<{ warning?: string }> {
@@ -89,6 +112,12 @@ export async function recomputeAndStorePromotionState(
       reliquatPromu: input.reliquatPromu,
     });
 
+    const dateProchainePromotion = resolveDateProchainePromotion(
+      baStatus,
+      input.dateProchainePromotionRectorat,
+      promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+    );
+
     const data = {
       grilleCode: promotion.grille,
       echelonDepart: String(promotion.echelonDepart),
@@ -97,7 +126,7 @@ export async function recomputeAndStorePromotionState(
       futurIndice: promotion.futurIndice,
       gainSalaireBrut: promotion.gainSalaireBrut,
       gainSalaireNet: promotion.gainSalaireNet,
-      dateProchainePromotion: input.dateProchainePromotionRectorat ?? (promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null),
+      dateProchainePromotion,
       baStatus,
     };
 
