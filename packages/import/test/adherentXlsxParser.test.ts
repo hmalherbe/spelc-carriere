@@ -12,8 +12,8 @@ async function buildXlsx(rows: (string | number)[][]): Promise<Buffer> {
 describe("parseAdherentXlsx", () => {
   it("parses a workbook's first sheet the same way parseAdherentCsv parses the equivalent CSV", async () => {
     const buffer = await buildXlsx([
-      ["Civ.", "Nom", "Prénom", "Nom naissance", "Grade", "Ancien échelon", "Statut", "Type de contrat", "Ancien Indice", "Date_Effet", "Mél.", "Mail academique", "Departement", "Spelc"],
-      ["Mme", "MARTIN", "Camille", "", "CERTIFIE", "5", "Titulaire", "Contrat définitif", 481, "01/09/2023", "camille.martin@example.com", "", "06", "Oui"],
+      ["Civ.", "Nom", "Prénom", "Nom naissance", "Grade", "Ancien échelon", "Statut", "Type de contrat", "Ancien Indice", "Date_Effet", "Mél.", "Mail academique", "Departement", "Spelc", "Reliquat"],
+      ["Mme", "MARTIN", "Camille", "", "CERTIFIE", "5", "Titulaire", "Contrat définitif", 481, "01/09/2023", "camille.martin@example.com", "", "06", "Oui", "00a03m16j"],
     ]);
 
     const { records, unmappedFields } = await parseAdherentXlsx(buffer);
@@ -31,6 +31,7 @@ describe("parseAdherentXlsx", () => {
       mailPersonnel: "camille.martin@example.com",
       departement: "06",
       spelc: "Oui",
+      reliquat: "00a03m16j",
     });
   });
 

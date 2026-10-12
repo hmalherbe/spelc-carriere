@@ -23,12 +23,12 @@ type EligibleAdherentRow = {
   degre: 1 | 2 | null;
   dateProchainePromotion: string | null;
   nonPresentDansRectorat: boolean;
-  /** Correction manuelle "ancienneté à reporter" portée par la fiche Teacher déjà rapprochée, le
-   * cas échéant (voir Teacher.ancienneteAReporter's own doc comment) — pas liée à cette campagne en
-   * particulier (c'est un champ intrinsèque à l'enseignant), donc toujours disponible même quand
-   * `nonPresentDansRectorat` est vrai (pas de fiche rectorat pour CETTE campagne, mais un
-   * rapprochement et une correction d'une campagne antérieure peuvent très bien exister). */
-  ancienneteAReporterTeacher: string | null;
+  /** "Ancienneté à reporter" telle que connue d'ADEL (colonne "Reliquat" de l'export — voir
+   * Adherent.reliquatAnciennete's own doc comment, qui précise pourquoi ce nom de colonne ADEL ne
+   * désigne PAS le mécanisme de reliquat de bonification d'ancienneté du syndicat, ReliquatPromotion,
+   * un concept entièrement différent). Disponible même pour un adhérent sans aucune fiche Teacher —
+   * contrairement à Teacher.ancienneteAReporter, qui exige un rapprochement. */
+  reliquatAnciennete: string | null;
 };
 
 /**
@@ -111,7 +111,7 @@ async function computeEligibleAdherents(campagneId: string): Promise<EligibleAdh
         degre: eligibility.degre,
         dateProchainePromotion,
         nonPresentDansRectorat: !presentDansRectorat,
-        ancienneteAReporterTeacher: a.matchCandidate?.teacher?.ancienneteAReporter ?? null,
+        reliquatAnciennete: a.reliquatAnciennete,
       };
     })
     .filter((r): r is EligibleAdherentRow => r !== null);
@@ -211,7 +211,7 @@ adherentsRouter.get("/eligibles-non-presents.xlsx", async (req, res) => {
       r.statut ?? "",
       r.typeContrat ?? "",
       formatDateFr(r.dateEffet),
-      r.ancienneteAReporterTeacher ?? "",
+      r.reliquatAnciennete ?? "",
       dureeEchelonText(r.grade, r.ancienEchelon, liveGrilles) ?? "",
       formatDateFr(r.dateProchainePromotion),
     ]);

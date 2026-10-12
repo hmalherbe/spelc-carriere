@@ -19,6 +19,10 @@ export interface AdherentRecord {
   mailPersonnel: string | null;
   departement: string | null;
   spelc: string | null;
+  /** Raw "ancienneté à reporter" text ("AAaMMmJJj"), from the export's own "Reliquat" column —
+   * left exactly as found, not reformatted — a different concept from the union's own BA-grant
+   * "reliquat" mechanism (ReliquatPromotion in the API's schema). */
+  reliquat: string | null;
 }
 
 // Maps normalized header names (lowercase, whitespace/newlines collapsed to a single space) to
@@ -59,6 +63,7 @@ const HEADER_ALIASES: Record<keyof AdherentRecord, string[]> = {
   // "departement_rattachem" : en-tête (tronqué) de l'export adhérents ADEL pour ce même champ.
   departement: ["departement", "departement_rattachem"],
   spelc: ["spelc"],
+  reliquat: ["reliquat"],
 };
 
 function normalizeHeader(header: string): string {
@@ -238,6 +243,7 @@ export function parseAdherentCsv(csvText: string): AdherentParseResult {
       mailPersonnel: get("mailPersonnel"),
       departement: get("departement"),
       spelc: get("spelc"),
+      reliquat: get("reliquat"),
     });
   }
 

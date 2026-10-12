@@ -3,10 +3,10 @@ import { parseAdherentCsv } from "../src/adherentCsvParser.js";
 
 describe("parseAdherentCsv", () => {
   const csv = [
-    'Civ.,Nom ,Prénom,Nom naissance,Grade,Ancien échelon,Statut,Type de contrat,Ancien Indice,Date_Effet,Mél.,Departement,Spelc',
-    'Mme,MARTIN,Camille,,CERTIFIE,5,Titulaire,Contrat définitif,481,01/09/2023,camille.martin@example.com,06,Oui',
-    'M.,"DUPONT, DE LA TOUR",Julien,DUPONT,AGREGE,8,Titulaire,Contrat définitif,715,15/09/2021,,83,Oui',
-    ",,,,,,,,,,,,", // blank trailing row some exports leave in
+    'Civ.,Nom ,Prénom,Nom naissance,Grade,Ancien échelon,Statut,Type de contrat,Ancien Indice,Date_Effet,Mél.,Departement,Spelc,Reliquat',
+    'Mme,MARTIN,Camille,,CERTIFIE,5,Titulaire,Contrat définitif,481,01/09/2023,camille.martin@example.com,06,Oui,00a03m16j',
+    'M.,"DUPONT, DE LA TOUR",Julien,DUPONT,AGREGE,8,Titulaire,Contrat définitif,715,15/09/2021,,83,Oui,',
+    ",,,,,,,,,,,,,", // blank trailing row some exports leave in
   ].join("\n");
 
   const { records, unmappedFields } = parseAdherentCsv(csv);
@@ -31,6 +31,7 @@ describe("parseAdherentCsv", () => {
       mailPersonnel: "camille.martin@example.com",
       departement: "06",
       spelc: "Oui",
+      reliquat: "00a03m16j",
     });
   });
 
@@ -60,9 +61,9 @@ describe("parseAdherentCsv", () => {
     // can land back on the nom/prénom columns — creating a bogus extra adherent out of a
     // comment sentence.
     const withComment = [
-      'Civ.,Nom ,Prénom,Nom naissance,Grade,Ancien échelon,Statut,Type de contrat,Ancien Indice,Date_Effet,Mél.,Departement,Spelc,Commentaire',
-      'Mme,FERRER,Florence,,CERTIFIE,7,Titulaire,Contrat définitif,563,01/09/2020,florence.ferrer@example.com,06,Oui,"Tél. du 20/09/23 : note interne.\nL\'élève a du redoubler, pas de place, donc elle a été replacée dans le public."',
-      'M.,MARTIN,Camille,,CERTIFIE,5,Titulaire,Contrat définitif,481,01/09/2023,camille.martin@example.com,06,Oui,',
+      'Civ.,Nom ,Prénom,Nom naissance,Grade,Ancien échelon,Statut,Type de contrat,Ancien Indice,Date_Effet,Mél.,Departement,Spelc,Reliquat,Commentaire',
+      'Mme,FERRER,Florence,,CERTIFIE,7,Titulaire,Contrat définitif,563,01/09/2020,florence.ferrer@example.com,06,Oui,,"Tél. du 20/09/23 : note interne.\nL\'élève a du redoubler, pas de place, donc elle a été replacée dans le public."',
+      'M.,MARTIN,Camille,,CERTIFIE,5,Titulaire,Contrat définitif,481,01/09/2023,camille.martin@example.com,06,Oui,,',
     ].join("\n");
 
     const { records } = parseAdherentCsv(withComment);
@@ -157,6 +158,7 @@ describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore 
   // grade ("AGREGE", "CERTIFIE HC"...) and "promo" the date of the last échelon change.
   set("echelle", "CERTIFIE HC");
   set("promo", "01/09/2023");
+  set("Reliquat", "01a02m03j");
   // Confirmed by the union: this export has no dedicated "Civ." column — the civilité is the
   // leading token of "nom_long" instead ("M. MARTIN Camille"), alongside the full name.
   set("nom_long", "Mme MARTIN Camille");
@@ -181,6 +183,7 @@ describe("parseAdherentCsv — real ADEL 'adhérents' export header (underscore 
       ancienIndice: 481,
       grade: "CERTIFIE HC",
       dateEffet: "2023-09-01",
+      reliquat: "01a02m03j",
     });
   });
 });

@@ -264,6 +264,7 @@ export async function importAdherentRecords(records: AdherentRecord[]): Promise<
       dateEffet: r.dateEffet ? new Date(r.dateEffet) : null,
       mailPersonnel: r.mailPersonnel,
       departement: r.departement,
+      reliquatAnciennete: r.reliquat,
     };
     if (existing) {
       await prisma.adherent.update({ where: { id: existing.id }, data });

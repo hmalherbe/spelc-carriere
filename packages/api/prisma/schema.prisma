@@ -325,21 +325,29 @@ model Teacher {
 // ---------------------------------------------------------------------------
 
 model Adherent {
-  id            String    @id @default(cuid())
-  civilite      String?
-  nom           String
-  prenom        String
-  nomNaissance  String?
-  grade         String?
-  echelleSpelc  String?
-  ancienEchelon String?
-  statut        String?
-  typeContrat   String?
-  ancienIndice  Int?
-  dateEffet     DateTime?
-  mailPersonnel String?
-  departement   String?
-  importedAt    DateTime  @default(now())
+  id                 String    @id @default(cuid())
+  civilite           String?
+  nom                String
+  prenom             String
+  nomNaissance       String?
+  grade              String?
+  echelleSpelc       String?
+  ancienEchelon      String?
+  statut             String?
+  typeContrat        String?
+  ancienIndice       Int?
+  dateEffet          DateTime?
+  mailPersonnel      String?
+  departement        String?
+  /// Raw "ancienneté à reporter" text ("AAaMMmJJj", left exactly as found), from the ADEL export's
+  /// own "Reliquat" column — a DIFFERENT concept from ReliquatPromotion below (the union's BA-grant
+  /// mechanism): this one is the rectorat's ancienneté-report credit, as ADEL already knows it for
+  /// an adherent who has no rectorat snapshot for a campagne (yet) at all, used by the "Adhérents
+  /// éligibles non présents dans fichiers rectorats" Excel export (routes/adherents.ts) — never a
+  /// fallback to Teacher.ancienneteAReporter, which requires a matched Teacher these adherents, by
+  /// definition, may not have.
+  reliquatAnciennete String?
+  importedAt         DateTime  @default(now())
 
   matchCandidate MatchCandidate?
 }
