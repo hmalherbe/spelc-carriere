@@ -34,17 +34,21 @@ describe("formatAnneesDecimalesText", () => {
     expect(formatAnneesDecimalesText(0)).toBe("0 an");
   });
 
-  it("keeps the raw decimal value with a French comma, matching the real sent mailing verbatim", () => {
-    // Verified against the actual 25 mars 2026 CCMA mailing PDF (Yann ADAM: "1,442 an" / "2,328 ans" seen elsewhere).
-    expect(formatAnneesDecimalesText(1.442)).toBe("1,442 an");
-    expect(formatAnneesDecimalesText(12.997)).toBe("12,997 ans");
+  it("rounds the decimal value to 1 digit, French comma (per product decision — the raw CCMI-sourced figure can carry many meaningless decimals)", () => {
+    expect(formatAnneesDecimalesText(1.442)).toBe("1,4 an");
     expect(formatAnneesDecimalesText(1.5)).toBe("1,5 an");
+    // Real CCMI case: Z1AG51 080001 (8 ans 0 mois 1 jour) -> 8 + 1/360 via ancienneteToBankingDays.
+    expect(formatAnneesDecimalesText(9.002777777777778)).toBe("9 ans");
   });
 
-  it("pluralizes 'ans' from 2 up, 'an' below 2", () => {
-    expect(formatAnneesDecimalesText(1.999)).toBe("1,999 an");
-    expect(formatAnneesDecimalesText(2)).toBe("2 ans");
-    expect(formatAnneesDecimalesText(2.001)).toBe("2,001 ans");
+  it("rounds up to a whole number with no trailing decimal shown, same as a value given whole", () => {
+    expect(formatAnneesDecimalesText(12.997)).toBe("13 ans");
+    expect(formatAnneesDecimalesText(1.999)).toBe("2 ans");
+  });
+
+  it("pluralizes 'ans'/'an' based on the rounded (displayed) value, not the raw input", () => {
+    expect(formatAnneesDecimalesText(1.94)).toBe("1,9 an");
+    expect(formatAnneesDecimalesText(2.001)).toBe("2 ans");
   });
 
   it("returns null for null/undefined input", () => {

@@ -22,20 +22,28 @@ export function formatDureeEncodedText(raw: string | null | undefined): string |
 
 /**
  * Formats a decimal-year ancienneté figure (e.g. 2.706, as stored in TeacherSnapshot.ancienneteGrade
- * / ancienneteEchelon) the same way the union's own mail-merged CCMA letters do: the raw decimal
- * value with a French comma ("2,706 ans"), NOT a years/months/days breakdown — confirmed against
- * the real sent mailing (e.g. "1,442 an", "12,997 ans"), which ruled out an earlier Y/M/D version
- * of this function.
+ * / ancienneteEchelon) the way the union's mail-merged letters show it: a French comma ("2,7 ans"),
+ * NOT a years/months/days breakdown — reconstructed from the real sent CCMA mailing, which ruled out
+ * an earlier Y/M/D version of this function.
  *
- * Singular "an" below 2, plural "ans" from 2 up. The real letters are themselves inconsistent in
- * the 1-2 range (the same 1,442 value shows up as both "an" and "ans" across different letters —
- * apparently two spreadsheet columns with slightly different rounding) — this picks the more common
- * of the two rather than trying to reproduce that inconsistency.
+ * Rounded to 1 decimal digit (per product decision): the secondaire source already prints at most
+ * 3 decimals, but the premier-degré (CCMI) source encodes ancienneté as années/mois/jours and goes
+ * through ancienneteToBankingDays' 360-day conversion to land on this same decimal-years figure —
+ * that division routinely produces long repeating decimals (e.g. 9.002777777777778) with no real
+ * meaning beyond the 1st digit, which read as a display bug rather than precision. A value that
+ * rounds to a whole number shows with no decimal at all (matches the existing whole-year case, e.g.
+ * "2 ans"), same as the real letters never show a trailing ",0".
+ *
+ * Singular "an" below 2, plural "ans" from 2 up (checked against the ROUNDED value shown, not the
+ * raw input, so a value that rounds up/down across the 2-year line pluralizes to match what's
+ * actually printed).
  */
 export function formatAnneesDecimalesText(years: number | null | undefined): string | null {
   if (years == null) return null;
-  const formattedValue = String(years).replace(".", ",");
-  return `${formattedValue} an${years >= 2 ? "s" : ""}`;
+  const fixed = years.toFixed(1);
+  const rounded = Number(fixed);
+  const formattedValue = Number.isInteger(rounded) ? String(rounded) : fixed.replace(".", ",");
+  return `${formattedValue} an${rounded >= 2 ? "s" : ""}`;
 }
 
 /**
