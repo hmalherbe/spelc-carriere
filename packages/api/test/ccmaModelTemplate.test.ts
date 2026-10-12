@@ -82,7 +82,7 @@ describe("buildCcmaModelEmail", () => {
     const { html } = buildCcmaModelEmail(BASE);
     expect(html).toContain("140 € nets");
     expect(html).toContain("régularisation financière devrait intervenir au plus tôt en avril 2026");
-    expect(html).toContain("Votre prochaine promotion dans ce grade est prévue le : 07 octobre 2028.");
+    expect(html).toContain("Votre prochaine promotion dans ce grade est prévue le : <strong>07 octobre 2028</strong>.");
     expect(html).not.toContain("l'accélération de carrière d'un an du PPCR");
   });
 
@@ -147,7 +147,9 @@ describe("buildCcmaModelEmail", () => {
       dateFuturePromotion: "2029-11-18",
       dateFuturePromotionSiBA: "2028-11-18",
     });
-    expect(html).toContain("soit le 18 novembre 2028 avec l'accélération de carrière d'un an du PPCR, ou à défaut le 18 novembre 2029");
+    expect(html).toContain(
+      "soit le <strong>18 novembre 2028</strong> avec l'accélération de carrière d'un an du PPCR, ou à défaut le <strong>18 novembre 2029</strong>",
+    );
   });
 
   it("BA granted: shows the acceptance paragraph and omits the passage-normal paragraph", () => {
@@ -162,8 +164,38 @@ describe("buildCcmaModelEmail", () => {
       dernierPromu: { bareme: 2, ancienneteGrade: 5, ancienneteEchelon: 1 },
     });
     expect(html).toContain("celle-ci a été acceptée");
+    expect(html).toContain("à la date du <strong>01 mars 2026</strong>.");
     expect(html).not.toContain("prévu par les durées du PPCR est acté");
     expect(html).toContain("Votre barème");
+  });
+
+  it("bolds every promotion date shown (per product decision) — the promotion date itself and any future-promotion date, in every variant", () => {
+    // Passage normal (no bonification in play) — already bold before this change, kept as a guard.
+    expect(buildCcmaModelEmail(BASE).html).toContain("prévu par les durées du PPCR est acté au <strong>07 avril 2026</strong>.");
+
+    // BA non promu: the "la CCMA/CCMI de l'année prochaine actera..." date.
+    const nonPromu = buildCcmaModelEmail({
+      ...BASE,
+      bonification: "NON_PROMU",
+      gainSalaireNet: 0,
+      pourcentagePromusBa: 30,
+      dateEligibiliteBA: "2026-02-05",
+      dateEffetCcm: "2027-02-05",
+    }).html;
+    expect(nonPromu).toContain("à la date du <strong>05 février 2027</strong>.");
+
+    // Future-promotion block, both the plain and the accelerated variants.
+    const futureNormal = buildCcmaModelEmail({ ...BASE, dateFuturePromotion: "2028-10-07" }).html;
+    expect(futureNormal).toContain("est prévue le : <strong>07 octobre 2028</strong>.");
+
+    const futureAccelerated = buildCcmaModelEmail({
+      ...BASE,
+      echelonSuivant: "6",
+      dateFuturePromotion: "2029-11-18",
+      dateFuturePromotionSiBA: "2028-11-18",
+    }).html;
+    expect(futureAccelerated).toContain("soit le <strong>18 novembre 2028</strong>");
+    expect(futureAccelerated).toContain("ou à défaut le <strong>18 novembre 2029</strong>");
   });
 
   it("keeps the AVIS_LABELS casing as-is in the appréciation text (real Word template never lowercases it)", () => {

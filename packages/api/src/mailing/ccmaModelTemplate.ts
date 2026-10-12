@@ -129,7 +129,7 @@ function buildBonificationAccordeeBlock(ctx: CcmaModelContext): string {
   const dateEligibilite = formatDateFr(ctx.dateEligibiliteBA);
   if (!dateEligibilite) return "";
   return p(
-    `Nous avons le plaisir de vous annoncer que celle-ci a été acceptée. Vous passez à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong> à la date du ${dateEligibilite}.`,
+    `Nous avons le plaisir de vous annoncer que celle-ci a été acceptée. Vous passez à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong> à la date du <strong>${dateEligibilite}</strong>.`,
   );
 }
 
@@ -140,10 +140,10 @@ function buildProchainePromotionFutureBlock(ctx: CcmaModelContext): string {
   if (!dateNormale) return "";
   const dateAcceleree = formatDateFr(ctx.dateFuturePromotionSiBA);
   if (!dateAcceleree) {
-    return p(`Votre prochaine promotion dans ce grade est prévue le : ${dateNormale}.`);
+    return p(`Votre prochaine promotion dans ce grade est prévue le : <strong>${dateNormale}</strong>.`);
   }
   return p(
-    `Votre prochaine promotion est possible soit le ${dateAcceleree} avec l'accélération de carrière d'un an du PPCR, ou à défaut le ${dateNormale}.`,
+    `Votre prochaine promotion est possible soit le <strong>${dateAcceleree}</strong> avec l'accélération de carrière d'un an du PPCR, ou à défaut le <strong>${dateNormale}</strong>.`,
   );
 }
 
@@ -199,7 +199,7 @@ function buildNonPromuLines(ctx: CcmaModelContext): string[] {
     // (pourcentagePromusBa), jamais le chiffre affiché lui-même.
     `Malheureusement seuls 30 % des promouvables ont obtenu cette accélération de carrière sur la base des évaluations à la suite du rendez-vous de carrière` +
       (dateEffet
-        ? `, la ${escapeHtml(ctx.commission)} de l'année prochaine actera votre passage à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong> à la date du ${dateEffet}.`
+        ? `, la ${escapeHtml(ctx.commission)} de l'année prochaine actera votre passage à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonSuivant))}</strong> à la date du <strong>${dateEffet}</strong>.`
         : "."),
     "Les critères discriminants appliqués pour deux appréciations équivalentes sont l'ancienneté dans le grade et ensuite l'ancienneté dans l'échelon.",
   ];
