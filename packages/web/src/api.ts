@@ -342,8 +342,9 @@ export interface MailingPreview {
 }
 
 /** "generique" = le mailing standard. "ccma_avancement" = le modèle reconstruit à partir du
- * courrier CCMA original (report d'ancienneté, bonification, comparaison au dernier promu...) —
- * n'existe que pour une campagne de type CCMA. */
+ * courrier CCMA original (report d'ancienneté, bonification, comparaison au dernier promu...),
+ * aussi utilisé pour la CCMI (mêmes règles, sans la phrase sur le nombre de sièges) — n'existe que
+ * pour une campagne de type CCMA ou CCMI. */
 export type MailingTemplate = "generique" | "ccma_avancement";
 
 export interface MailingSendResult {

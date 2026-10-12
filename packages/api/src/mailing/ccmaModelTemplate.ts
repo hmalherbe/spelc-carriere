@@ -17,9 +17,11 @@ import {
  * value below. See the comments on each block builder for which paragraph of the original letter
  * it reproduces and under which condition.
  *
- * CCMA-only for now: the intro paragraph states the union's CCMA seat count ("3 sièges sur 5"),
- * which has no confirmed CCMI equivalent — this template refuses to render for a CCMI recipient
- * rather than guess that wording (see buildCcmaModelEmail).
+ * Also used for CCMI (premier degré), with two differences confirmed by the union: the intro
+ * paragraph drops the CCMA-only seat-count sentence ("syndicat majoritaire et représenté avec 3
+ * sièges sur 5" — no equivalent figure given for CCMI, so none is shown rather than guessed), and
+ * every "CCMA"/"CCMI" wording swap already uses ctx.commission (see buildIntroParagraph and
+ * buildNonPromuLines's "la CCMA/CCMI de l'année prochaine" sentence).
  */
 export type BonificationState = "ANCIENNETE" | "BONIFICATION" | "NON_PROMU";
 
@@ -236,19 +238,21 @@ function buildComparaisonBaremeLines(ctx: CcmaModelContext): string[] {
   return lines;
 }
 
-export class CcmaModelUnavailableError extends Error {}
+/** Confirmed by the union: for CCMI, drop the seat-count sentence entirely rather than guess a
+ * figure (CCMA's "syndicat majoritaire et représenté avec 3 sièges sur 5" has no CCMI equivalent on
+ * file) — everything else in the paragraph just swaps "CCMA"/"CCMI" via ctx.commission. */
+function buildIntroParagraph(ctx: CcmaModelContext): string {
+  const spelcClause = ctx.commission === "CCMA" ? ", syndicat majoritaire et représenté avec 3 sièges sur 5," : "";
+  return p(
+    `La ${escapeHtml(ctx.commission)} de ce jour a examiné votre situation d'avancement d'échelon. Le Spelc${spelcClause} s'est assuré de la conformité des données étudiées et a le plaisir de vous communiquer votre nouvelle situation :`,
+  );
+}
 
 export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; html: string } {
-  if (ctx.commission !== "CCMA") {
-    throw new CcmaModelUnavailableError(
-      "Le modèle CCMA n'est pas encore disponible pour la CCMI (composition/texte d'intro non confirmés) — utilisez le modèle générique.",
-    );
-  }
-
   const dateCcmaFr = formatDateFr(ctx.dateCcma) ?? "";
   const greeting = buildGreeting(ctx.civilite, ctx.isAdherent, ctx.prenom, ctx.nom);
 
-  const subject = `Spelc Côte d'Azur - CCMA du ${dateCcmaFr} : avancements`;
+  const subject = `Spelc Côte d'Azur - ${ctx.commission} du ${dateCcmaFr} : avancements`;
 
   const header = buildHeader(ctx.logoDataUrl, ctx.t1Text);
   const elusFooter = buildElusFooter(ctx.commission, ctx.elus);
@@ -256,12 +260,10 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
   const socialLinks = buildSocialLinks(ctx.socialLinks);
 
   const body = [
-    p(`<strong>CCMA du ${dateCcmaFr}</strong>`),
+    p(`<strong>${escapeHtml(ctx.commission)} du ${dateCcmaFr}</strong>`),
     ctx.email ? p(escapeHtml(ctx.email)) : "",
     greeting,
-    p(
-      "La CCMA de ce jour a examiné votre situation d'avancement d'échelon. Le Spelc, syndicat majoritaire et représenté avec 3 sièges sur 5, s'est assuré de la conformité des données étudiées et a le plaisir de vous communiquer votre nouvelle situation :",
-    ),
+    buildIntroParagraph(ctx),
     p(`Vous étiez à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonDepart))}</strong> de l'échelle de rémunération : ${escapeHtml(ctx.grade)}.`),
     buildReportAncienneteBlock(ctx),
     buildPassageNormalBlock(ctx),

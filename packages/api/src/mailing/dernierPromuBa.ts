@@ -14,9 +14,12 @@ function isLower(a: DernierPromuBa, b: DernierPromuBa): boolean {
 }
 
 /**
- * For each (grade, échelon actuel) group in this campagne, the rectorat-confirmed BA winner with
- * the LOWEST (barème, ancienneté grade, ancienneté échelon) — i.e. the "just barely promoted" peer
- * the CCMA model letter shows a non-promu candidate, to explain the tie-break that separated them.
+ * For each (grade, échelon actuel, département) group in this campagne, the rectorat-confirmed BA
+ * winner with the LOWEST (barème, ancienneté grade, ancienneté échelon) — i.e. the "just barely
+ * promoted" peer the CCMA/CCMI model letter shows a non-promu candidate, to explain the tie-break
+ * that separated them. Département-scoped (06/83, see TeacherSnapshot.departement's doc comment;
+ * null for CCMA) so a CCMI comparison never pools the two départements' candidates together under
+ * the same grade+échelon, same as the reliquats.ts grouping this mirrors.
  *
  * This reuses the exact tie-break order the deleted baThreshold.ts (git history, commit caa40a1's
  * parent) inferred a selection cutoff from — but unlike that removed code, it never estimates
@@ -32,13 +35,13 @@ export async function loadDernierPromuBaByGroup(campagneId: string): Promise<Map
       campagneId,
       OR: [{ proTypePromotion: "BA", proConfirmee: true }, ...(reliquatTeacherIds.size > 0 ? [{ teacherId: { in: [...reliquatTeacherIds] } }] : [])],
     },
-    select: { grade: true, echelonActuel: true, avisEvaluation: true, ancienneteGrade: true, ancienneteEchelon: true },
+    select: { grade: true, echelonActuel: true, departement: true, avisEvaluation: true, ancienneteGrade: true, ancienneteEchelon: true },
   });
 
   const byGroup = new Map<string, DernierPromuBa>();
   for (const p of promus) {
     if (p.avisEvaluation == null || p.ancienneteGrade == null || p.ancienneteEchelon == null) continue;
-    const key = `${p.grade}|${p.echelonActuel}`;
+    const key = `${p.grade}|${p.echelonActuel}|${p.departement ?? ""}`;
     const candidate: DernierPromuBa = { bareme: p.avisEvaluation, ancienneteGrade: p.ancienneteGrade, ancienneteEchelon: p.ancienneteEchelon };
     const current = byGroup.get(key);
     if (!current || isLower(candidate, current)) byGroup.set(key, candidate);

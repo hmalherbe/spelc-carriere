@@ -13,8 +13,9 @@ export async function loadReliquatPromotionsByCampagne(campagneId: string): Prom
 }
 
 /**
- * Reliquat promotions for this campagne, counted per (grade, échelon actuel) group — the same key
- * shape as baCandidateStats.ts's loadBaCandidateCountByGroup, so routes/mailing.ts can add this
+ * Reliquat promotions for this campagne, counted per (grade, échelon actuel, département) group —
+ * the same key shape as baCandidateStats.ts's loadBaCandidateCountByGroup (département-scoped for
+ * CCMI, null for CCMA — see that function's own doc comment), so routes/mailing.ts can add this
  * count on top of the rectorat's own TeacherSnapshot.nombrePromusBaSection when computing the
  * "seuls X % des promouvables..." percentage shown to a non-promu colleague in the same group —
  * without it, a reliquat promotion would silently lower that percentage for everyone else instead
@@ -26,12 +27,12 @@ export async function loadReliquatCountByGroup(campagneId: string): Promise<Map<
 
   const snapshots = await prisma.teacherSnapshot.findMany({
     where: { campagneId, teacherId: { in: reliquats.map((r) => r.teacherId) } },
-    select: { grade: true, echelonActuel: true },
+    select: { grade: true, echelonActuel: true, departement: true },
   });
 
   const counts = new Map<string, number>();
   for (const s of snapshots) {
-    const key = `${s.grade}|${s.echelonActuel}`;
+    const key = `${s.grade}|${s.echelonActuel}|${s.departement ?? ""}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;

@@ -1,10 +1,12 @@
 import { prisma } from "../db.js";
 
 /**
- * Per (grade, échelon actuel) group in this campagne: how many teachers were BA candidates this
- * cycle, whether ultimately granted or not. Combined with TeacherSnapshot.nombrePromusBaSection
- * (the rectorat's own promoted count for the same group), this gives the promotion rate the CCMA
- * model letter shows a non-promu candidate — computed live rather than typed by hand each campaign.
+ * Per (grade, échelon actuel, département) group in this campagne: how many teachers were BA
+ * candidates this cycle, whether ultimately granted or not. Combined with
+ * TeacherSnapshot.nombrePromusBaSection (the rectorat's own promoted count for the same group),
+ * this gives the promotion rate the CCMA/CCMI model letter shows a non-promu candidate — computed
+ * live rather than typed by hand each campaign. Département-scoped (06/83; null for CCMA) for the
+ * same reason as loadDernierPromuBaByGroup — see that function's own doc comment.
  *
  * "Was a candidate" uses the exact same OR condition as deriveBonification.ts (typePromotion==="BA"
  * OR proTypePromotion==="BA") — a base "AN" marker with a pending/confirmed "BA" proTypePromotion
@@ -15,11 +17,11 @@ import { prisma } from "../db.js";
 export async function loadBaCandidateCountByGroup(campagneId: string): Promise<Map<string, number>> {
   const candidates = await prisma.teacherSnapshot.findMany({
     where: { campagneId, OR: [{ typePromotion: "BA" }, { proTypePromotion: "BA" }] },
-    select: { grade: true, echelonActuel: true },
+    select: { grade: true, echelonActuel: true, departement: true },
   });
   const counts = new Map<string, number>();
   for (const c of candidates) {
-    const key = `${c.grade}|${c.echelonActuel}`;
+    const key = `${c.grade}|${c.echelonActuel}|${c.departement ?? ""}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;

@@ -73,7 +73,7 @@ export function MailingPage() {
   const [emailFilter, setEmailFilter] = useState<"" | "VIDE" | "RENSEIGNE">("");
 
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
-  const ccmaModelAvailable = selectedCampagne?.type === "CCMA";
+  const ccmaModelAvailable = selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI";
 
   // Options des filtres Grade/Échelon — sur `recipients` (pas `visibleRecipients`) pour que la
   // liste déroulante ne rétrécisse pas au fur et à mesure qu'on combine plusieurs filtres, comme
@@ -136,12 +136,12 @@ export function MailingPage() {
 
   useEffect(() => {
     if (campagneId) refresh(campagneId);
-    // Le modèle CCMA (reconstruit à partir du vrai courrier du syndicat) est le bon choix par
+    // Le modèle CCMA/CCMI (reconstruit à partir du vrai courrier du syndicat) est le bon choix par
     // défaut dès qu'il est disponible — sans ça, rebasculer silencieusement sur "Modèle générique"
-    // à chaque changement de campagne faisait repartir une campagne CCMA sans aucun contenu lié à
-    // la BA (bonification d'ancienneté) tant que l'admin ne re-sélectionnait pas le bon modèle à la
-    // main, un piège facile à manquer avant un envoi réel.
-    setTemplate(selectedCampagne?.type === "CCMA" ? "ccma_avancement" : "generique");
+    // à chaque changement de campagne faisait repartir une campagne CCMA/CCMI sans aucun contenu lié
+    // à la BA (bonification d'ancienneté) tant que l'admin ne re-sélectionnait pas le bon modèle à
+    // la main, un piège facile à manquer avant un envoi réel.
+    setTemplate(selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI" ? "ccma_avancement" : "generique");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campagneId]);
 
@@ -286,7 +286,7 @@ export function MailingPage() {
         {ccmaModelAvailable && (
           <select value={template} onChange={(e) => setTemplate(e.target.value as MailingTemplate)}>
             <option value="generique">Modèle générique</option>
-            <option value="ccma_avancement">Modèle CCMA (avancement d'échelon)</option>
+            <option value="ccma_avancement">Modèle {selectedCampagne?.type} (avancement d'échelon)</option>
           </select>
         )}
       </div>
@@ -303,7 +303,9 @@ export function MailingPage() {
       {template === "ccma_avancement" && (
         <p className="hint">
           Modèle reconstruit à partir du courrier CCMA du Spelc (report d'ancienneté, bonification, comparaison au
-          dernier promu du même grade/échelon...) — vérifiez l'aperçu de quelques destinataires avant l'envoi.
+          dernier promu du même grade/échelon{selectedCampagne?.type === "CCMI" ? "/département" : ""}...)
+          {selectedCampagne?.type === "CCMI" ? ", sans la phrase sur le nombre de sièges (non communiquée pour la CCMI)" : ""}{" "}
+          — vérifiez l'aperçu de quelques destinataires avant l'envoi.
         </p>
       )}
       {selectedCampagne && !selectedCampagne.type && (

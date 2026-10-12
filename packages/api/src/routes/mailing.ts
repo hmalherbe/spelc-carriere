@@ -4,7 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
 import { buildPromotionEmail, escapeHtml, htmlToPlainText, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
-import { buildCcmaModelEmail, CcmaModelUnavailableError, type CcmaModelContext } from "../mailing/ccmaModelTemplate.js";
+import { buildCcmaModelEmail, type CcmaModelContext } from "../mailing/ccmaModelTemplate.js";
 import { deriveBonification } from "../mailing/bonification.js";
 import { loadDernierPromuBaByGroup, type DernierPromuBa } from "../mailing/dernierPromuBa.js";
 import { loadBaCandidateCountByGroup } from "../mailing/baCandidateStats.js";
@@ -102,7 +102,10 @@ function buildCcmaModelContext(
   shared: { elus: MailingElu[]; t1Text: string | null; logoDataUrl: string | null; socialLinks: MailingSocialLink[] },
 ): CcmaModelContext {
   const bonification = deriveBonification(recipient);
-  const groupKey = `${recipient.grade}|${recipient.echelonActuel}`;
+  // Département-scoped for CCMI (06/83, see TeacherSnapshot.departement's doc comment) — null for
+  // CCMA, same as the reliquats.ts grouping this mirrors — so a BA comparison/percentage never
+  // pools the two départements' candidates together under the same grade+échelon.
+  const groupKey = `${recipient.grade}|${recipient.echelonActuel}|${recipient.departement ?? ""}`;
   const dernierPromu = extras.dernierPromuByGroup.get(groupKey) ?? null;
 
   const candidateCount = extras.candidateCountByGroup.get(groupKey) ?? 0;
@@ -191,9 +194,10 @@ function buildRecipientEmail(
   ccmaExtras: CcmaModelExtras | null,
 ): { subject: string; html: string } {
   if (template === "ccma_avancement" && ccmaExtras) {
-    // Callers only ever pass ccmaExtras when campagne.type === "CCMA" (see loadCcmaModelExtras's
-    // call sites below) — TS doesn't narrow the enclosing object's type from that, so restate it.
-    return buildCcmaModelEmail(buildCcmaModelContext(recipient, { ...campagne, type: "CCMA" as const }, ccmaExtras, shared));
+    // Callers only ever pass ccmaExtras when campagne.type is CCMA or CCMI (see each route's own
+    // guard above its loadCcmaModelExtras call) — buildCcmaModelContext/buildCcmaModelEmail render
+    // either commission, so campagne.type is passed through as-is, no cast needed.
+    return buildCcmaModelEmail(buildCcmaModelContext(recipient, campagne, ccmaExtras, shared));
   }
   return buildPromotionEmail({
     civilite: recipient.civilite,
@@ -413,18 +417,13 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
 
   let email: { subject: string; html: string };
   if (template === "ccma_avancement") {
-    if (campagne.type !== "CCMA") {
-      return res.status(400).json({ error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." });
+    if (campagne.type !== "CCMA" && campagne.type !== "CCMI") {
+      return res.status(400).json({ error: "Ce modèle n'est disponible que pour une campagne CCMA ou CCMI." });
     }
-    try {
-      const extras = await loadCcmaModelExtras(campagneId);
-      // Guard above already proved campagne.type === "CCMA" at runtime — TS doesn't narrow the
-      // enclosing object's type from a property-only check, so state it explicitly here.
-      email = buildCcmaModelEmail(buildCcmaModelContext(recipient, { ...campagne, type: "CCMA" as const }, extras, shared));
-    } catch (e) {
-      if (e instanceof CcmaModelUnavailableError) return res.status(400).json({ error: e.message });
-      throw e;
-    }
+    const extras = await loadCcmaModelExtras(campagneId);
+    // Guard above already proved campagne.type is "CCMA" or "CCMI" at runtime — TS doesn't retain
+    // that narrowing on a property access across the await just above, so restate it here.
+    email = buildCcmaModelEmail(buildCcmaModelContext(recipient, { ...campagne, type: campagne.type as "CCMA" | "CCMI" }, extras, shared));
   } else {
     email = buildPromotionEmail({
       civilite: recipient.civilite,
@@ -549,8 +548,8 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
     return res.status(400).json({ error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." });
   }
 
-  if (template === "ccma_avancement" && campagne.type !== "CCMA") {
-    return res.status(400).json({ error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." });
+  if (template === "ccma_avancement" && campagne.type !== "CCMA" && campagne.type !== "CCMI") {
+    return res.status(400).json({ error: "Ce modèle n'est disponible que pour une campagne CCMA ou CCMI." });
   }
 
   let brevoConfig: BrevoConfig;
@@ -660,8 +659,8 @@ async function buildMailingLetters(
   if (campagne.type === "HC" || campagne.type === "EXC") {
     return { status: 400, error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." };
   }
-  if (template === "ccma_avancement" && campagne.type !== "CCMA") {
-    return { status: 400, error: "Le modèle CCMA n'est disponible que pour une campagne de type CCMA." };
+  if (template === "ccma_avancement" && campagne.type !== "CCMA" && campagne.type !== "CCMI") {
+    return { status: 400, error: "Ce modèle n'est disponible que pour une campagne CCMA ou CCMI." };
   }
 
   const all = await eligibleRecipients(campagneId);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCcmaModelEmail, CcmaModelUnavailableError, type CcmaModelContext } from "../src/mailing/ccmaModelTemplate.js";
+import { buildCcmaModelEmail, type CcmaModelContext } from "../src/mailing/ccmaModelTemplate.js";
 
 // Base fixture matching the real letter used to reverse-engineer this template
 // (Lettre_Modele_CCMA_25-03-2026.docx, recipient Elise MORIN): échelon 4 -> 5, passage normal PPCR
@@ -37,8 +37,20 @@ const BASE: CcmaModelContext = {
 };
 
 describe("buildCcmaModelEmail", () => {
-  it("refuses to render for a CCMI recipient (composition text not confirmed)", () => {
-    expect(() => buildCcmaModelEmail({ ...BASE, commission: "CCMI" })).toThrow(CcmaModelUnavailableError);
+  it("renders for CCMI too, dropping the CCMA-only seat-count sentence (confirmed by the union: no CCMI figure to show)", () => {
+    const { subject, html } = buildCcmaModelEmail({ ...BASE, commission: "CCMI" });
+    expect(subject).toBe("Spelc Côte d'Azur - CCMI du 25 mars 2026 : avancements");
+    expect(html).toContain("CCMI du 25 mars 2026");
+    expect(html).toContain("La CCMI de ce jour a examiné votre situation d'avancement d'échelon. Le Spelc s'est assuré");
+    expect(html).not.toContain("syndicat majoritaire");
+    expect(html).not.toContain("sièges");
+  });
+
+  it("keeps the CCMA seat-count sentence unchanged", () => {
+    const { html } = buildCcmaModelEmail(BASE);
+    expect(html).toContain(
+      "La CCMA de ce jour a examiné votre situation d'avancement d'échelon. Le Spelc, syndicat majoritaire et représenté avec 3 sièges sur 5, s'est assuré",
+    );
   });
 
   it("renders the campaign title, greeting and current-échelon paragraph", () => {
