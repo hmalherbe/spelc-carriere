@@ -71,6 +71,7 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
       nom: true,
       prenom: true,
       grade: true,
+      nomNaissance: true,
       matchCandidate: {
         select: {
           status: true,
@@ -152,7 +153,7 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
   const matchingConfig = await prisma.matchingConfig.findUnique({ where: { id: "singleton" } });
 
   const matchResults = matchAdherents(
-    toRetry.map((a) => ({ adherentId: a.id, nom: a.nom, prenom: a.prenom, grade: a.grade })),
+    toRetry.map((a) => ({ adherentId: a.id, nom: a.nom, prenom: a.prenom, grade: a.grade, nomNaissance: a.nomNaissance })),
     availableTeachers.map((t) => ({ teacherId: t.teacherId, nom: t.nomUsage, prenom: t.prenom, grade: t.grade })),
     matchingConfig?.minSuggestionThreshold ?? DEFAULT_MIN_SUGGESTION_THRESHOLD,
   );

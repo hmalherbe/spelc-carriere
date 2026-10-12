@@ -28,20 +28,20 @@ describe("matchAdherents", () => {
   ];
 
   it("auto-confirms an exact (post-normalization) nom+prénom match", () => {
-    const [result] = matchAdherents([{ adherentId: "a1", nom: "MARTIN", prenom: "Camille", grade: "CERTIFIE" }], teachers);
+    const [result] = matchAdherents([{ adherentId: "a1", nom: "MARTIN", prenom: "Camille", grade: "CERTIFIE", nomNaissance: null }], teachers);
     expect(result.teacherId).toBe("t1");
     expect(result.autoConfirmable).toBe(true);
     expect(result.confidence).toBe(1);
   });
 
   it("still matches through an accent/case discrepancy the workbook's hard-coded dictionary used to handle", () => {
-    const [result] = matchAdherents([{ adherentId: "a2", nom: "dubois", prenom: "Julien", grade: "CERTIFIE" }], teachers);
+    const [result] = matchAdherents([{ adherentId: "a2", nom: "dubois", prenom: "Julien", grade: "CERTIFIE", nomNaissance: null }], teachers);
     expect(result.teacherId).toBe("t2");
     expect(result.autoConfirmable).toBe(true);
   });
 
   it("flags a low-confidence match for review instead of auto-confirming", () => {
-    const [result] = matchAdherents([{ adherentId: "a3", nom: "MARTINE", prenom: "Camil", grade: "CERTIFIE" }], teachers);
+    const [result] = matchAdherents([{ adherentId: "a3", nom: "MARTINE", prenom: "Camil", grade: "CERTIFIE", nomNaissance: null }], teachers);
     expect(result.teacherId).toBe("t1");
     expect(result.autoConfirmable).toBe(false);
     expect(result.confidence).toBeGreaterThan(0);
@@ -49,14 +49,14 @@ describe("matchAdherents", () => {
   });
 
   it("returns no candidate when nothing is remotely close", () => {
-    const [result] = matchAdherents([{ adherentId: "a4", nom: "ZZZZZZ", prenom: "Qqqqqq", grade: "CERTIFIE" }], teachers);
+    const [result] = matchAdherents([{ adherentId: "a4", nom: "ZZZZZZ", prenom: "Qqqqqq", grade: "CERTIFIE", nomNaissance: null }], teachers);
     expect(result.teacherId).toBeNull();
     expect(result.confidence).toBe(0);
   });
 
   it("doesn't suggest a pair whose names only coincidentally overlap — real case: adherent ADANERO Olivia was suggested against teacher BARBERO FLORIAN (43% combined score, a different surname AND a different prénom)", () => {
     const [result] = matchAdherents(
-      [{ adherentId: "a10", nom: "ADANERO", prenom: "Olivia", grade: "CERTIFIE" }],
+      [{ adherentId: "a10", nom: "ADANERO", prenom: "Olivia", grade: "CERTIFIE", nomNaissance: null }],
       [...teachers, { teacherId: "t5", nom: "BARBERO", prenom: "FLORIAN", grade: "CERTIFIE" }],
     );
     expect(result.teacherId).toBeNull();
@@ -73,7 +73,7 @@ describe("matchAdherents", () => {
     ];
     for (const [adherentNom, prenom, teacherNom, teacherPrenom] of commonPrenomCases) {
       const [result] = matchAdherents(
-        [{ adherentId: "x", nom: adherentNom, prenom, grade: "CERTIFIE" }],
+        [{ adherentId: "x", nom: adherentNom, prenom, grade: "CERTIFIE", nomNaissance: null }],
         [{ teacherId: "y", nom: teacherNom, prenom: teacherPrenom, grade: "CERTIFIE" }],
         0.4, // even at a lenient combined-score threshold, the nom floor alone must reject these
       );
@@ -86,7 +86,7 @@ describe("matchAdherents", () => {
     // the existing "flags a low-confidence match for review" test above already covers the
     // combined-score behavior for this pair; this one isolates that the nom floor isn't what
     // would block it.
-    const [result] = matchAdherents([{ adherentId: "a3b", nom: "MARTINE", prenom: "Camil", grade: "CERTIFIE" }], teachers);
+    const [result] = matchAdherents([{ adherentId: "a3b", nom: "MARTINE", prenom: "Camil", grade: "CERTIFIE", nomNaissance: null }], teachers);
     expect(result.teacherId).toBe("t1");
   });
 
@@ -95,7 +95,7 @@ describe("matchAdherents", () => {
     // prénom is unrelated (prenomScore = 0), so the combined score (0.45) sits between 0.4 and
     // 0.6 — this isolates minSuggestionThreshold's effect from the independent nom floor. Uses a
     // standalone candidate list (not `teachers`) so it doesn't tie against an unrelated pair.
-    const adherents = [{ adherentId: "a11", nom: "BERNARDOT", prenom: "Xyz", grade: "CERTIFIE" }];
+    const adherents = [{ adherentId: "a11", nom: "BERNARDOT", prenom: "Xyz", grade: "CERTIFIE", nomNaissance: null }];
     const candidateTeachers = [{ teacherId: "t5", nom: "BERNARD", prenom: "Camille", grade: "CERTIFIE" }];
     // A lower admin-set threshold lets a weaker combined score through...
     const [lenient] = matchAdherents(adherents, candidateTeachers, 0.4);
@@ -106,7 +106,7 @@ describe("matchAdherents", () => {
   });
 
   it("rejects a pair below the nom floor even when minSuggestionThreshold is lowered far enough that the combined score alone would pass — real case: adherent ADANERO Olivia was suggested against teacher BARBERO FLORIAN (nomScore 0.43, prenomScore 0.43, 43% combined)", () => {
-    const adherents = [{ adherentId: "a12", nom: "ADANERO", prenom: "Olivia", grade: "CERTIFIE" }];
+    const adherents = [{ adherentId: "a12", nom: "ADANERO", prenom: "Olivia", grade: "CERTIFIE", nomNaissance: null }];
     const candidateTeachers = [...teachers, { teacherId: "t5", nom: "BARBERO", prenom: "FLORIAN", grade: "CERTIFIE" }];
     const [result] = matchAdherents(adherents, candidateTeachers, 0.1);
     expect(result.teacherId).toBeNull();
@@ -118,8 +118,8 @@ describe("matchAdherents", () => {
     // teacherId (which would violate the DB's unique constraint on MatchCandidate.teacherId).
     const results = matchAdherents(
       [
-        { adherentId: "weak", nom: "MARTINE", prenom: "Camil", grade: "CERTIFIE" },
-        { adherentId: "exact", nom: "MARTIN", prenom: "Camille", grade: "CERTIFIE" },
+        { adherentId: "weak", nom: "MARTINE", prenom: "Camil", grade: "CERTIFIE", nomNaissance: null },
+        { adherentId: "exact", nom: "MARTIN", prenom: "Camille", grade: "CERTIFIE", nomNaissance: null },
       ],
       teachers,
     );
@@ -133,7 +133,7 @@ describe("matchAdherents", () => {
   it("doesn't let a similar prénom alone override a clearly different nom", () => {
     // "STEPHANE"/"STEPHANIE" as noms are close, but combined with a matching prénom "Marie" on t3
     // shouldn't outrank an exact nom+prénom match elsewhere for a different adherent.
-    const [result] = matchAdherents([{ adherentId: "a5", nom: "STEPHANE", prenom: "Marie", grade: "CERTIFIE" }], teachers);
+    const [result] = matchAdherents([{ adherentId: "a5", nom: "STEPHANE", prenom: "Marie", grade: "CERTIFIE", nomNaissance: null }], teachers);
     expect(result.teacherId).toBe("t3");
     expect(result.confidence).toBe(1);
   });
@@ -141,14 +141,14 @@ describe("matchAdherents", () => {
   it("never proposes a match across different grades, even for an otherwise-exact nom+prénom", () => {
     // Reproduces the real bug: an adherent's exact-name teacher exists but under a different
     // grade — that pair must never be suggested, no matter how perfect the name similarity is.
-    const [result] = matchAdherents([{ adherentId: "a6", nom: "MARTIN", prenom: "Camille", grade: "AGREGE" }], teachers);
+    const [result] = matchAdherents([{ adherentId: "a6", nom: "MARTIN", prenom: "Camille", grade: "AGREGE", nomNaissance: null }], teachers);
     expect(result.teacherId).toBeNull();
     expect(result.confidence).toBe(0);
   });
 
   it("normalizes grade like it does names — case/accent/whitespace differences don't block a real match", () => {
     const [result] = matchAdherents(
-      [{ adherentId: "a7", nom: "MARTIN", prenom: "Camille", grade: " certifié " }],
+      [{ adherentId: "a7", nom: "MARTIN", prenom: "Camille", grade: " certifié ", nomNaissance: null }],
       teachers,
     );
     expect(result.teacherId).toBe("t1");
@@ -157,7 +157,7 @@ describe("matchAdherents", () => {
   it("never proposes a match when the TEACHER's grade is unknown — nothing to vouch for on that side at all", () => {
     const teachersWithUnknownGrade = [{ teacherId: "t4", nom: "MARTIN", prenom: "Camille", grade: null }];
     const [byMissingTeacherGrade] = matchAdherents(
-      [{ adherentId: "a9", nom: "MARTIN", prenom: "Camille", grade: "CERTIFIE" }],
+      [{ adherentId: "a9", nom: "MARTIN", prenom: "Camille", grade: "CERTIFIE", nomNaissance: null }],
       teachersWithUnknownGrade,
     );
     expect(byMissingTeacherGrade.teacherId).toBeNull();
@@ -165,7 +165,7 @@ describe("matchAdherents", () => {
 
   it("still proposes a match by name alone when only the ADHERENT's grade is unknown — real case: adherent \"ALDEGUER Anna\" has a blank grade in the ADEL export (the \"Echelle\" column wasn't filled in), even though the matching teacher \"ALDEGUER Anna Paula\" (CERTIFIE) is right there in the imported rectorat file — but never auto-confirms it, since the grade cross-check that normally backs an auto-confirm never ran", () => {
     const [result] = matchAdherents(
-      [{ adherentId: "a13", nom: "ALDEGUER", prenom: "Anna", grade: null }],
+      [{ adherentId: "a13", nom: "ALDEGUER", prenom: "Anna", grade: null, nomNaissance: null }],
       [...teachers, { teacherId: "t6", nom: "ALDEGUER", prenom: "Anna Paula", grade: "CERTIFIE" }],
     );
     expect(result.teacherId).toBe("t6");
@@ -174,9 +174,29 @@ describe("matchAdherents", () => {
 
   it("with an unknown adherent grade, still only proposes teachers whose OWN grade is known — no grade at all to vouch for a pair isn't the same as an unverifiable-but-present one", () => {
     const [result] = matchAdherents(
-      [{ adherentId: "a14", nom: "MARTIN", prenom: "Camille", grade: null }],
+      [{ adherentId: "a14", nom: "MARTIN", prenom: "Camille", grade: null, nomNaissance: null }],
       [{ teacherId: "t7", nom: "MARTIN", prenom: "Camille", grade: null }],
     );
     expect(result.teacherId).toBeNull();
+  });
+
+  it("also matches via the adhérent's nom de naissance when the rectorat file uses it as nom d'usage instead of ADEL's own married name — real-world case: a woman's current union-held nom differs from what the rectorat administratively lists her under", () => {
+    const [result] = matchAdherents(
+      [{ adherentId: "a15", nom: "KOBYLECKI", prenom: "Alexandra", grade: "CERTIFIE", nomNaissance: "PICARD" }],
+      [{ teacherId: "t8", nom: "PICARD", prenom: "Alexandra", grade: "CERTIFIE" }],
+    );
+    expect(result.teacherId).toBe("t8");
+    expect(result.confidence).toBe(1);
+  });
+
+  it("prefers whichever of nom/nomNaissance scores higher against the teacher's nom, rather than only trying nomNaissance as a fallback when nom itself finds nothing", () => {
+    // Here "nom" itself is already an exact match — nomNaissance ("UNRELATEDNAME") must not drag
+    // the score down or otherwise change the outcome.
+    const [result] = matchAdherents(
+      [{ adherentId: "a16", nom: "MARTIN", prenom: "Camille", grade: "CERTIFIE", nomNaissance: "UNRELATEDNAME" }],
+      teachers,
+    );
+    expect(result.teacherId).toBe("t1");
+    expect(result.confidence).toBe(1);
   });
 });

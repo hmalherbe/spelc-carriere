@@ -60,6 +60,11 @@ export interface MatchCandidateAdherent {
   nom: string;
   prenom: string;
   grade: string | null;
+  /** ADEL's own "nom de naissance" column, when it has one — compared against the rectorat's
+   * nom d'usage too (see nomScore's own comment below), since for some adhérentes ADEL's "nom"
+   * ended up holding the birth name rather than the married one the rectorat file uses (or vice
+   * versa), silently missing a real match despite both files genuinely covering the same person. */
+  nomNaissance: string | null;
 }
 
 /** Same normalization `nameSimilarity` already applies to nom/prénom (case/accent/whitespace),
@@ -148,7 +153,12 @@ export function matchAdherents(
       if (!teacher.grade) continue;
       const gradeVerified = adherent.grade !== null;
       if (gradeVerified && normalizeGrade(adherent.grade!) !== normalizeGrade(teacher.grade)) continue;
-      const nomScore = nameSimilarity(adherent.nom, teacher.nom);
+      // Tries both the adhérent's usage name and birth name against the teacher's own nom d'usage
+      // — whichever scores higher — so a married adhérente isn't missed just because ADEL and the
+      // rectorat file happen to disagree on which of her two names counts as "usage" for her.
+      const nomScoreUsage = nameSimilarity(adherent.nom, teacher.nom);
+      const nomScoreNaissance = adherent.nomNaissance ? nameSimilarity(adherent.nomNaissance, teacher.nom) : 0;
+      const nomScore = Math.max(nomScoreUsage, nomScoreNaissance);
       if (nomScore < NOM_SIMILARITY_FLOOR) continue;
       const prenomScore = nameSimilarity(adherent.prenom, teacher.prenom);
       const score = nomScore * 0.6 + prenomScore * 0.4;
