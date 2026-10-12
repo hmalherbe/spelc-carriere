@@ -51,6 +51,12 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
   "4754": "PLP",
   "4755": "PLP HC",
   "4757": "PLP EXC",
+  // CCMI (premier degré) — confirmé par l'utilisateur (Correspondance_libelles_grades_grilles.xlsx) :
+  // mêmes grilles indiciaires que les professeurs du secondaire (PROFS/HC_PROFS/EXC_PROFS), pas de
+  // grille dédiée au premier degré.
+  "4051": "Prof. Ecoles",
+  "4052": "Prof. Ecoles HC",
+  "4053": "Prof. Ecoles EXC",
 };
 
 importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
