@@ -552,6 +552,9 @@ export const api = {
       "/matches/stats",
     ),
   adherentsEligibles: (campagneId: string) => request<AdherentEligible[]>(`/adherents/eligibles?campagneId=${campagneId}`),
+  /** Export Excel des adhérents éligibles mais absents de tout fichier rectorat de cette campagne
+   * (voir routes/adherents.ts's own doc comment pour ce que ça couvre exactement). */
+  adherentsEligiblesNonPresentsXlsx: (campagneId: string) => requestBlob(`/adherents/eligibles-non-presents.xlsx?campagneId=${campagneId}`),
   confirmMatch: (id: string, teacherId?: string) =>
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),
   rejectMatch: (id: string) => request(`/matches/${id}/reject`, { method: "POST" }),

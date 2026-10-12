@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type AdherentEligible, type Campagne } from "../api.js";
+import { api, downloadBlob, type AdherentEligible, type Campagne } from "../api.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null): string {
@@ -22,6 +22,8 @@ export function AdherentsEligiblesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [presenceFilter, setPresenceFilter] = useState<PresenceFilter>("all");
+  const [exportingNonPresents, setExportingNonPresents] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     api.campagnes().then((c) => {
@@ -48,6 +50,20 @@ export function AdherentsEligiblesPage() {
   }, [adherents, presenceFilter]);
 
   const nonPresentCount = useMemo(() => adherents.filter((a) => a.nonPresentDansRectorat).length, [adherents]);
+
+  async function exportNonPresents() {
+    if (!campagneId) return;
+    setExportingNonPresents(true);
+    setExportError(null);
+    try {
+      const blob = await api.adherentsEligiblesNonPresentsXlsx(campagneId);
+      downloadBlob(blob, "adherents_eligibles_non_presents_rectorat.xlsx");
+    } catch (e) {
+      setExportError(String(e));
+    } finally {
+      setExportingNonPresents(false);
+    }
+  }
 
   if (error) return <p className="error-text">{error}</p>;
 
@@ -78,6 +94,12 @@ export function AdherentsEligiblesPage() {
           adhérents éligibles.
         </p>
       )}
+      <div className="row-actions" style={{ marginBottom: 16 }}>
+        <button type="button" className="secondary" onClick={exportNonPresents} disabled={!campagneId || exportingNonPresents}>
+          {exportingNonPresents ? "Export en cours..." : "Adhérents éligibles non présents dans fichiers rectorats"}
+        </button>
+        {exportError && <span className="error-text">{exportError}</span>}
+      </div>
       {loading ? (
         <p>Chargement...</p>
       ) : visible.length === 0 ? (
