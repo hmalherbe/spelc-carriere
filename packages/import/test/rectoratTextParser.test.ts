@@ -228,3 +228,103 @@ describe("parseZ2AGEA", () => {
     expect(parseZ2AGEA("290402")).toEqual({ annees: 29, mois: 4, jours: 2 });
   });
 });
+
+describe("parseRectoratFile — premier degré (CCMI) format, real file (PE CN Alpes-Maritimes 2025-2026)", () => {
+  // Real production file, uploaded by the union after the secondaire-format parser failed on it
+  // entirely ("Aucun grade reconnu dans ce fichier") — its grade/échelon headers, record layout and
+  // barème field codes all differ from the secondaire export (see rectoratTextParser.ts's
+  // module-level "Premier degré (CCMI) format" comment).
+  const result = parseRectoratFile(fixture("pe-cn-alpes-maritimes-real.txt"));
+
+  it("recognizes the grade header despite its code-in-parentheses shape, and the campaign period", () => {
+    expect(result.grades).toHaveLength(1);
+    expect(result.grades[0].gradeCode).toBe("4051");
+    expect(result.grades[0].gradeLabel).toBe("ECR PROFESSEUR DES ECOLES CL. NORMALE");
+    expect(result.periodeDebut).toBe("2025-09-01");
+    expect(result.periodeFin).toBe("2026-08-31");
+  });
+
+  it("parses every record across all 9 échelon sections (03 through 11), none dropped as a bogus footer/header chunk", () => {
+    expect(result.grades[0].records).toHaveLength(97);
+    expect(result.grades[0].sections.map((s) => s.echelon)).toEqual(["03", "04", "05", "06", "07", "08", "09", "10", "11"]);
+  });
+
+  it("splits the civility-prefixed nom+prénom cluster correctly for a straightforward record", () => {
+    const r = result.grades[0].records.find((r) => r.nomUsage === "BIANCO")!;
+    expect(r).toBeDefined();
+    expect(r.prenom).toBe("OLYMPE");
+    expect(r.dateNaissance).toBe("2001-03-30");
+    expect(r.rneEtablissement).toBe("0061023E");
+    expect(r.typeEtablissement).toBe("E.E.PR");
+    expect(r.nomEtablissement).toBe("APRAXINE");
+    expect(r.codePostal).toBe("06200");
+    expect(r.ville).toBe("NICE");
+    expect(r.echelonActuel).toBe("03");
+    expect(r.dateAccesEchelon).toBe("2024-09-30");
+    expect(r.typePromotion).toBe("AN");
+    expect(r.dateProchainePromotionRectorat).toBe("2025-09-30");
+    expect(r.proTypePromotion).toBe("AN");
+    expect(r.proConfirmee).toBe(true);
+  });
+
+  it("splits a compound (particule-prefixed) nom correctly, favoring the last token as the prénom", () => {
+    const cases: [string, string][] = [
+      ["ROBERT DUBORPER", "LAURIE"],
+      ["D ETTORRE", "AURORA"],
+      ["DELERCE RAFFALLI", "GAELLE"],
+      ["RAGUENET DE SAINT AL", "DIANE"],
+    ];
+    for (const [nomUsage, prenom] of cases) {
+      const r = result.grades[0].records.find((r) => r.nomUsage === nomUsage);
+      expect(r, `record for ${nomUsage}`).toBeDefined();
+      expect(r!.prenom).toBe(prenom);
+    }
+  });
+
+  it("converts the AAMMJJ-encoded barème (AVSIAE/Z1AG51/Z2AECH/Z3AGE1) into the same decimal-years convention as the secondaire format's EVAECH line", () => {
+    const r = result.grades[0].records.find((r) => r.nomUsage === "MAZZA")!;
+    expect(r).toBeDefined();
+    expect(r.avisEvaluation).toBe(4);
+    // Z1AG51 080001 = 8 ans 0 mois 1 jour
+    expect(r.ancienneteGrade).toBeCloseTo(8 + 0 / 12 + 1 / 360, 6);
+    // Z2AECH 010208 = 1 an 2 mois 8 jours
+    expect(r.ancienneteEchelon).toBeCloseTo(1 + 2 / 12 + 8 / 360, 6);
+    // Z3AGE1 330202 stored raw, like the secondaire format's Z2AGEA — matches the teacher's real age
+    // (born 30/06/1992) as of the campaign's reference date (01/09/2025): 33 ans 2 mois 2 jours.
+    expect(r.ageEncodedRectorat).toBe("330202");
+  });
+
+  it("reads the BA-track marker from line 1 ('BA <date> P', no period, trailing P for confirmed)", () => {
+    const r = result.grades[0].records.find((r) => r.nomUsage === "MAZZA")!;
+    expect(r.proTypePromotion).toBe("BA");
+    expect(r.dateProchainePromotionRectorat).toBe("2026-06-24");
+    expect(r.proConfirmee).toBe(true);
+
+    // BOHSALI's BA marker has no trailing "P" — eligible but not confirmed this cycle.
+    const notConfirmed = result.grades[0].records.find((r) => r.nomUsage === "BOHSALI")!;
+    expect(notConfirmed.proTypePromotion).toBe("BA");
+    expect(notConfirmed.proConfirmee).toBe(false);
+  });
+
+  it("reads a 'RE <AAaMMmJJj>' durée-restante marker (space-separated, no period, unlike the secondaire format)", () => {
+    const r = result.grades[0].records.find((r) => r.nomUsage === "LE GAL")!;
+    expect(r.typePromotion).toBe("RE");
+    expect(r.dureeRestante).toBe("00a04m10j");
+  });
+
+  it("handles a record with no établissement (contractuel-style, same as the secondaire format)", () => {
+    const r = result.grades[0].records.find((r) => r.nomUsage === "GUIOT")!;
+    expect(r).toBeDefined();
+    expect(r.rneEtablissement).toBeNull();
+    expect(r.typeEtablissement).toBeNull();
+    expect(r.nomEtablissement).toBeNull();
+    expect(r.dateNaissance).toBe("1965-07-18");
+  });
+
+  it("drops every bogus record a naive '!' -agnostic chunk split would produce (unbordered page-break headers and the 'BA AN NBRE DE PROMOUV...' footer summary line)", () => {
+    for (const r of result.grades[0].records) {
+      expect(r.nomUsage).not.toContain("NBRE DE PROMOUV");
+      expect(r.nomUsage).not.toContain("Bureau de gestion");
+    }
+  });
+});

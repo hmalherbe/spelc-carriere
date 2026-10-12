@@ -1,3 +1,5 @@
+import { ancienneteToBankingDays } from "@spelc/domain";
+
 /**
  * Parses the plain text of a rectorat "AVANCEMENT D'ECHELON" PDF export (already extracted from
  * the PDF — see pdfText.ts) into structured records.
@@ -100,11 +102,54 @@ const DISCIPLINE_CODE_RE = /\b(\d{4}[A-Z])\s+/;
 const TRAILING_PROMO_MARKER_RE = /\s*\S{1,2}\.(?:\s*\d{2}a\d{2}m\d{2}j)?\s*$/;
 const AVIS_LINE_RE = /\b([0-4])\s+(EXCELLENT|TRES SATIS|SATIS|A CONSOLID|NON RENS)\b/;
 // The section footer's "NOMBRE DE PROMUS" line: two counts, BA then AN, in that column order
-// (matches both the "B A   A N" and "BA      AN" header-row spellings seen across real exports).
+// (matches both the "B A   A N" and "BA      AN" header-row spellings seen across real exports —
+// the primer-degré export sometimes appends a 3rd, unlabeled total-roster count after them, which
+// this regex simply doesn't capture, leaving the BA/AN meaning unchanged).
 const PROMUS_FOOTER_RE = /NOMBRE DE PROMUS\s*:?\s*(\d+)\s+(\d+)/;
 const BAREME_LINE_RE = /!\s*EVAECH\s*(\d)?\s*!\s*Z1AGRA\s+([\d.]+)\s*!\s*Z1ANEC\s+([\d.]+)\s*!\s*Z2AGEA\s+(\d{6})\s*!/;
-// Établissement type codes as they appear in the rectorat exports (collège/lycée/lycée pro/etc.)
+// Établissement type codes as they appear in the secondaire rectorat exports (collège/lycée/lycée
+// pro/etc.).
 const TYPE_ETAB_RE = /\b(CLG|LGT|LG|LPO|LP|LT|LYT|ECS|SEP)\s+(PR|CC)\b/;
+
+// --- Premier degré (CCMI) format ---
+//
+// The rectorat's primer-degré "AVANCEMENT D'ECHELON" export (Professeurs des écoles) uses a
+// structurally different layout from the secondaire one above — confirmed against a real file (PE
+// CN Alpes-Maritimes 2025-2026): grade/échelon headers are worded differently, every record is
+// prefixed with a civility ("MME"/"M."), nom and prénom share line 1 instead of being split across
+// lines 1-2, the date de naissance moved from line 2 to line 3, and the barème block uses entirely
+// different field codes (AVSIAE/Z1AG51/Z2AECH/Z3AGE1 instead of EVAECH/Z1AGRA/Z1ANEC/Z2AGEA) whose
+// ancienneté values are encoded as "AAMMJJ" six-digit text rather than decimal years. Distinguished
+// from the secondaire format by its own grade-header shape (code in parentheses AFTER the label,
+// rather than before it with a colon — see GRADE_HEADER_PARENS_RE), and parsed by a dedicated set of
+// helpers below rather than overloading the secondaire ones with per-format branches throughout.
+const CIVILITY_RE = /^\s*(MME|M\.)\s+/;
+const ECHELON_DATE_ANCHOR_RE = /(\d{2})\s+(\d{2}\/\d{2}\/\d{4})/;
+// The "PROCHAINES PROMOTIONS" column marker: "BA 24/06/2026  P" (no period, unlike the secondaire
+// PRO_DATE_RE) — appears at the end of line 1 for a BA-eligible échelon (6/8) record, or at the end
+// of line 3 otherwise. The trailing "P" (confirmed) replaces the secondaire format's leading "Pro "
+// prefix convention.
+const PRO_DATE_RE_PREMIER_DEGRE = /\b(AN|CL|BA)\s+(\d{2}\/\d{2}\/\d{4})\s*(P)?\b/;
+// Line 2's type-promotion marker: "AN" alone (no value — an implicit zero duree, unlike the
+// secondaire format which always prints one), or "RE 00a04m10j" (space before the value, not the
+// secondaire format's period).
+const TYPE_PROMOTION_RE_PREMIER_DEGRE = /\b(AN|CL|BA|RE)(?:\s+(\d{2}a\d{2}m\d{2}j))?\b/;
+const BAREME_LINE_RE_PREMIER_DEGRE =
+  /!\s*Bareme\s*:\s*!\s*AVSIAE\s*(\d)?\s*!\s*Z1AG51\s+(\d{6})\s*!\s*Z2AECH\s+(\d{6})\s*!\s*Z3AGE1\s+(\d{6})\s*!/;
+
+/**
+ * Converts the primer-degré barème's "AAMMJJ" six-digit ancienneté encoding (years/months/days, no
+ * separators) into the same decimal-years convention the secondaire format already gives directly
+ * (e.g. Z1ANEC "2.500") — reusing the établi "banking calendar" (360 days/year, 30 days/month, see
+ * ancienneteToBankingDays) so both formats compare consistently downstream (BA échelon eligibility
+ * windows, grille durée lookups, etc. all compare against this decimal-years value).
+ */
+function aammjjToDecimalYears(raw: string): number {
+  const annees = Number(raw.slice(0, 2));
+  const mois = Number(raw.slice(2, 4));
+  const jours = Number(raw.slice(4, 6));
+  return ancienneteToBankingDays({ annees, mois, jours }) / 360;
+}
 
 function toIsoDate(jjmmaaaa: string): string | null {
   const m = DATE_RE.exec(jjmmaaaa);
@@ -129,7 +174,13 @@ function toNumber(text: string | undefined): number | null {
 // a continuation of the same one — each one's own teacherSnapshot.deleteMany() then silently wiped
 // out the previous page's already-imported records.
 const GRADE_HEADER_RE = /(\d{4})\s*:\s*(ECR.*?)(?:\s{2,}|\n|$)/g;
-const ECHELON_HEADER_RE = /ECHELON\s*:\s*(\d{2})/g;
+// Premier degré (CCMI) grade header: the code sits in parentheses AFTER the label instead of before
+// it with a colon, e.g. "ECR PROFESSEUR DES ECOLES CL. NORMALE (4051)" — confirmed against a real
+// file (see the module-level "Premier degré (CCMI) format" comment above).
+const GRADE_HEADER_PARENS_RE = /\b(ECR[^()\n]*?)\s*\((\d{4})\)/g;
+// Case-insensitive ("Echelon :" in the premier-degré export vs "ECHELON :" in the secondaire one —
+// confirmed against a real file, same header otherwise).
+const ECHELON_HEADER_RE = /echelon\s*:\s*(\d{2})/gi;
 
 /**
  * Parses one file's worth of text (all pages concatenated) into records, grouped first by grade
@@ -146,11 +197,23 @@ const ECHELON_HEADER_RE = /ECHELON\s*:\s*(\d{2})/g;
 export function parseRectoratFile(rawText: string): ParsedRectoratFile {
   const periodeMatch = /DU\s+(\d{2}\/\d{2}\/\d{4})[\s\S]*?AU\s+(\d{2}\/\d{2}\/\d{4})/.exec(rawText);
 
-  const gradeOccurrences = [...rawText.matchAll(GRADE_HEADER_RE)].map((m) => ({
-    index: m.index,
-    gradeCode: m[1],
-    gradeLabel: m[2].trim(),
-  }));
+  // Two grade-header shapes, each tagging its occurrences with the record format they imply (see
+  // the module-level "Premier degré (CCMI) format" comment) — merged and sorted by position so the
+  // "most recently preceding" attribution below works regardless of which shape a file uses.
+  const gradeOccurrences = [
+    ...[...rawText.matchAll(GRADE_HEADER_RE)].map((m) => ({
+      index: m.index,
+      gradeCode: m[1],
+      gradeLabel: m[2].trim(),
+      format: "secondaire" as const,
+    })),
+    ...[...rawText.matchAll(GRADE_HEADER_PARENS_RE)].map((m) => ({
+      index: m.index,
+      gradeCode: m[2],
+      gradeLabel: m[1].trim(),
+      format: "premier_degre" as const,
+    })),
+  ].sort((a, b) => a.index - b.index);
 
   const echelonHeaders = [...rawText.matchAll(ECHELON_HEADER_RE)].map((m) => ({
     echelon: m[1],
@@ -185,7 +248,7 @@ export function parseRectoratFile(rawText: string): ParsedRectoratFile {
       blockOrder.push(key);
     }
 
-    block.records.push(...parseSectionRecords(sectionText, echelon));
+    block.records.push(...parseSectionRecords(sectionText, echelon, owner?.format ?? "secondaire"));
 
     // Keyed by échelon rather than pushed per chunk: the same "ECHELON : NN" section can span
     // several physical PDF pages (repeating the header on each), with the summary footer appearing
@@ -209,16 +272,21 @@ export function parseRectoratFile(rawText: string): ParsedRectoratFile {
   };
 }
 
-function parseSectionRecords(sectionText: string, echelon: string): ParsedTeacherRecord[] {
+function parseSectionRecords(
+  sectionText: string,
+  echelon: string,
+  format: "secondaire" | "premier_degre",
+): ParsedTeacherRecord[] {
   // Stop at "NOMBRE DE PROMOUVABLES" — everything after that is the section's summary footer, not
   // another record.
   const body = sectionText.split(/NOMBRE DE PROMOUVABLES/)[0];
 
-  // Both the section's table-header separator and each record's end-of-barème separator are a
-  // full line made only of "!" and "-" (e.g. "!----...----!" or "!-----------!---...---!"). Every
-  // such line is a safe split point: it never carries real content, whether it's a structural
-  // header rule or a record boundary.
-  const chunks = body.split(/^[!-]{10,}\s*$/m).map((c) => c.trim());
+  // Both the section's table-header separator and each record's end-of-barème separator are a full
+  // line made only of "!"/"-" (secondaire, e.g. "!----...----!") or "!"/"="/"-" (premier degré,
+  // which additionally wraps its own column-header block in "====...====" rules — see the
+  // module-level "Premier degré (CCMI) format" comment). Every such line is a safe split point: it
+  // never carries real content, whether it's a structural header rule or a record boundary.
+  const chunks = body.split(/^[!=-]{10,}\s*$/m).map((c) => c.trim());
 
   const out: ParsedTeacherRecord[] = [];
   for (const chunk of chunks) {
@@ -232,8 +300,13 @@ function parseSectionRecords(sectionText: string, echelon: string): ParsedTeache
     // "NOM USAGE - PRENOM" for an actual surname — that's not caught by the nomUsage-and-prenom-
     // both-empty guard further down, since a "nomUsage" WAS found. Skip it here by its known, fixed,
     // literal content instead of trying to make the nom regex itself rule out this one string.
-    if (chunk.includes("NOM USAGE - PRENOM")) continue;
-    const record = parseRecordChunk(chunk, echelon);
+    if (chunk.includes("NOM USAGE - PRENOM") || chunk.includes("Nom - Prenom")) continue;
+    // A real record chunk is always bordered in "!...!" — the premier-degré section footer
+    // sometimes prints an unbordered "BA   AN   NBRE DE PROMOUV. PROMUS BA : N" summary line BEFORE
+    // "NOMBRE DE PROMOUVABLES" (the cutoff above), which would otherwise land in `body` as a bogus
+    // trailing chunk and get misread as a record.
+    if (!chunk.startsWith("!")) continue;
+    const record = format === "premier_degre" ? parsePremierDegreRecordChunk(chunk, echelon) : parseRecordChunk(chunk, echelon);
     if (record) out.push(record);
   }
   return out;
@@ -331,6 +404,112 @@ function parseRecordChunk(chunk: string, echelon: string): ParsedTeacherRecord |
     dateProchainePromotionRectorat: proDateMatch ? toIsoDate(proDateMatch[3]) : null,
     proTypePromotion: (proDateMatch?.[2] as "AN" | "CL" | "BA" | undefined) ?? null,
     proConfirmee: proDateMatch ? proDateMatch[1] !== undefined : false,
+    warnings,
+  };
+}
+
+/**
+ * Premier degré (CCMI) counterpart to parseRecordChunk — see the module-level "Premier degré
+ * (CCMI) format" comment for how this layout differs from the secondaire one.
+ */
+function parsePremierDegreRecordChunk(chunk: string, echelon: string): ParsedTeacherRecord | null {
+  const rawLines = chunk.split("\n").map((l) => l.trim());
+  const lines = /^!\s*!?$/.test(rawLines[0] ?? "") ? rawLines.slice(1) : rawLines;
+  const warnings: string[] = [];
+
+  // Line 1: "!<CIVILITE> <NOM PRENOM>  [<RNE> <TYPE_ETAB> <NOM_ETAB>]  <ECHELON_LITTERAL> <DATE_ACCES>  [<BA DATE> [P]]!"
+  const line1Raw = (lines[0] ?? "").replace(/^!/, "");
+  const civilityMatch = CIVILITY_RE.exec(line1Raw);
+  const line1 = civilityMatch ? line1Raw.slice(civilityMatch[0].length) : line1Raw.trimStart();
+
+  const rneMatch = RNE_RE.exec(line1);
+  // The literal per-record "échelon actuel" + date d'accès that closes out the person/affectation
+  // block — everything after it is the optional "BA <date> [P]" PROCHAINES PROMOTIONS marker.
+  const echelonDateAnchor = ECHELON_DATE_ANCHOR_RE.exec(line1);
+  const clusterEnd = rneMatch ? rneMatch.index : (echelonDateAnchor?.index ?? line1.length);
+  const nomPrenomCluster = line1.slice(0, clusterEnd).trim();
+
+  // Nom and prénom share this line with no reliable column boundary between them (see this
+  // function's own doc comment) — the last whitespace-separated token is taken as the prénom
+  // (hyphenated first names like "ANNE-CLAIRE" count as one token) and everything before it as the
+  // nom, which matches a compound/particule nom (e.g. "ROBERT DUBORPER", "D ETTORRE") far more often
+  // in practice than the reverse would match a multi-word prénom (e.g. "ANNE SOPHIE") — confirmed by
+  // counting both patterns across a real file.
+  const tokens = nomPrenomCluster.split(/\s+/).filter(Boolean);
+  const nomUsage = tokens.length > 1 ? tokens.slice(0, -1).join(" ") : "";
+  const prenom = tokens.length > 0 ? tokens[tokens.length - 1] : "";
+  if (!nomUsage) warnings.push("Nom introuvable sur la ligne 1");
+  if (!prenom) warnings.push("Prénom introuvable sur la ligne 1");
+
+  let typeEtablissement: string | null = null;
+  let nomEtablissement: string | null = null;
+  if (rneMatch) {
+    const afterRne = line1.slice(rneMatch.index + rneMatch[0].length, echelonDateAnchor?.index ?? line1.length).trim();
+    const typeMatch = /^(\S+)\s*/.exec(afterRne);
+    typeEtablissement = typeMatch?.[1] ?? null;
+    nomEtablissement = (typeMatch ? afterRne.slice(typeMatch[0].length) : afterRne).trim() || null;
+  }
+
+  const dateAccesMatch = echelonDateAnchor ? DATE_RE.exec(echelonDateAnchor[2]) : null;
+  const line1Tail = echelonDateAnchor ? line1.slice(echelonDateAnchor.index + echelonDateAnchor[0].length) : "";
+  const proMatchLine1 = PRO_DATE_RE_PREMIER_DEGRE.exec(line1Tail);
+
+  // Line 2: "! Nee <NOM_NAISSANCE>  <ADRESSE ETABLISSEMENT>  <AN|CL|BA|RE [AAaMMmJJj]>  !"
+  // The "Nee ..." birth-name prefix and the établissement address aren't stored (no corresponding
+  // ParsedTeacherRecord field — same as the secondaire format never storing a street address).
+  const line2 = (lines[1] ?? "").replace(/^!/, "").trim();
+  const typePromoMatch = TYPE_PROMOTION_RE_PREMIER_DEGRE.exec(line2);
+  if (!typePromoMatch) warnings.push("Durée restante illisible (probable glitch d'encodage sur le type de promotion)");
+
+  // Line 3: "!  <DATE_NAISSANCE>  <CP VILLE>  [<AVIS>]  [<AN DATE [P]>]  !"
+  const line3 = (lines[2] ?? "").replace(/^!/, "").trim();
+  const dobMatch = DATE_RE.exec(line3);
+  const cpMatch = /(\d{5})\s+/.exec(line3);
+  let ville: string | null = null;
+  if (cpMatch) {
+    const afterCp = line3.slice(cpMatch.index + cpMatch[0].length);
+    const avisInAfterCp = AVIS_LINE_RE.exec(afterCp);
+    const proInAfterCp = PRO_DATE_RE_PREMIER_DEGRE.exec(afterCp);
+    const cut = Math.min(avisInAfterCp?.index ?? afterCp.length, proInAfterCp?.index ?? afterCp.length);
+    ville = afterCp.slice(0, cut).trim() || null;
+  }
+  const avisMatch = AVIS_LINE_RE.exec(line3);
+  const proMatchLine3 = PRO_DATE_RE_PREMIER_DEGRE.exec(line3);
+  const proMatch = proMatchLine1 ?? proMatchLine3;
+
+  // Barème: "! Bareme : ! AVSIAE n ! Z1AG51 AAMMJJ ! Z2AECH AAMMJJ ! Z3AGE1 AAMMJJ ! ! !" — empty
+  // (no "AVSIAE" text at all) for a record outside a BA-eligible échelon this cycle, same as the
+  // secondaire format's EVAECH line being commonly absent there.
+  const baremeLine = lines.find((l) => l.includes("AVSIAE")) ?? "";
+  const baremeMatch = BAREME_LINE_RE_PREMIER_DEGRE.exec(baremeLine);
+  if (!baremeMatch) warnings.push("Bloc barème (AVSIAE/Z1AG51/Z2AECH/Z3AGE1) illisible");
+
+  if (!nomUsage && !prenom) {
+    return null;
+  }
+
+  return {
+    nomUsage,
+    prenom,
+    dateNaissance: dobMatch ? toIsoDate(dobMatch[0]) : null,
+    rneEtablissement: rneMatch?.[1] ?? null,
+    typeEtablissement,
+    nomEtablissement,
+    codePostal: cpMatch?.[1] ?? null,
+    ville,
+    disciplineCode: null,
+    disciplineLibelle: null,
+    echelonActuel: echelon,
+    dateAccesEchelon: dateAccesMatch ? toIsoDate(dateAccesMatch[0]) : null,
+    avisEvaluation: avisMatch ? Number(avisMatch[1]) : null,
+    ancienneteGrade: baremeMatch ? aammjjToDecimalYears(baremeMatch[2]) : null,
+    ancienneteEchelon: baremeMatch ? aammjjToDecimalYears(baremeMatch[3]) : null,
+    ageEncodedRectorat: baremeMatch?.[4] ?? null,
+    typePromotion: typePromoMatch?.[1] ?? null,
+    dureeRestante: typePromoMatch?.[2] ?? null,
+    dateProchainePromotionRectorat: proMatch ? toIsoDate(proMatch[2]) : null,
+    proTypePromotion: (proMatch?.[1] as "AN" | "CL" | "BA" | undefined) ?? null,
+    proConfirmee: proMatch ? proMatch[3] !== undefined : false,
     warnings,
   };
 }
