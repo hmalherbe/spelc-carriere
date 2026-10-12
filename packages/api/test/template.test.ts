@@ -132,7 +132,7 @@ describe("buildPromotionEmail", () => {
     expect(html).toContain("Ligne 1<br>Ligne 2<br>Ligne 3");
   });
 
-  it("lists the recipient's own commission's élus as a table — name, mobile, mail, no titulaire/suppléant label", () => {
+  it("lists the recipient's own commission's élus one per row — name, then téléphone/e-mail together on a second line, no titulaire/suppléant label", () => {
     const { html } = buildPromotionEmail({
       ...BASE,
       commission: "CCMA",
@@ -144,12 +144,21 @@ describe("buildPromotionEmail", () => {
     expect(html).toContain("Vos élu(e)s CCMA");
     expect(html).not.toContain("<th align=\"left\"");
     expect(html).not.toContain(">Prénom NOM<");
-    expect(html).toContain(">Julien MARTIN<");
-    expect(html).toContain(">06 00 00 00 00<");
-    expect(html).toContain(">julien@spelc.example<");
-    expect(html).toContain(">Sophie DURAND<");
+    expect(html).toContain("<strong>Julien MARTIN</strong><br>06 00 00 00 00 · julien@spelc.example");
+    // No téléphone/e-mail at all -> no dangling <br> or separator, just the name.
+    expect(html).toMatch(/<strong>Sophie DURAND<\/strong>\s*<\/td>/);
     expect(html).not.toContain("Titulaire");
     expect(html).not.toContain("Suppléant");
+  });
+
+  it("shows whichever of téléphone/e-mail is present alone, with no stray ' · ' separator", () => {
+    const { html } = buildPromotionEmail({
+      ...BASE,
+      commission: "CCMA",
+      elus: [{ role: "TITULAIRE", prenom: "Anne", nom: "DUPONT", telephone: "06 11 22 33 44", email: null }],
+    });
+    expect(html).toContain("<strong>Anne DUPONT</strong><br>06 11 22 33 44");
+    expect(html).not.toContain(" · ");
   });
 
   it("renders no élus section when the list is empty", () => {

@@ -143,24 +143,31 @@ export function buildHeader(logoDataUrl: string | null, t1Text: string | null): 
 }
 
 /** The union's élus for the recipient's own commission (CCMA/CCMI) — filtered and ordered
- * (titulaires then suppléants) by the caller. Rendered as a plain table, one row per élu — the
- * titulaire/suppléant distinction is deliberately not shown here (confirmed by the union: the
- * recipient just needs someone to call, not which seat they hold). */
+ * (titulaires then suppléants) by the caller. One élu per row, name then téléphone/e-mail on a
+ * second line — the titulaire/suppléant distinction is deliberately not shown here (confirmed by
+ * the union: the recipient just needs someone to call, not which seat they hold).
+ *
+ * A 3-column table (name/téléphone/e-mail side by side) is unreadable on a phone — a narrow mail
+ * client squeezes the téléphone column down to a handful of characters, wrapping a single mobile
+ * number across up to 4 lines (confirmed by the union on a real CCMI letter). One column per élu,
+ * with téléphone and e-mail together on their own line underneath the name, lets both wrap as
+ * normal flowing text instead of being trapped in an undersized column. */
 export function buildElusFooter(commission: MailingContext["commission"], elus: MailingElu[]): string {
   if (elus.length === 0) return "";
   const rows = elus
-    .map(
-      (e) => `<tr>
-        <td style="padding: 4px 16px 4px 0; border-bottom: 1px solid #eeeeee;">${escapeHtml(e.prenom)} ${escapeHtml(e.nom)}</td>
-        <td style="padding: 4px 16px 4px 0; border-bottom: 1px solid #eeeeee;">${e.telephone ? escapeHtml(e.telephone) : ""}</td>
-        <td style="padding: 4px 0 4px 0; border-bottom: 1px solid #eeeeee;">${e.email ? escapeHtml(e.email) : ""}</td>
-      </tr>`,
-    )
+    .map((e) => {
+      const contact = [e.telephone, e.email].filter((v): v is string => Boolean(v)).map(escapeHtml).join(" · ");
+      return `<tr>
+        <td style="padding: 6px 0; border-bottom: 1px solid #eeeeee;">
+          <strong>${escapeHtml(e.prenom)} ${escapeHtml(e.nom)}</strong>${contact ? `<br>${contact}` : ""}
+        </td>
+      </tr>`;
+    })
     .join("");
   const label = commission ? `Vos élu(e)s ${escapeHtml(commission)}` : "Vos élu(e)s";
   return `
     <p style="margin-top: 24px; margin-bottom: 4px;"><strong>${label} :</strong></p>
-    <table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse; margin-top: 0; font-size: 0.9rem;">
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse; margin-top: 0; font-size: 0.9rem;">
       ${rows}
     </table>`;
 }
