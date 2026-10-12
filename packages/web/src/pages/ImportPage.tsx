@@ -16,6 +16,10 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function dateCommissionLabel(type: Campagne["type"]): string {
+  return type === "CCMI" ? "Date CCMI" : "Date CCMA";
+}
+
 function formatSyncDate(iso: string): string {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" });
 }
@@ -296,7 +300,7 @@ export function ImportPage() {
               />
             </label>
             <label>
-              Date CCMA
+              {dateCommissionLabel(selectedCampagne.type)}
               <input required type="date" value={editDates.dateCcma} onChange={(e) => setEditDates((s) => ({ ...s, dateCcma: e.target.value }))} />
             </label>
             <button type="submit" disabled={savingDates}>
@@ -366,7 +370,7 @@ export function ImportPage() {
               />
             </label>
             <label>
-              Date CCMA
+              {dateCommissionLabel(newCampagne.type)}
               <input
                 required
                 type="date"
