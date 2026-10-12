@@ -33,6 +33,11 @@ reliquatsRouter.get("/:campagneId", asyncHandler(async (req, res) => {
     {
       grade: string;
       echelon: 6 | 8;
+      // null for CCMA (no département split) — see TeacherSnapshot.departement's own doc comment.
+      // Part of the grouping key below so a CCMI group's candidates never mix the two départements'
+      // separate BA pools — per product decision, 06 and 83 each run their own reliquat selection
+      // at échelon 6 and 8, from their own non-promu candidates only.
+      departement: string | null;
       candidates: {
         teacherId: string;
         nom: string;
@@ -57,8 +62,8 @@ reliquatsRouter.get("/:campagneId", asyncHandler(async (req, res) => {
     });
     if (baStatus !== "non_promu" || baEchelonDepart == null) continue;
 
-    const key = `${snap.grade}|${baEchelonDepart}`;
-    if (!groups.has(key)) groups.set(key, { grade: snap.grade, echelon: baEchelonDepart, candidates: [] });
+    const key = `${snap.grade}|${baEchelonDepart}|${snap.departement ?? ""}`;
+    if (!groups.has(key)) groups.set(key, { grade: snap.grade, echelon: baEchelonDepart, departement: snap.departement, candidates: [] });
     groups.get(key)!.candidates.push({
       teacherId: snap.teacherId,
       nom: snap.nomUsage,
@@ -73,7 +78,7 @@ reliquatsRouter.get("/:campagneId", asyncHandler(async (req, res) => {
 
   const result = Array.from(groups.values())
     .map((g) => ({ ...g, candidates: g.candidates.sort((a, b) => a.nom.localeCompare(b.nom) || a.prenom.localeCompare(b.prenom)) }))
-    .sort((a, b) => a.grade.localeCompare(b.grade) || a.echelon - b.echelon);
+    .sort((a, b) => a.grade.localeCompare(b.grade) || a.echelon - b.echelon || (a.departement ?? "").localeCompare(b.departement ?? ""));
 
   res.json({ campagneId, groups: result });
 }));

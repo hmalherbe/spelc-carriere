@@ -88,6 +88,7 @@ export function DashboardPage() {
   const [adherentFilter, setAdherentFilter] = useState<AdherentFilter>("all");
   const [baFilter, setBaFilter] = useState<BaFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
+  const [departementFilter, setDepartementFilter] = useState<string>("all");
   const [echelonFilter, setEchelonFilter] = useState<string>("all");
   const [ancienneteMin, setAncienneteMin] = useState<string>("");
   const [ancienneteMax, setAncienneteMax] = useState<string>("");
@@ -162,6 +163,11 @@ export function DashboardPage() {
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
 
   const grades = useMemo(() => Array.from(new Set(teachers.map((t) => t.grade))).sort(), [teachers]);
+  // Vide pour une campagne CCMA (pas de découpage départemental) — le filtre ne s'affiche alors pas.
+  const departements = useMemo(
+    () => Array.from(new Set(teachers.map((t) => t.departement).filter((d): d is string => d != null))).sort(),
+    [teachers],
+  );
   const echelons = useMemo(
     () => Array.from(new Set(teachers.map((t) => t.echelonActuel))).sort((a, b) => echelonSortValue(a) - echelonSortValue(b)),
     [teachers],
@@ -176,6 +182,7 @@ export function DashboardPage() {
       if (baFilter === "eligible" && t.baEligible !== true) return false;
       if (baFilter === "non_eligible" && t.baEligible !== false) return false;
       if (gradeFilter !== "all" && t.grade !== gradeFilter) return false;
+      if (departementFilter !== "all" && t.departement !== departementFilter) return false;
       if (echelonFilter !== "all" && t.echelonActuel !== echelonFilter) return false;
       if (min !== null && (t.ancienneteEchelon == null || t.ancienneteEchelon < min)) return false;
       if (max !== null && (t.ancienneteEchelon == null || t.ancienneteEchelon > max)) return false;
@@ -200,7 +207,7 @@ export function DashboardPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [teachers, adherentFilter, baFilter, gradeFilter, echelonFilter, ancienneteMin, ancienneteMax, sortKey, sortDir]);
+  }, [teachers, adherentFilter, baFilter, gradeFilter, departementFilter, echelonFilter, ancienneteMin, ancienneteMax, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -325,6 +332,19 @@ export function DashboardPage() {
             ))}
           </select>
         </label>
+        {departements.length > 0 && (
+          <label>
+            Département
+            <select value={departementFilter} onChange={(e) => setDepartementFilter(e.target.value)}>
+              <option value="all">Tous</option>
+              {departements.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           Échelon
           <select value={echelonFilter} onChange={(e) => setEchelonFilter(e.target.value)}>
@@ -369,6 +389,7 @@ export function DashboardPage() {
               <th className="sortable" onClick={() => toggleSort("grade")}>
                 Grade{sortIndicator("grade")}
               </th>
+              {departements.length > 0 && <th>Département</th>}
               <th className="sortable" onClick={() => toggleSort("echelon")}>
                 Échelon{sortIndicator("echelon")}
               </th>
@@ -390,6 +411,7 @@ export function DashboardPage() {
                   <td>{t.nom}</td>
                   <td>{formatPrenom(t.prenom)}</td>
                   <td>{t.grade}</td>
+                  {departements.length > 0 && <td>{t.departement ?? "—"}</td>}
                   <td>
                     {formatEchelonLabel(t.echelonActuel)} →{" "}
                     {t.computedState ? formatEchelonLabel(t.computedState.echelonSuivant) : "—"}

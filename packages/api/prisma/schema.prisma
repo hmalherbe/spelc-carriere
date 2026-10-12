@@ -149,6 +149,14 @@ model TeacherSnapshot {
   typeEtablissement              String? // CLG/LGT/LP/LPO/LT/LYT CC/ECS/SEP...
   codePostal                     String?
   ville                          String?
+  // "06" (Alpes-Maritimes) or "83" (Var) for a CCMI (premier degré) campagne — null for CCMA, which
+  // has no département split. The rectorat's CCMI export comes as 6 separate files (3 grades × 2
+  // départements) with no explicit département marker inside their own content, so this is derived
+  // from the UPLOADED FILE'S NAME at import time (see deriveDepartementFromFileName in
+  // routes/imports.ts) — confirmed by the union: a name containing "Alpes-Maritimes" is 06, "Var"
+  // is 83. Required to keep each département's teachers — and especially its BA reliquat candidate
+  // pool at échelon 6/8 — from being mixed with the other département's (see reliquats.ts).
+  departement                    String?
   disciplineCode                 String?
   disciplineLibelle              String?
   echelonActuel                  String

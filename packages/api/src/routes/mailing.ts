@@ -266,6 +266,9 @@ async function eligibleRecipients(campagneId: string) {
      * than coming from Adherent.civilite — callers must display it as an estimation, not a fact. */
     civiliteEstimee: boolean;
     grade: string;
+    // "06"/"83" pour une campagne CCMI, null pour CCMA — voir TeacherSnapshot.departement's own doc
+    // comment. Pilote le filtre département de MailingPage.tsx.
+    departement: string | null;
     echelonDepart: string;
     echelonSuivant: string;
     indiceActuel: number;
@@ -344,6 +347,7 @@ async function eligibleRecipients(campagneId: string) {
       civilite,
       civiliteEstimee,
       grade: snap.grade,
+      departement: snap.departement,
       echelonDepart: state.echelonDepart,
       echelonSuivant: state.echelonSuivant,
       indiceActuel: state.indiceActuel,

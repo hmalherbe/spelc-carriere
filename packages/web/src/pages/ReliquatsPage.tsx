@@ -92,9 +92,10 @@ export function ReliquatsPage() {
         <p className="hint">Aucun candidat BA "non promu" (échelon 6 ou 8) pour cette campagne.</p>
       ) : (
         groups.map((g) => (
-          <section className="card" key={`${g.grade}|${g.echelon}`}>
+          <section className="card" key={`${g.grade}|${g.echelon}|${g.departement ?? ""}`}>
             <h3>
               {g.grade} — échelon {g.echelon}
+              {g.departement && ` — ${g.departement}`}
             </h3>
             <table className="data-table">
               <thead>

@@ -122,6 +122,8 @@ export interface TeacherListItem {
    * DashboardPage.tsx, qui groupe par grade puis trie sur cette valeur. */
   fileOrder: number;
   grade: string;
+  /** "06"/"83" pour une campagne CCMI, null pour CCMA (pas de découpage départemental). */
+  departement: string | null;
   /** Échelon actuel corrigé pour l'affichage : pour un candidat BA pas encore confirmé, c'est
    * l'échelon de départ réel (6 ou 8), pas l'échelon d'arrivée tel que titré par le rectorat
    * (07/09) — voir baEchelonDepart, qui donne la même valeur explicitement pour la colonne BA. */
@@ -315,6 +317,8 @@ export interface MailingRecipient {
    * it as an estimation, never as a fact. */
   civiliteEstimee: boolean;
   grade: string;
+  /** "06"/"83" pour une campagne CCMI, null pour CCMA (pas de découpage départemental). */
+  departement: string | null;
   echelonDepart: string;
   echelonSuivant: string;
   indiceActuel: number;
@@ -436,6 +440,8 @@ export interface ReliquatCandidate {
 export interface ReliquatGroup {
   grade: string;
   echelon: 6 | 8;
+  /** "06" / "83" pour une campagne CCMI, null pour CCMA (pas de découpage départemental). */
+  departement: string | null;
   candidates: ReliquatCandidate[];
 }
 

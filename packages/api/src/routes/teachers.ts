@@ -151,6 +151,9 @@ teachersRouter.get("/", async (req, res) => {
       // the "fichier" sort in DashboardPage.tsx groups by grade first, then by this field.
       fileOrder: snap.rowIndex,
       grade: snap.grade,
+      // "06"/"83" for a CCMI campagne, null for CCMA — see TeacherSnapshot.departement's own doc
+      // comment. Drives the département filter on DashboardPage.tsx.
+      departement: snap.departement,
       echelonActuel: echelonActuelAffiche,
       dateAccesEchelon: snap.dateAccesEchelon,
       ancienneteEchelon: snap.ancienneteEchelon,

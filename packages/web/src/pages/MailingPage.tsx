@@ -68,6 +68,7 @@ export function MailingPage() {
   const [template, setTemplate] = useState<MailingTemplate>("generique");
   const [civiliteFilter, setCiviliteFilter] = useState<"" | "VIDE" | "M" | "Mme">("");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
+  const [departementFilter, setDepartementFilter] = useState<string>("all");
   const [echelonFilter, setEchelonFilter] = useState<string>("all");
   const [emailFilter, setEmailFilter] = useState<"" | "VIDE" | "RENSEIGNE">("");
 
@@ -79,6 +80,11 @@ export function MailingPage() {
   // pour le filtre grade/échelon de DashboardPage. Échelon = échelon de départ (celui affiché en
   // premier dans la colonne "Échelon" : "départ → suivant").
   const grades = useMemo(() => Array.from(new Set(recipients.map((r) => r.grade))).sort(), [recipients]);
+  // Vide pour une campagne CCMA (pas de découpage départemental) — le filtre ne s'affiche alors pas.
+  const departements = useMemo(
+    () => Array.from(new Set(recipients.map((r) => r.departement).filter((d): d is string => d != null))).sort(),
+    [recipients],
+  );
   const echelons = useMemo(
     () => Array.from(new Set(recipients.map((r) => r.echelonDepart))).sort((a, b) => echelonSortValue(a) - echelonSortValue(b)),
     [recipients],
@@ -95,12 +101,13 @@ export function MailingPage() {
         if (r.civilite !== civiliteFilter) return false;
       }
       if (gradeFilter !== "all" && r.grade !== gradeFilter) return false;
+      if (departementFilter !== "all" && r.departement !== departementFilter) return false;
       if (echelonFilter !== "all" && r.echelonDepart !== echelonFilter) return false;
       if (emailFilter === "VIDE" && r.email) return false;
       if (emailFilter === "RENSEIGNE" && !r.email) return false;
       return true;
     });
-  }, [recipients, civiliteFilter, gradeFilter, echelonFilter, emailFilter]);
+  }, [recipients, civiliteFilter, gradeFilter, departementFilter, echelonFilter, emailFilter]);
 
   const missingEmail = useMemo(() => visibleRecipients.filter((r) => !r.email), [visibleRecipients]);
   const missingEmailAllSelected = missingEmail.length > 0 && missingEmail.every((r) => selected.has(r.teacherId));
@@ -380,6 +387,19 @@ export function MailingPage() {
               ))}
             </select>
           </label>
+          {departements.length > 0 && (
+            <label>
+              Département
+              <select value={departementFilter} onChange={(e) => setDepartementFilter(e.target.value)}>
+                <option value="all">Tous</option>
+                {departements.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Échelon
             <select value={echelonFilter} onChange={(e) => setEchelonFilter(e.target.value)}>
@@ -418,6 +438,7 @@ export function MailingPage() {
               <th>Prénom</th>
               <th>Adhérent</th>
               <th>Grade</th>
+              {departements.length > 0 && <th>Département</th>}
               <th>Échelon</th>
               <th>Éligibilité BA</th>
               <th>Gain net</th>
@@ -476,6 +497,7 @@ export function MailingPage() {
                   </span>
                 </td>
                 <td>{r.grade}</td>
+                {departements.length > 0 && <td>{r.departement ?? "—"}</td>}
                 <td>
                   {formatEchelonLabel(r.echelonDepart)} → {formatEchelonLabel(r.echelonSuivant)}
                 </td>

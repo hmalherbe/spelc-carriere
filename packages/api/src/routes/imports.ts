@@ -59,6 +59,21 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
   "4053": "Prof. Ecoles EXC",
 };
 
+/**
+ * Derives a CCMI (premier degré) file's département ("06" Alpes-Maritimes / "83" Var) from its own
+ * file NAME — confirmed by the union: the rectorat's 6 CCMI exports (3 grades × 2 départements)
+ * carry no explicit département marker in their own content, only in how the file itself is named
+ * (e.g. "PE CE Alpes-Maritimes - avancements d'échelon 2025-2026.txt", "PE CE Var - ...").
+ * Word-boundary matched so an unrelated filename isn't misread (e.g. a name merely containing "var"
+ * as a substring). Returns null for a CCMA file (no département split), which is the expected,
+ * harmless case for every file uploaded outside a CCMI campagne.
+ */
+export function deriveDepartementFromFileName(fileName: string): string | null {
+  if (/\balpes-maritimes\b/i.test(fileName)) return "06";
+  if (/\bvar\b/i.test(fileName)) return "83";
+  return null;
+}
+
 importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
   const { campagneId } = req.body as { campagneId?: string };
   if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
@@ -69,6 +84,9 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   if (campagne.type === "HC" || campagne.type === "EXC") {
     return res.status(400).json({ error: "Cette campagne est de type Hors Classe / Classe exceptionnelle — utilisez plutôt l'import dédié." });
   }
+
+  // null for CCMA (no département split) — see deriveDepartementFromFileName's own doc comment.
+  const departement = deriveDepartementFromFileName(req.file.originalname);
 
   // Accepts either the rectorat's native PDF export, or the same "AVANCEMENT D'ECHELON" content
   // already as plain text (e.g. copié-collé depuis un lecteur PDF, ou déjà extrait par un autre
@@ -176,7 +194,12 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
     // the dashboard. Safe to do only after the name -> teacherId map above is built, so a teacher
     // whose only snapshot was in this campagne still resolves to their existing Teacher row instead
     // of forking a new one once their old snapshot is gone.
-    await prisma.teacherSnapshot.deleteMany({ where: { campagneId, grade } });
+    //
+    // `departement` is part of this filter for CCMI: the SAME grade ("Prof. Ecoles") comes from TWO
+    // separate files in one campagne (06 and 83) — without this, importing 83's file would wipe out
+    // 06's already-imported snapshots for that grade (both share the same campagneId+grade). Always
+    // null for CCMA, where it's a no-op (matches only the already-null CCMA rows, as before).
+    await prisma.teacherSnapshot.deleteMany({ where: { campagneId, grade, departement } });
 
     const nombrePromusBaBySection = new Map(gradeBlock.sections.map((s) => [s.echelon, s.nombrePromusBA]));
 
@@ -226,6 +249,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
           typeEtablissement: record.typeEtablissement,
           codePostal: record.codePostal,
           ville: record.ville,
+          departement,
           disciplineCode: record.disciplineCode,
           disciplineLibelle: record.disciplineLibelle,
           echelonActuel: record.echelonActuel,
