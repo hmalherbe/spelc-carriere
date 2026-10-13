@@ -32,6 +32,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(body.error ?? "Erreur inconnue", res.status);
   }
+  // A 204 has no body at all — res.json() rejects on the empty string (not valid JSON), which
+  // otherwise surfaced as a false error to the caller despite the request having succeeded (real
+  // case: api.deleteElu, whose DELETE route returns a bare 204).
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -539,6 +543,10 @@ export const api = {
     id: string,
     data: Partial<{ anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }>,
   ) => request<Campagne>(`/campagnes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  /** Irreversible: deletes the campagne and every piece of data tied to it (imports, snapshots,
+   * computed states, mailing logs...) — see routes/campagnes.ts's own doc comment. The caller must
+   * warn the admin before calling this; nothing here asks for confirmation again. */
+  deleteCampagne: (id: string) => request<void>(`/campagnes/${id}`, { method: "DELETE" }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
   updateAncienneteADeduire: (teacherId: string, ancienneteADeduire: string | null, ancienneteADeduireNote: string | null) =>
     request<{ ancienneteADeduire: string | null; ancienneteADeduireNote: string | null; warnings: string[] }>(

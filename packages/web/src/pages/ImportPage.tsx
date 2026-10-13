@@ -61,6 +61,8 @@ export function ImportPage() {
   const [showEditDates, setShowEditDates] = useState(false);
   const [editDates, setEditDates] = useState({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: "" });
   const [savingDates, setSavingDates] = useState(false);
+  const [deletingCampagne, setDeletingCampagne] = useState(false);
+  const [deleteCampagneError, setDeleteCampagneError] = useState<string | null>(null);
 
   // Repopule le formulaire d'édition sur la campagne réellement sélectionnée à chaque ouverture —
   // sinon il garderait les valeurs d'une précédente ouverture si l'utilisateur change de campagne
@@ -169,6 +171,37 @@ export function ImportPage() {
     }
   }
 
+  async function deleteCampagne() {
+    if (!selectedCampagne) return;
+    const label = `${selectedCampagne.type ?? "?"} ${selectedCampagne.anneeScolaire}`;
+    const confirmed = window.confirm(
+      `Supprimer définitivement la campagne "${label}" ?\n\n` +
+        `Toutes les données liées à cette campagne seront supprimées : les ${selectedCampagne._count.teacherSnapshots} enseignant(s) importé(s), ` +
+        `les ${selectedCampagne._count.imports} fichier(s) rectorat importé(s), les promotions calculées, les reliquats, les contingents et ` +
+        `l'historique d'envois de mailing de cette campagne.\n\n` +
+        `Cette action est irréversible.`,
+    );
+    if (!confirmed) return;
+    setDeletingCampagne(true);
+    setDeleteCampagneError(null);
+    try {
+      await api.deleteCampagne(selectedCampagne.id);
+      // Not refreshCampagnes(): its own "pick a default" fallback only fires when campagneId is
+      // already falsy, which it isn't yet here (still the just-deleted id, from this render's
+      // closure) — so the just-deleted campagne could remain selected until some LATER unrelated
+      // state change reruns that check. Recomputing the filtered list directly here always lands
+      // on a valid next selection (or none) immediately.
+      const all = await api.campagnes();
+      const remaining = all.filter((x) => x.type !== "HC" && x.type !== "EXC");
+      setCampagnes(remaining);
+      setCampagneId(remaining.length > 0 ? remaining[0].id : null);
+    } catch (e) {
+      setDeleteCampagneError(String(e));
+    } finally {
+      setDeletingCampagne(false);
+    }
+  }
+
   async function submitRectorat(e: React.FormEvent) {
     e.preventDefault();
     if (!campagneId || rectoratFiles.length === 0) return;
@@ -269,7 +302,13 @@ export function ImportPage() {
               {showEditDates ? "Annuler" : "Modifier les dates"}
             </button>
           )}
+          {selectedCampagne && (
+            <button type="button" className="secondary" onClick={deleteCampagne} disabled={deletingCampagne}>
+              {deletingCampagne ? "Suppression..." : "Supprimer la campagne"}
+            </button>
+          )}
         </div>
+        {deleteCampagneError && <p className="error-text">{deleteCampagneError}</p>}
 
         {showEditDates && selectedCampagne && (
           <form className="inline-form" onSubmit={saveDates}>

@@ -89,6 +89,55 @@ campagnesRouter.patch("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, 
 });
 
 /**
+ * Permanently deletes a campagne and every piece of data tied to it: imports, teacher/HC-EXC
+ * snapshots, computed promotion states, contingents, reliquats, mailing logs. A Teacher this
+ * campagne's own data touched is deleted too, but ONLY if this campagne was its sole remaining data
+ * — a teacher who also appears in another, still-existing campagne (and their adherent match,
+ * manual ancienneté corrections, civilité override...) must survive untouched. Irreversible: no
+ * confirmation at this layer, the caller (ImportPage.tsx) is expected to have already warned the
+ * admin before calling this.
+ */
+campagnesRouter.delete("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const campagneId = req.params.id;
+  const existing = await prisma.campagne.findUnique({ where: { id: campagneId } });
+  if (!existing) return res.status(404).json({ error: "Campagne introuvable" });
+
+  await prisma.$transaction(async (tx) => {
+    const touchedTeacherIds = new Set<string>();
+    for (const s of await tx.teacherSnapshot.findMany({ where: { campagneId }, select: { teacherId: true } })) touchedTeacherIds.add(s.teacherId);
+    for (const s of await tx.hcExcSnapshot.findMany({ where: { campagneId }, select: { teacherId: true } })) touchedTeacherIds.add(s.teacherId);
+
+    await tx.mailingLog.deleteMany({ where: { campagneId } });
+    await tx.reliquatPromotion.deleteMany({ where: { campagneId } });
+    // No @relation on ComputedPromotionState.campagneId (see schema.prisma) — still campagne-scoped
+    // data, deleted explicitly rather than left as orphaned rows pointing at a gone campagneId.
+    await tx.computedPromotionState.deleteMany({ where: { campagneId } });
+    await tx.contingent.deleteMany({ where: { campagneId } });
+    await tx.teacherSnapshot.deleteMany({ where: { campagneId } });
+    await tx.hcExcSnapshot.deleteMany({ where: { campagneId } });
+    await tx.rectoratImport.deleteMany({ where: { campagneId } });
+
+    if (touchedTeacherIds.size > 0) {
+      const teacherIds = [...touchedTeacherIds];
+      const [remainingSnapshots, remainingHcExc] = await Promise.all([
+        tx.teacherSnapshot.findMany({ where: { teacherId: { in: teacherIds } }, select: { teacherId: true } }),
+        tx.hcExcSnapshot.findMany({ where: { teacherId: { in: teacherIds } }, select: { teacherId: true } }),
+      ]);
+      const stillReferencedIds = new Set([...remainingSnapshots, ...remainingHcExc].map((s) => s.teacherId));
+      const orphanTeacherIds = teacherIds.filter((id) => !stillReferencedIds.has(id));
+      if (orphanTeacherIds.length > 0) {
+        await tx.matchCandidate.deleteMany({ where: { teacherId: { in: orphanTeacherIds } } });
+        await tx.teacher.deleteMany({ where: { id: { in: orphanTeacherIds } } });
+      }
+    }
+
+    await tx.campagne.delete({ where: { id: campagneId } });
+  });
+
+  res.status(204).end();
+});
+
+/**
  * The rectorat's promotion quota for each (grade[, vivier]) of a Hors Classe/Classe Exceptionnelle
  * campagne — see Contingent's own doc comment in schema.prisma for contingentAnnonce vs
  * contingentPropose. No per-row CRUD: an admin edits the whole campagne's contingents at once
