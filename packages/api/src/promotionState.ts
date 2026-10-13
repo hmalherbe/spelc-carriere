@@ -1,5 +1,5 @@
 import { prisma } from "./db.js";
-import { computeEchelonPromotion, parseAncienneteText, GRADE_MAPPINGS, type GrilleCode, type EchelonRow } from "@spelc/domain";
+import { computeEchelonPromotion, parseAncienneteText, addCalendarYMD, GRADE_MAPPINGS, type GrilleCode, type EchelonRow } from "@spelc/domain";
 import { deriveAncienneteAReporter } from "./ancienneteReportee.js";
 import { computeBaStatus } from "./baStatus.js";
 
@@ -56,27 +56,38 @@ export interface RecomputePromotionStateInput {
  * every case, this simply defers to the rectorat's own stated date whenever it has one — the other
  * computed fields (échelon suivant, indices, gain) are unaffected and stay exactly as computed.
  *
- * BA (bonification d'ancienneté) is the one exception to "always prefer the rectorat's date": a BA
- * candidate not (yet) granted it — computeBaStatus's "non_promu"/"hors_fenetre" — only has a
- * dateProchainePromotionRectorat because the rectorat prints the HYPOTHETICAL accelerated date right
- * next to its raw, unconfirmed "BA.<date>" marker. That date is not this teacher's real next
- * promotion: without the bonification, they stay on the grille's normal (non-accelerated) PPCR
- * schedule — computeEchelonPromotion's own projection, which is what's used here instead. Real case
- * that forced this: a CCMI non-promu BA candidate shown "promouvable" (eligible) at 05/02/2026 whose
- * letter nonetheless said their actual next promotion was also 05/02/2026, identical to the
- * eligibility date, when it should fall exactly 1 year later (05/02/2027) — the whole point of the
- * "bonification d'ancienneté d'un an" is that it's a full year ahead of the normal schedule, so
- * without it the normal schedule applies. A granted BA (proConfirmee or reliquatPromu — baStatus
- * "promu") keeps using the rectorat's own date as before: that one IS real, the accelerated date
- * having actually been decided.
+ * BA (bonification d'ancienneté) is the one case needing its own derivation, but STILL from the
+ * rectorat's own stated date alone — never computeEchelonPromotion's grille-based recompute, which
+ * the union has explicitly reiterated (2026-10-13) must never be the source for any teacher's
+ * dateProchainePromotion, in any case. A BA candidate not (yet) granted it — computeBaStatus's
+ * "non_promu"/"hors_fenetre" — has a dateProchainePromotionRectorat that is the HYPOTHETICAL
+ * accelerated date printed next to the rectorat's raw, unconfirmed "BA.<date>" marker, not this
+ * teacher's real next promotion: without the bonification, that falls exactly 1 calendar year later
+ * (the whole point of a bonification "d'un an") — added directly onto the rectorat's own date, never
+ * computeEchelonPromotion's own projection. Real case that first forced the "don't just reuse the
+ * rectorat's raw BA date outright" half of this rule: a CCMI non-promu candidate shown eligible at
+ * 05/02/2026 whose letter nonetheless announced that exact same date as their real next promotion
+ * instead of 05/02/2027. Real case that then forced the "+1 year on the rectorat's date, NOT the
+ * grille recompute" half: Jan-César NATAF (CERTIFIE, échelon 6, dateAccesEchelon 2017-09-01, "RE.
+ * 01a04m16j" report d'ancienneté, rectorat's own "BA.15/04/2025") — computeEchelonPromotion's
+ * recompute from his old access date + that report credit lands on 15/04/2019, nonsensically in the
+ * past by the time the letter is sent; confirmed by the union that his real next promotion (BA not
+ * granted) is 15/04/2026 — exactly the rectorat's own BA date plus 1 year, confirming the grille
+ * recompute must never enter into it. A granted BA (proConfirmee or reliquatPromu — baStatus "promu")
+ * keeps using the rectorat's own date as-is: that one IS real, the accelerated date having actually
+ * been decided.
  */
 export function resolveDateProchainePromotion(
   baStatus: ReturnType<typeof computeBaStatus>["baStatus"],
   dateProchainePromotionRectorat: Date | null,
   computedDate: Date | null,
 ): Date | null {
-  const baNotGranted = baStatus === "non_promu" || baStatus === "hors_fenetre";
-  return !baNotGranted && dateProchainePromotionRectorat ? dateProchainePromotionRectorat : computedDate;
+  if (baStatus === "non_promu" || baStatus === "hors_fenetre") {
+    if (!dateProchainePromotionRectorat) return null;
+    const isoDate = dateProchainePromotionRectorat.toISOString().slice(0, 10);
+    return new Date(addCalendarYMD(isoDate, { annees: 1, mois: 0, jours: 0 }));
+  }
+  return dateProchainePromotionRectorat ?? computedDate;
 }
 
 export async function recomputeAndStorePromotionState(
