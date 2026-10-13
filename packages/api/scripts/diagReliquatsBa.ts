@@ -1,12 +1,13 @@
 /**
  * Diagnostic ponctuel : pour une campagne donnée, explique pourquoi la page Reliquats peut
  * n'afficher aucun candidat — cette page ne montre que les TeacherSnapshot dont computeBaStatus()
- * (baStatus.ts) renvoie EXACTEMENT "non_promu" (jamais "hors_fenetre"/"promu"/null), calculé EN
- * DIRECT à partir des champs bruts (echelonActuel, proTypePromotion, proConfirmee, ancienneteEchelon)
- * — pas depuis la colonne ComputedPromotionState.baStatus stockée. Affiche la distribution de ces
- * champs bruts et le baStatus qui en résulte pour chaque enregistrement candidat BA (proTypePromotion
- * ou typePromotion = "BA"), pour voir exactement où ça coince (échelon encore mal dérivé, marqueur
- * absent, etc.) sans deviner.
+ * (baStatus.ts) renvoie EXACTEMENT "non_promu" (jamais "promu"/null), calculé EN DIRECT à partir des
+ * champs bruts (echelonActuel, proTypePromotion, proConfirmee) — pas depuis la colonne
+ * ComputedPromotionState.baStatus stockée, et depuis le marqueur du rectorat seul : l'ancienneté
+ * dans l'échelon n'entre plus du tout dans ce calcul (voir baStatus.ts's own doc comment,
+ * 2026-10-13). Affiche la distribution de ces champs bruts et le baStatus qui en résulte pour chaque
+ * enregistrement candidat BA (proTypePromotion ou typePromotion = "BA"), pour voir exactement où ça
+ * coince (échelon encore mal dérivé, marqueur absent, etc.) sans deviner.
  *
  * Usage (depuis packages/api, sur le serveur où tourne l'appli) :
  *   npx tsx scripts/diagReliquatsBa.ts <campagneId>
@@ -82,10 +83,9 @@ async function diag(campagneId: string) {
 
   console.log("Répartition de baStatus (calculé en direct, reliquatPromu=false) parmi ces candidats BA :");
   for (const [k, n] of baStatusCounts) console.log(`  ${k}: ${n}`);
-  console.log(
-    '\n  (seuls les "non_promu" apparaissent dans le pool Reliquats — "hors_fenetre"/"promu"/"null" en sont',
-  );
-  console.log("  exclus par construction, voir reliquats.ts.)\n");
+  console.log('\n  (seuls les "non_promu" apparaissent dans le pool Reliquats — "promu"/"null" en sont exclus');
+  console.log("  par construction, voir reliquats.ts. L'ancienneté dans l'échelon n'entre plus dans ce calcul : un");
+  console.log('  marqueur "BA." non confirmé est toujours "non_promu", quelle que soit ancienneteEchelon.)\n');
 
   console.log("Détail ligne par ligne :");
   for (const r of rows) console.log(r);

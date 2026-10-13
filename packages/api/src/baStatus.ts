@@ -15,12 +15,14 @@ export interface BaStatusInput {
 
 export interface BaStatusResult {
   baEchelonDepart: 6 | 8 | null;
+  /** Purely informational (see isEligibleBonificationAnciennete's own doc comment) — never gates
+   * baStatus below. Exposed only for display (DashboardPage/MailingPage don't currently use it, but
+   * routes/teachers.ts still surfaces it). */
   baEligible: boolean | null;
-  /** Carries the rectorat's own "BA" marker (proTypePromotion) on an arrival page — as opposed to
-   * baEligible, which is window-only per the union's rule. Exposed for callers that still need to
-   * gate other BA-specific logic (e.g. the échelon-display correction in routes/teachers.ts). */
+  /** Carries the rectorat's own "BA" marker (proTypePromotion). Exposed for callers that still need
+   * to gate other BA-specific logic (e.g. the échelon-display correction in routes/teachers.ts). */
   isBaCandidate: boolean;
-  baStatus: "hors_fenetre" | "promu" | "non_promu" | null;
+  baStatus: "promu" | "non_promu" | null;
   /** Did this record actually ARRIVE at a new échelon this cycle? Always false for a BA candidate
    * (confirmed or not) — see the long comment in routes/teachers.ts this was extracted from. */
   arrivedThisEchelon: boolean;
@@ -46,16 +48,25 @@ export function computeBaStatus(snap: BaStatusInput): BaStatusResult {
 
   const isBaCandidate = baEchelonDepart !== null && snap.proTypePromotion === "BA";
 
-  // proConfirmee ("Pro BA." on the record) is checked BEFORE baEligible — per this module's own
-  // "Pro BA. is final, not an estimate to second-guess" rule, never overridden by our own window
-  // estimate. baEligible only decides between "hors_fenetre"/"non_promu" for a candidate
-  // NOT (yet) confirmed. Real cases from the CCMA campaign of 25 mars 2026 (BRUNO, NIZET, MELVIN,
-  // OLIVIERI, PARRA, BOTTON, EYMARD, BEZAC — all CERTIFIE, échelon 6, "Pro BA." confirmed) all carry
-  // an ancienneté of 2.0 to 2.85 years at the point their promotion is confirmed — outside the [1, 2)
-  // window isEligibleBonificationAnciennete checks for échelon 6 — proof the window is only a rough
-  // candidacy estimate, not something a genuine rectorat confirmation should ever be discarded for:
-  // gating "promu" behind baEligible made every one of these real, already-decided promotions show
-  // as "hors_fenetre" instead.
+  // baStatus comes ENTIRELY from the rectorat's own markers now — never from baEligible (the
+  // computed ancienneté window above). Per the union's explicit rule (confirmed 2026-10-13): a
+  // candidate's real-world status is "BA.<date>" (unconfirmed) vs "Pro BA.<date>" (confirmed) as
+  // printed in the rectorat file, full stop — not an estimate we second-guess it against. This
+  // used to gate "non_promu" behind baEligible (a separate "hors_fenetre" status for a candidate
+  // whose ancienneté fell outside isEligibleBonificationAnciennete's window), on the assumption that
+  // such cases were stale/spurious "BA" markers rather than real candidates — confirmed WRONG by the
+  // union on the campagne CCMA 2024-2025 (06/83) : 72 of its 97 échelon-6/8 BA candidates landed
+  // "hors_fenetre" this way and vanished from the Reliquats/Enseignants pages entirely, even though
+  // the rectorat file's own "BA.<date>" marker plainly listed every one of them as a real candidate.
+  // "hors_fenetre" is gone — every unconfirmed BA-marked candidate is "non_promu" now, regardless of
+  // ancienneteEchelon. (The same loosening already applied to "promu" via the BRUNO/NIZET/MELVIN/...
+  // real cases below, which already proved baEligible was only ever a rough estimate.)
+  //
+  // proConfirmee ("Pro BA." on the record) still wins outright over everything else — a rectorat
+  // confirmation is final, never second-guessed. Real cases from the CCMA campaign of 25 mars 2026
+  // (BRUNO, NIZET, MELVIN, OLIVIERI, PARRA, BOTTON, EYMARD, BEZAC — all CERTIFIE, échelon 6, "Pro
+  // BA." confirmed) all carry an ancienneté of 2.0 to 2.85 years — outside the [1, 2) window
+  // isEligibleBonificationAnciennete checks for échelon 6.
   //
   // Agrégés used to be forced to "national" here (BA décidée au ministère, jamais tranchable par ce
   // fichier départemental) — confirmed obsolete by the union (2026-10-09): la BA des agrégés se
@@ -67,13 +78,7 @@ export function computeBaStatus(snap: BaStatusInput): BaStatusResult {
   // champ lui-même). Real case: Yann ADAM, AGREGE, échelon 6, pas de "Pro BA." dans le fichier
   // rectorat du 25 mars 2026, promu quand même par reliquat.
   const isConfirmedOrReliquat = snap.proConfirmee || snap.reliquatPromu === true;
-  const baStatus: BaStatusResult["baStatus"] = !isBaCandidate
-    ? null
-    : isConfirmedOrReliquat
-      ? "promu"
-      : baEligible !== true
-        ? "hors_fenetre"
-        : "non_promu";
+  const baStatus: BaStatusResult["baStatus"] = !isBaCandidate ? null : isConfirmedOrReliquat ? "promu" : "non_promu";
 
   const arrivedThisEchelon = isBaCandidate ? false : snap.proConfirmee;
 

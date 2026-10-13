@@ -7,7 +7,6 @@ const COMPUTED_DATE = new Date("2027-02-05"); // computeEchelonPromotion's norma
 describe("resolveDateProchainePromotion", () => {
   it("adds exactly 1 calendar year onto the rectorat's own date for a BA candidate NOT granted the bonification — real case, Audrey SALICETI (CCMI, promouvable 05/02/2026, non-promu, real next promotion 05/02/2027)", () => {
     expect(resolveDateProchainePromotion("non_promu", RECTORAT_DATE, COMPUTED_DATE)).toEqual(new Date("2027-02-05"));
-    expect(resolveDateProchainePromotion("hors_fenetre", RECTORAT_DATE, COMPUTED_DATE)).toEqual(new Date("2027-02-05"));
   });
 
   it("never falls back to the computeEchelonPromotion recompute for a BA candidate not granted — real case, Jan-César NATAF (CERTIFIE, échelon 6, dateAccesEchelon 2017-09-01, report d'ancienneté 1a04m16j, rectorat's own 'BA.15/04/2025'): the grille recompute lands on 15/04/2019 (nonsensically in the past), while the union confirmed the real next promotion is 15/04/2026 — the rectorat's date plus 1 year, not the recompute", () => {
@@ -31,6 +30,5 @@ describe("resolveDateProchainePromotion", () => {
 
   it("returns null for a BA candidate not granted when the rectorat gave no date at all — never substitutes the grille recompute, per the union's explicit rule", () => {
     expect(resolveDateProchainePromotion("non_promu", null, COMPUTED_DATE)).toBeNull();
-    expect(resolveDateProchainePromotion("hors_fenetre", null, COMPUTED_DATE)).toBeNull();
   });
 });

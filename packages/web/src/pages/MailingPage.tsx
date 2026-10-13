@@ -36,7 +36,6 @@ function baCell(r: MailingRecipient): { label: string; className: string } {
   if (r.baStatus === null) return { label: "—", className: "" };
   const atDepart = r.baEchelonDepart != null && Number(r.echelonDepart) === r.baEchelonDepart;
   const dep = atDepart ? ` (départ éch. ${r.baEchelonDepart})` : "";
-  if (r.baStatus === "hors_fenetre") return { label: `BA hors fenêtre d'éligibilité${dep}`, className: "badge badge-indetermine" };
   if (r.baStatus === "promu") return { label: `Promu BA${dep}`, className: "badge badge-promu_estime" };
   return { label: `Éligible à la BA - non promu${dep}`, className: "badge badge-non_promu_estime" };
 }

@@ -17,19 +17,17 @@ export type EchelonBA = 6 | 8;
  */
 
 /**
- * BA (bonification d'ancienneté) eligibility window — being in this window doesn't by itself mean
- * the promotion was granted (see baStatus.ts's baStatus, which also requires the rectorat's own
- * "BA."/"Pro BA." marker), but being OUTSIDE it means "not even a candidate this campaign".
+ * BA (bonification d'ancienneté) eligibility window — PURELY INFORMATIONAL (baEligible in
+ * baStatus.ts). Does NOT gate baStatus any more: per the union's explicit rule (confirmed
+ * 2026-10-13), a candidate's real status — "non_promu" vs "promu" — comes entirely from the
+ * rectorat's own marker ("BA.<date>" vs "Pro BA.<date>"), never from this window. An earlier version
+ * used being outside this window to downgrade an unconfirmed BA candidate to a separate
+ * "hors_fenetre" status, on the assumption that fell-outside-the-window meant a stray/stale "BA"
+ * marker rather than a real candidate — confirmed WRONG on the campagne CCMA 2024-2025, where 72 of
+ * 97 échelon-6/8 BA candidates landed outside this window despite being real, undecided candidates
+ * per the rectorat's own file.
  *   - échelon 6 -> 7 : "être dans la 2e année de cet échelon" -> ancienneté in [1, 2) years.
  *   - échelon 8 -> 9 : "entre 18 et 30 mois" -> ancienneté in [1.5, 2.5] years.
- *
- * Used to read BA ÉLIGIBILITÉ off an imported rectorat snapshot (see teachers.ts): the rectorat's
- * "ECHELON : NN" export groups every record by the échelon it would ARRIVE at if promoted this
- * cycle (07/09 for a départ-6/8 BA case — see routes/teachers.ts), and `ancienneteEchelon`, taken
- * at face value on that page, lines up correctly with this window — verified against real BA
- * winners (1.44 years, squarely in [1, 2)) and against real false positives this window correctly
- * excludes (3.00 years — someone who simply completed the full non-accelerated échelon duration,
- * not a BA candidate, despite their file still carrying a stray "BA" marker).
  *
  * Éligibilité (this function) is deliberately separate from PROMOTION: per the union's own rule,
  * éligibilité is échelon+ancienneté alone, while promotion is decided definitively by the rectorat

@@ -60,7 +60,7 @@ export interface RecomputePromotionStateInput {
  * rectorat's own stated date alone — never computeEchelonPromotion's grille-based recompute, which
  * the union has explicitly reiterated (2026-10-13) must never be the source for any teacher's
  * dateProchainePromotion, in any case. A BA candidate not (yet) granted it — computeBaStatus's
- * "non_promu"/"hors_fenetre" — has a dateProchainePromotionRectorat that is the HYPOTHETICAL
+ * "non_promu" — has a dateProchainePromotionRectorat that is the HYPOTHETICAL
  * accelerated date printed next to the rectorat's raw, unconfirmed "BA.<date>" marker, not this
  * teacher's real next promotion: without the bonification, that falls exactly 1 calendar year later
  * (the whole point of a bonification "d'un an") — added directly onto the rectorat's own date, never
@@ -82,7 +82,7 @@ export function resolveDateProchainePromotion(
   dateProchainePromotionRectorat: Date | null,
   computedDate: Date | null,
 ): Date | null {
-  if (baStatus === "non_promu" || baStatus === "hors_fenetre") {
+  if (baStatus === "non_promu") {
     if (!dateProchainePromotionRectorat) return null;
     const isoDate = dateProchainePromotionRectorat.toISOString().slice(0, 10);
     return new Date(addCalendarYMD(isoDate, { annees: 1, mois: 0, jours: 0 }));

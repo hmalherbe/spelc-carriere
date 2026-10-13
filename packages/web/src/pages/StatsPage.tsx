@@ -119,9 +119,6 @@ export function StatsPage() {
                 <div className="stat-label">% BA promus / promouvables</div>
               </div>
             </div>
-            {stats.ba.horsFenetre > 0 && (
-              <p className="hint">Hors calcul ci-dessus : {stats.ba.horsFenetre} anomalie(s) hors fenêtre d'éligibilité.</p>
-            )}
 
             <h3>Répartition hommes / femmes parmi les BA (promouvables)</h3>
             <GenreTable genre={stats.ba.genre} />

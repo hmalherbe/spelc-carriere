@@ -143,15 +143,16 @@ export interface TeacherListItem {
    * ci-dessus quand le candidat n'est pas encore confirmé, fournie ici explicitement pour la
    * colonne BA. null = non applicable. */
   baEchelonDepart: 6 | 8 | null;
-  /** "hors_fenetre" = candidat BA (marqueur "BA." présent) mais ancienneté hors de la fenêtre
-   * officielle — anomalie à vérifier. "promu" / "non_promu" = candidat BA, dans la fenêtre, statut
-   * donné directement par le marqueur "Pro" du rectorat ("Pro BA." = promu, "BA." seul = éligible
-   * mais pas promu) — y compris pour les agrégés, dont la BA se décide directement au niveau
-   * académique (pas de remontée nationale). null = pas candidat BA ce cycle (pas de marqueur
-   * "BA."), quel que soit baEligible — un enseignant suivi sur un autre mécanisme (AN/CL/RE) ce
-   * tour-ci, ou hors-classe/classe-exceptionnelle, n'a simplement rien à voir avec la BA. */
-  baStatus: "hors_fenetre" | "promu" | "non_promu" | null;
-  /** null = not applicable (mauvais échelon, ou données d'ancienneté manquantes) — pas "non éligible". */
+  /** "promu" / "non_promu" = candidat BA, statut donné directement par le marqueur du rectorat
+   * ("Pro BA." = promu, "BA." seul = éligible mais pas promu) — y compris pour les agrégés, dont la
+   * BA se décide directement au niveau académique (pas de remontée nationale), et quelle que soit
+   * l'ancienneté dans l'échelon (baEligible ci-dessous ne détermine plus ce statut, voir baStatus.ts
+   * côté API). null = pas candidat BA ce cycle (pas de marqueur "BA.") — un enseignant suivi sur un
+   * autre mécanisme (AN/CL/RE) ce tour-ci, ou hors-classe/classe-exceptionnelle, n'a simplement rien
+   * à voir avec la BA. */
+  baStatus: "promu" | "non_promu" | null;
+  /** Purement informatif (voir baStatus ci-dessus) — null = not applicable (mauvais échelon, ou
+   * données d'ancienneté manquantes) — pas "non éligible". */
   baEligible: boolean | null;
   horsClasseEligible: boolean | null;
   classeExceptionnelleEligible: boolean | null;
@@ -335,7 +336,7 @@ export interface MailingRecipient {
   lastSentAt: string | null;
   lastError: string | null;
   /** Même règle que la colonne "Éligibilité BA" de DashboardPage — voir baCell() dans MailingPage.tsx. */
-  baStatus: "hors_fenetre" | "promu" | "non_promu" | null;
+  baStatus: "promu" | "non_promu" | null;
   baEchelonDepart: 6 | 8 | null;
 }
 
@@ -463,11 +464,9 @@ export interface CampagneStats {
   ba: {
     promus: number;
     nonPromus: number;
-    /** promus + nonPromus — les anomalies ("hors_fenetre") en sont exclues, faute d'un vrai appel
-     * promu/non-promu pour elles. */
+    /** promus + nonPromus. */
     promouvables: number;
     pctPromus: number;
-    horsFenetre: number;
     genre: GenreBreakdown;
   };
   tousLesPromus: {

@@ -1,9 +1,15 @@
 /**
  * Diagnostic ponctuel : liste, pour une campagne donnée, tous les candidats à la bonification
- * d'ancienneté (BA) NON retenus cette année (baStatus "non_promu" ou "hors_fenetre") avec la date
- * du rectorat, la date stockée (dateProchainePromotion) et si elle correspond bien à "date du
- * rectorat + 1 an" — la règle confirmée par l'union (voir promotionState.ts's own doc comment,
- * cas réel Jan-César NATAF). Signale toute incohérence au lieu de la supposer corrigée partout.
+ * d'ancienneté (BA) NON retenus cette année (baStatus "non_promu") avec la date du rectorat, la
+ * date stockée (dateProchainePromotion) et si elle correspond bien à "date du rectorat + 1 an" — la
+ * règle confirmée par l'union (voir promotionState.ts's own doc comment, cas réel Jan-César NATAF).
+ * Signale toute incohérence au lieu de la supposer corrigée partout.
+ *
+ * Inclut encore l'ancien statut "hors_fenetre" dans la recherche (voir baStatus.ts's own doc
+ * comment, 2026-10-13 : ce statut a été supprimé, fusionné dans "non_promu") — la colonne stockée
+ * ComputedPromotionState.baStatus ne perd cette ancienne valeur qu'après un recompute (voir
+ * recomputeAllPromotionStates.ts) ; tant que ce n'est pas fait sur une campagne donnée, ce script
+ * la retrouve quand même ici.
  *
  * Usage (depuis packages/api, sur le serveur où tourne l'appli) :
  *   npx tsx scripts/checkBaNonPromuDates.ts <campagneId>

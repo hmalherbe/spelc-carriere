@@ -170,11 +170,10 @@ teachersRouter.get("/", async (req, res) => {
       // as `echelonActuel` above once corrected for an unconfirmed candidate, surfaced explicitly
       // here for the "Éligibilité BA" column.
       baEchelonDepart: baEchelonDepart ?? null,
-      // "hors_fenetre" = BA candidate, but ancienneté outside the official window (anomaly) ;
-      // "promu" / "non_promu" = BA candidate, in-window, per the rectorat's own "Pro" marker
-      // (including agrégés — their BA is decided directly at académie level, no national ministry
-      // step) ; null = not a BA candidate this cycle (no "BA" marker) — shown regardless of
-      // baEligible below, which is irrelevant noise for a non-candidate.
+      // "promu" / "non_promu" = BA candidate, per the rectorat's own "Pro" marker alone (including
+      // agrégés — their BA is decided directly at académie level, no national ministry step) ; null
+      // = not a BA candidate this cycle (no "BA" marker). baEligible below never gates this — see
+      // baStatus.ts's own doc comment for why.
       baStatus,
       baEligible,
       horsClasseEligible,

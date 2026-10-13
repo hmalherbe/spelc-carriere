@@ -56,9 +56,6 @@ function baCell(t: TeacherListItem): { label: string; className: string } {
   // qui ne correspondrait plus à ce que montre la colonne Échelon.
   const atDepart = t.baEchelonDepart != null && Number(t.echelonActuel) === t.baEchelonDepart;
   const dep = atDepart ? ` (départ éch. ${t.baEchelonDepart})` : "";
-  // Candidat BA (marqueur présent) mais hors de la fenêtre d'ancienneté officielle — anomalie à
-  // vérifier (cas réel observé : un marqueur "BA." sur ce qui était en fait un cycle AN classique).
-  if (t.baStatus === "hors_fenetre") return { label: `BA hors fenêtre d'éligibilité${dep}`, className: "badge badge-indetermine" };
   // Le marqueur "Pro" du rectorat tranche directement, sans estimation — y compris pour les
   // agrégés, dont la BA se décide désormais directement au niveau académique (pas de remontée
   // nationale au ministère, confirmé par le syndicat le 2026-10-09).

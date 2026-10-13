@@ -1,12 +1,17 @@
 /**
- * One-off: re-runs recomputeAndStorePromotionState for every existing TeacherSnapshot, after a fix
- * to promotionState.ts's dateProchainePromotion logic (see that file's own doc comment) — a BA
- * candidate NOT granted the bonification (baStatus "non_promu"/"hors_fenetre") was wrongly shown
- * the rectorat's hypothetical ACCELERATED date instead of their real next promotion (exactly 1 year
- * later, on the grille's normal schedule). The fix only takes effect on recompute — this applies it
- * to every campagne already imported, not just future ones. Harmless to re-run: every other computed
- * field is recomputed identically, only dateProchainePromotion for a BA non-promu/hors-fenêtre record
- * actually changes.
+ * One-off: re-runs recomputeAndStorePromotionState for every existing TeacherSnapshot — needed
+ * after either of two fixes to this project's BA logic, to apply them to every campagne already
+ * imported rather than just future ones:
+ *   - promotionState.ts's dateProchainePromotion logic (see that file's own doc comment) — a BA
+ *     candidate NOT granted the bonification (baStatus "non_promu") was wrongly shown the
+ *     rectorat's hypothetical ACCELERATED date instead of their real next promotion (exactly 1 year
+ *     later, on the grille's normal schedule).
+ *   - baStatus.ts's "hors_fenetre" removal (2026-10-13) — a candidate whose ancienneté fell outside
+ *     isEligibleBonificationAnciennete's window used to get that separate, downgraded status
+ *     instead of "non_promu", silently excluding them from the Reliquats/Enseignants pages. Running
+ *     this re-labels every stored ComputedPromotionState.baStatus still at "hors_fenetre" to
+ *     "non_promu" (and recomputes its dateProchainePromotion the same way as any other non_promu).
+ * Harmless to re-run: every other computed field is recomputed identically.
  *
  * Usage (depuis packages/api, sur le serveur où tourne l'appli) :
  *   npx tsx scripts/recomputeAllPromotionStates.ts

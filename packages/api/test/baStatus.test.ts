@@ -107,15 +107,22 @@ describe("computeBaStatus", () => {
     expect(result.baStatus).toBe("promu");
   });
 
-  it("computes baStatus 'hors_fenetre' for a BA marker outside the ancienneté window, when NOT confirmed", () => {
+  // Real case: campagne CCMA 2024-2025 (06/83) — 72 of its 97 échelon-6/8 BA candidates have an
+  // ancienneté outside isEligibleBonificationAnciennete's window at this point, yet are genuine,
+  // undecided "BA.<date>" (no "Pro" prefix) candidates per the rectorat's own file. An earlier rule
+  // downgraded these to a separate "hors_fenetre" status, silently excluding them from the
+  // Reliquats/Enseignants pages entirely — confirmed wrong by the union (2026-10-13): baStatus must
+  // come from the rectorat's own marker alone, never from this computed window.
+  it("computes baStatus 'non_promu' for a BA marker even when ancienneté falls outside the window, as long as it's NOT confirmed", () => {
     const result = computeBaStatus({
       echelonActuel: "06",
       grade: "CERTIFIE",
       proTypePromotion: "BA",
       proConfirmee: false,
-      ancienneteEchelon: 3.0, // completed the full non-accelerated duration, not an actual BA candidate
+      ancienneteEchelon: 3.0, // outside [1, 2) — no longer downgrades the status at all
     });
-    expect(result.baStatus).toBe("hors_fenetre");
+    expect(result.baStatus).toBe("non_promu");
+    expect(result.baEligible).toBe(false); // the window estimate itself stays honest, just uninvolved in baStatus
   });
 
   it("computes baStatus 'promu' for a CONFIRMED BA even when ancienneté falls outside the window — real cases, CCMA du 25 mars 2026 (BRUNO, NIZET, MELVIN, OLIVIERI, PARRA, BOTTON, EYMARD, BEZAC : échelon 6, CERTIFIE, 'Pro BA.' confirmed, ancienneté 2.0-2.85 ans)", () => {

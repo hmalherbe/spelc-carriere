@@ -61,7 +61,6 @@ statsRouter.get("/", async (req, res) => {
   const seenTeacherIds = new Set<string>();
   let baPromus = 0;
   let baNonPromus = 0;
-  let baHorsFenetre = 0;
   const baGenre = emptyGenreCounts(); // among BA promouvables (promus + non promus) only
   let totalPromus = 0;
   const totalPromusGenre = emptyGenreCounts();
@@ -79,18 +78,15 @@ statsRouter.get("/", async (req, res) => {
     const prenom = isAdherent ? candidate!.adherent.prenom : snap.prenom;
     const sexe = resolveSexe(declaredCivilite, prenom);
 
-    // "BA" here means the promouvables population per product decision: a promu/non_promu call is
-    // only ever made for these two statuses — "hors_fenetre" (anomaly) is surfaced as a separate
-    // count for context, not folded into either the promouvables total or the genre breakdown,
-    // since it isn't a real promu/non-promu call.
+    // "BA" here means the promouvables population per product decision: every BA-marked candidate
+    // not yet confirmed counts as non_promu, straight from the rectorat's own "BA.<date>" marker —
+    // see baStatus.ts's own doc comment (no "hors_fenetre" carve-out any more).
     if (baStatus === "promu" || baStatus === "non_promu") {
       if (baStatus === "promu") baPromus++;
       else baNonPromus++;
       if (sexe === "M") baGenre.hommes++;
       else if (sexe === "F") baGenre.femmes++;
       else baGenre.indetermine++;
-    } else if (baStatus === "hors_fenetre") {
-      baHorsFenetre++;
     }
 
     // "tous les promus" is campaign-wide and independent of BA: every teacher who actually arrived
@@ -112,7 +108,6 @@ statsRouter.get("/", async (req, res) => {
       nonPromus: baNonPromus,
       promouvables: baPromouvables,
       pctPromus: baPromouvables > 0 ? Math.round((baPromus / baPromouvables) * 1000) / 10 : 0,
-      horsFenetre: baHorsFenetre,
       genre: withPct(baGenre, baPromouvables),
     },
     tousLesPromus: {

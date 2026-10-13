@@ -56,15 +56,13 @@ Tables disponibles :
   - "grilleCode" text, "echelonDepart" text, "echelonSuivant" text, "indiceActuel" int, "futurIndice" int
   - "gainSalaireBrut" int, "gainSalaireNet" int, "dateProchainePromotion" timestamp
   - "baStatus" text : statut de bonification d'ancienneté (BA) de cet enseignant pour cette campagne,
-    NULL si l'enseignant n'est pas candidat BA ce cycle (immense majorité des lignes). Sinon :
-      'promu' = BA accordée et confirmée par le rectorat (compte comme "promouvable à la BA" ET
-        "promu à la BA")
-      'non_promu' = candidat BA, dans la fenêtre d'ancienneté habituelle, mais pas encore confirmé
-        (compte comme "promouvable à la BA", pas comme "promu")
-      'hors_fenetre' = candidat BA mais ancienneté hors fenêtre habituelle, non confirmé (anomalie ;
-        compte quand même comme "promouvable à la BA")
-      'national' = agrégé candidat BA : la décision est nationale, jamais tranchée par ce fichier
-        départemental (compte comme "promouvable à la BA", ni promu ni non-promu déterminable)
+    NULL si l'enseignant n'est pas candidat BA ce cycle (immense majorité des lignes). Sinon, tranché
+    uniquement par le marqueur du rectorat lui-même (jamais par un calcul d'ancienneté) :
+      'promu' = BA accordée et confirmée par le rectorat ("Pro BA.<date>", ou promotion par reliquat)
+        (compte comme "promouvable à la BA" ET "promu à la BA") — y compris pour les agrégés, dont la
+        BA se décide directement au niveau académique, sans remontée nationale.
+      'non_promu' = candidat BA ("BA.<date>" sans "Pro" devant), pas encore confirmé (compte comme
+        "promouvable à la BA", pas comme "promu") — quelle que soit son ancienneté dans l'échelon.
     Pour "combien de promouvables/candidats à la BA cette campagne ?" : COUNT WHERE "baStatus" IS NOT
     NULL AND "campagneId" = ce_id. Pour "combien de promus à la BA ?" : ajoute AND "baStatus" = 'promu'.
 
