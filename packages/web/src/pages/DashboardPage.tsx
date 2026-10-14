@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Campagne, type TeacherListItem } from "../api.js";
+import { api, type TeacherListItem } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom, formatEchelonLabel } from "../format.js";
 
 const MATCHING_LABEL: Record<string, string> = {
@@ -76,8 +77,7 @@ const CORRECTION_LABEL: Record<ManualCorrectionField, string> = {
 export function DashboardPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
-  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
-  const [campagneId, setCampagneId] = useState<string | null>(null);
+  const { candidates: campagnes, campagneId, setCampagneId } = useCampagneSelection(["ECHELON"]);
   const [teachers, setTeachers] = useState<TeacherListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,18 +102,15 @@ export function DashboardPage() {
   const [savingCorrection, setSavingCorrection] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api
-      .campagnes()
-      .then((c) => {
-        setCampagnes(c);
-        if (c.length > 0) setCampagneId(c[0].id);
-      })
-      .catch((e) => setError(String(e)));
-  }, []);
-
   function refreshTeachers() {
-    if (!campagneId) return;
+    // null est désormais un cas durable (année scolaire sans campagne d'échelon pour l'instant),
+    // pas juste transitoire avant le premier chargement — vide la liste plutôt que de garder
+    // affichés les enseignants d'une campagne qu'on vient de quitter.
+    if (!campagneId) {
+      setTeachers([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     api
       .teachers(campagneId)
@@ -279,16 +276,22 @@ export function DashboardPage() {
     <div>
       <div className="toolbar">
         <h2>Enseignants promouvables</h2>
-        {campagnes.length > 0 && (
+        {campagnes.length > 1 && (
           <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
             {campagnes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.type ?? "?"} {c.anneeScolaire}
+                {labelForCampagneCandidate(c, 1)}
               </option>
             ))}
           </select>
         )}
       </div>
+      {campagnes.length === 0 && (
+        <p className="hint">
+          Aucune campagne d'avancement d'échelon (CCMA/CCMI) pour l'année scolaire sélectionnée — créez-la depuis la page
+          Import, ou changez d'année scolaire dans l'en-tête.
+        </p>
+      )}
       {selectedCampagne && (
         <p className="hint">
           Période du {formatDate(selectedCampagne.periodeDebut)} au {formatDate(selectedCampagne.periodeFin)} — date CCMA :{" "}

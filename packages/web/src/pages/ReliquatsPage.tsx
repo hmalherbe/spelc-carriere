@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, type Campagne, type ReliquatCandidate, type ReliquatGroup } from "../api.js";
+import { api, type ReliquatCandidate, type ReliquatGroup } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null): string {
@@ -17,20 +18,11 @@ export function ReliquatsPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
-  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
-  const [campagneId, setCampagneId] = useState<string | null>(null);
+  const { candidates: campagnes, campagneId, setCampagneId } = useCampagneSelection(["ECHELON"]);
   const [groups, setGroups] = useState<ReliquatGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.campagnes().then((c) => {
-      setCampagnes(c);
-      if (c.length > 0) setCampagneId(c[0].id);
-      else setLoading(false);
-    });
-  }, []);
 
   function refresh(id: string) {
     setLoading(true);
@@ -44,6 +36,10 @@ export function ReliquatsPage() {
 
   useEffect(() => {
     if (campagneId) refresh(campagneId);
+    else {
+      setGroups([]);
+      setLoading(false);
+    }
   }, [campagneId]);
 
   async function toggle(candidate: ReliquatCandidate) {
@@ -67,16 +63,22 @@ export function ReliquatsPage() {
     <div>
       <div className="toolbar">
         <h2>Reliquats — bonification d'ancienneté</h2>
-        {campagnes.length > 0 && (
+        {campagnes.length > 1 && (
           <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
             {campagnes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.type ?? "?"} {c.anneeScolaire}
+                {labelForCampagneCandidate(c, 1)}
               </option>
             ))}
           </select>
         )}
       </div>
+      {campagnes.length === 0 && (
+        <p className="hint">
+          Aucune campagne d'avancement d'échelon (CCMA/CCMI) pour l'année scolaire sélectionnée — créez-la depuis la page
+          Import, ou changez d'année scolaire dans l'en-tête.
+        </p>
+      )}
       <p className="hint">
         Une promotion à la bonification d'ancienneté (BA) accordée après coup, sur reliquat (arrondis du quota de
         30 % de promouvables) — le fichier rectorat ne porte jamais de marqueur "Pro BA." pour ce cas. Cocher ici un

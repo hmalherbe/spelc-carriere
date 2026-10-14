@@ -1,18 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { api, type Campagne, type Contingent, type HcExcGroupe, type HcExcImportResult, type HcExcTeacherRow } from "../api.js";
+import { useEffect, useState } from "react";
+import { api, type Contingent, type HcExcGroupe, type HcExcImportResult, type HcExcTeacherRow } from "../api.js";
 import { useAuth } from "../AuthContext.js";
-import { formatPrenom } from "../format.js";
+import { useCampagneContext, labelForCampagneCandidate } from "../CampagneContext.js";
+import { formatPrenom, derivePeriodeFromAnneeScolaire } from "../format.js";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Same convention as ImportPage.tsx's derivePeriodeFromAnneeScolaire — kept in sync there. */
-function derivePeriodeFromAnneeScolaire(anneeScolaire: string): { periodeDebut: string; periodeFin: string } | null {
-  const m = /^(\d{4})-(\d{4})$/.exec(anneeScolaire.trim());
-  if (!m) return null;
-  const [, anneeDebut, anneeFin] = m;
-  return { periodeDebut: `${anneeDebut}-09-01`, periodeFin: `${anneeFin}-08-31` };
+function dateCommissionLabel(commission: "CCMA" | "CCMI"): string {
+  return commission === "CCMI" ? "Date CCMI" : "Date CCMA";
 }
 
 function hcExcFilesOnly(files: File[]): File[] {
@@ -27,15 +24,28 @@ export function HorsClasseExceptionnellePage() {
   const { user } = useAuth();
   const canEdit = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
-  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
+  const { campagnesAnneeSelectionnee, refresh: refreshContextCampagnes, setSelectedAnneeScolaire } = useCampagneContext();
+  const hcExcCampagnes = campagnesAnneeSelectionnee.filter((c) => c.nature === "HC" || c.nature === "EXC");
   const [campagneId, setCampagneId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (hcExcCampagnes.some((c) => c.id === campagneId)) return;
+    setCampagneId(hcExcCampagnes[0]?.id ?? null);
+    // Gardé sur la liste jointe des id : `hcExcCampagnes` est un nouveau tableau à chaque rendu
+    // (dérivé du contexte) — ne doit se redéclencher que si l'ENSEMBLE des id change réellement.
+  }, [hcExcCampagnes.map((c) => c.id).join("|")]);
+
   const [showNewCampagne, setShowNewCampagne] = useState(false);
-  const [newCampagne, setNewCampagne] = useState<{ anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string; type: "HC" | "EXC" }>(
-    { anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso(), type: "HC" },
-  );
+  const [newCampagne, setNewCampagne] = useState<{
+    anneeScolaire: string;
+    periodeDebut: string;
+    periodeFin: string;
+    dateCcma: string;
+    type: "HC" | "EXC";
+    commission: "CCMA" | "CCMI";
+  }>({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso(), type: "HC", commission: "CCMA" });
   const [campagneError, setCampagneError] = useState<string | null>(null);
 
-  const hcExcCampagnes = useMemo(() => campagnes.filter((c) => c.type === "HC" || c.type === "EXC"), [campagnes]);
   const selectedCampagne = hcExcCampagnes.find((c) => c.id === campagneId) ?? null;
 
   const [files, setFiles] = useState<File[]>([]);
@@ -51,19 +61,14 @@ export function HorsClasseExceptionnellePage() {
   const [contingentBusy, setContingentBusy] = useState(false);
   const [contingentError, setContingentError] = useState<string | null>(null);
 
-  function refreshCampagnes(selectId?: string) {
-    api.campagnes().then((c) => {
-      setCampagnes(c);
-      const hcExc = c.filter((x) => x.type === "HC" || x.type === "EXC");
-      if (selectId) setCampagneId(selectId);
-      else if (!campagneId && hcExc.length > 0) setCampagneId(hcExc[0].id);
-    });
+  /** Rafraîchit la liste via le contexte global (partagé avec le sélecteur d'en-tête et toutes les
+   * autres pages) plutôt que de refetcher indépendamment. `selectId` force la sélection d'une
+   * campagne qui vient d'être créée — l'effet d'auto-sélection ci-dessus ne choisit que le PREMIER
+   * candidat quand l'actuel disparaît, pas un id précis. */
+  async function refreshCampagnes(selectId?: string) {
+    await refreshContextCampagnes();
+    if (selectId) setCampagneId(selectId);
   }
-
-  useEffect(() => {
-    refreshCampagnes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   function refreshResults() {
     if (!campagneId) {
@@ -120,7 +125,11 @@ export function HorsClasseExceptionnellePage() {
     try {
       const created = await api.createCampagne(newCampagne);
       setShowNewCampagne(false);
-      setNewCampagne({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso(), type: "HC" });
+      setNewCampagne({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso(), type: "HC", commission: "CCMA" });
+      // La nouvelle campagne peut appartenir à une année scolaire différente de celle actuellement
+      // sélectionnée en en-tête — sans ça, `hcExcCampagnes` (filtré sur l'année sélectionnée) ne la
+      // contiendrait pas et `created.id` ne correspondrait à aucune option du sélecteur ci-dessous.
+      setSelectedAnneeScolaire(created.anneeScolaire);
       refreshCampagnes(created.id);
     } catch (e) {
       setCampagneError(String(e));
@@ -191,12 +200,15 @@ export function HorsClasseExceptionnellePage() {
             <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
               {hcExcCampagnes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.type} {c.anneeScolaire} ({c._count.teacherSnapshots} enseignants)
+                  {labelForCampagneCandidate(c, 2)} ({c._count.teacherSnapshots} enseignants)
                 </option>
               ))}
             </select>
           ) : (
-            <span className="hint">Aucune campagne HC/EXC — créez-en une pour commencer.</span>
+            <span className="hint">
+              Aucune campagne HC/EXC pour l'année scolaire sélectionnée — créez-en une ci-dessous, ou changez d'année
+              scolaire dans l'en-tête.
+            </span>
           )}
           {canEdit && (
             <button type="button" className="secondary" onClick={() => setShowNewCampagne((v) => !v)}>
@@ -212,6 +224,16 @@ export function HorsClasseExceptionnellePage() {
               <select value={newCampagne.type} onChange={(e) => setNewCampagne((s) => ({ ...s, type: e.target.value as "HC" | "EXC" }))}>
                 <option value="HC">Hors classe</option>
                 <option value="EXC">Classe exceptionnelle</option>
+              </select>
+            </label>
+            <label>
+              Commission
+              <select
+                value={newCampagne.commission}
+                onChange={(e) => setNewCampagne((s) => ({ ...s, commission: e.target.value as "CCMA" | "CCMI" }))}
+              >
+                <option value="CCMA">CCMA (second degré)</option>
+                <option value="CCMI">CCMI (premier degré)</option>
               </select>
             </label>
             <label>
@@ -246,7 +268,7 @@ export function HorsClasseExceptionnellePage() {
               />
             </label>
             <label>
-              Date CCMA
+              {dateCommissionLabel(newCampagne.commission)}
               <input required type="date" value={newCampagne.dateCcma} onChange={(e) => setNewCampagne((s) => ({ ...s, dateCcma: e.target.value }))} />
             </label>
             <button type="submit">Créer</button>

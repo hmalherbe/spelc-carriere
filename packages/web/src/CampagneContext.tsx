@@ -87,3 +87,43 @@ export function useCampagneContext(): CampagneContextValue {
   if (!ctx) throw new Error("useCampagneContext must be used within CampagneProvider");
   return ctx;
 }
+
+export type Nature = "ECHELON" | "HC" | "EXC";
+
+/**
+ * Pour une page qui opère sur UNE campagne à la fois (Dashboard/Mailing/Reliquats/Stats/Import :
+ * nature ECHELON ; HorsClasseExceptionnellePage : HC et/ou EXC) — restreint les candidats à
+ * l'année scolaire globalement sélectionnée (sélecteur d'en-tête) et aux natures demandées, au lieu
+ * de la liste complète de campagnes toutes années confondues que chaque page gérait indépendamment
+ * jusqu'ici. Garde une sélection locale par commission (CCMA/CCMI) quand plusieurs candidats
+ * existent pour cette année scolaire — ex. une campagne CCMA et une campagne CCMI d'avancement
+ * d'échelon coexistent presque toujours, voir ANNEE_SCOLAIRE_SLOTS côté API.
+ */
+export function useCampagneSelection(natures: Nature[]): {
+  candidates: Campagne[];
+  campagneId: string | null;
+  setCampagneId: (id: string) => void;
+} {
+  const { campagnesAnneeSelectionnee } = useCampagneContext();
+  const candidates = campagnesAnneeSelectionnee.filter((c) => c.nature != null && natures.includes(c.nature));
+  const [campagneId, setCampagneId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (candidates.some((c) => c.id === campagneId)) return;
+    setCampagneId(candidates[0]?.id ?? null);
+    // Gardé sur la liste jointe des id, pas sur le tableau lui-même : `candidates` est un nouveau
+    // tableau à chaque rendu (dérivé du contexte) — ne doit se redéclencher que si l'ENSEMBLE des id
+    // change réellement (nouvelle année scolaire sélectionnée, campagne créée/supprimée).
+  }, [candidates.map((c) => c.id).join("|")]);
+
+  return { candidates, campagneId, setCampagneId };
+}
+
+/** Libellé court pour un candidat de useCampagneSelection — la commission seule suffit quand une
+ * seule nature est demandée (ex. "CCMA"), les deux axes sinon (ex. "CCMA · HC", "CCMI · Échelon"). */
+export function labelForCampagneCandidate(c: Campagne, naturesCount: number): string {
+  const commission = c.commission ?? c.type ?? "?";
+  if (naturesCount <= 1) return commission;
+  const natureLabel = c.nature === "HC" ? "HC" : c.nature === "EXC" ? "EXC" : c.nature === "ECHELON" ? "Échelon" : (c.type ?? "?");
+  return `${commission} · ${natureLabel}`;
+}

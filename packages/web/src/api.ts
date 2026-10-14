@@ -543,6 +543,9 @@ export const api = {
     periodeFin: string;
     dateCcma: string;
     type: "CCMA" | "CCMI" | "HC" | "EXC";
+    /** Seulement utile (et optionnel) quand `type` est HC/EXC — voir deriveCommissionNature côté
+     * API. Ignoré pour CCMA/CCMI, dont la commission est le type lui-même. */
+    commission?: "CCMA" | "CCMI";
   }) => request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
   /** Crée les 6 campagnes d'une année scolaire en un appel (CCMA/CCMI échelon + CCMA/CCMI HC +
    * CCMA/CCMI EXC) — idempotent : une case déjà couverte pour cette année scolaire est renvoyée

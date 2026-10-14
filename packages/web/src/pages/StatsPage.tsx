@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type Campagne, type CampagneStats } from "../api.js";
+import { api, type CampagneStats } from "../api.js";
+import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
 
 function GenreTable({ genre }: { genre: CampagneStats["ba"]["genre"] }) {
   return (
@@ -31,20 +32,11 @@ function GenreTable({ genre }: { genre: CampagneStats["ba"]["genre"] }) {
 }
 
 export function StatsPage() {
-  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
-  const [campagneId, setCampagneId] = useState<string | null>(null);
+  const { candidates: campagnes, campagneId, setCampagneId } = useCampagneSelection(["ECHELON"]);
   const [gradeFilter, setGradeFilter] = useState<string>("all");
   const [stats, setStats] = useState<CampagneStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.campagnes().then((c) => {
-      setCampagnes(c);
-      if (c.length > 0) setCampagneId(c[0].id);
-      else setLoading(false);
-    });
-  }, []);
 
   // Un changement de campagne repart d'un filtre "Tous les grades" — la liste de grades d'une
   // autre campagne peut ne plus contenir celui qui était sélectionné.
@@ -53,7 +45,11 @@ export function StatsPage() {
   }, [campagneId]);
 
   useEffect(() => {
-    if (!campagneId) return;
+    if (!campagneId) {
+      setStats(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     api
@@ -69,11 +65,11 @@ export function StatsPage() {
     <div>
       <div className="toolbar">
         <h2>Statistiques</h2>
-        {campagnes.length > 0 && (
+        {campagnes.length > 1 && (
           <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
             {campagnes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.type ?? "?"} {c.anneeScolaire}
+                {labelForCampagneCandidate(c, 1)}
               </option>
             ))}
           </select>
@@ -95,7 +91,12 @@ export function StatsPage() {
         d'incertitude.
       </p>
 
-      {loading || !stats ? (
+      {campagnes.length === 0 ? (
+        <p className="hint">
+          Aucune campagne d'avancement d'échelon (CCMA/CCMI) pour l'année scolaire sélectionnée — créez-la depuis la
+          page Import, ou changez d'année scolaire dans l'en-tête.
+        </p>
+      ) : loading || !stats ? (
         <p>Chargement...</p>
       ) : (
         <>

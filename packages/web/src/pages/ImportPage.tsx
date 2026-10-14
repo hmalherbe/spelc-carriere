@@ -10,6 +10,7 @@ import {
   type RectoratImportResult,
 } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { useCampagneContext, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom, derivePeriodeFromAnneeScolaire } from "../format.js";
 
 function todayIso(): string {
@@ -32,8 +33,21 @@ export function ImportPage() {
   const { user } = useAuth();
   const canImport = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
-  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
+  // Cette page (avancement d'échelon) ne concerne que CCMA/CCMI — les campagnes Hors Classe/Classe
+  // Exceptionnelle ont leur propre page (HorsClasseExceptionnellePage) et leur propre sélecteur.
+  // Une campagne sans nature (créée avant l'ajout de ce champ) reste visible ici : c'est cette page
+  // qui offre de définir sa commission CCMA/CCMI, ci-dessous.
+  const { campagnesAnneeSelectionnee, refresh: refreshContextCampagnes, setSelectedAnneeScolaire } = useCampagneContext();
+  const campagnes = campagnesAnneeSelectionnee.filter((c) => c.nature === "ECHELON" || c.nature == null);
   const [campagneId, setCampagneId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (campagnes.some((c) => c.id === campagneId)) return;
+    setCampagneId(campagnes[0]?.id ?? null);
+    // Gardé sur la liste jointe des id : `campagnes` est un nouveau tableau à chaque rendu (dérivé
+    // du contexte) — ne doit se redéclencher que si l'ENSEMBLE des id change réellement.
+  }, [campagnes.map((c) => c.id).join("|")]);
+
   const [showNewCampagne, setShowNewCampagne] = useState(false);
   const [newCampagne, setNewCampagne] = useState<{ anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string; type: "CCMA" | "CCMI" }>({
     anneeScolaire: "",
@@ -99,23 +113,15 @@ export function ImportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCampagne?.type]);
 
-  function refreshCampagnes(selectId?: string) {
-    api.campagnes().then((all) => {
-      // Cette page (avancement d'échelon) ne concerne que CCMA/CCMI — les campagnes Hors
-      // Classe/Classe Exceptionnelle ont leur propre page (HorsClasseExceptionnellePage) et leur
-      // propre sélecteur. Une campagne sans type (créée avant son ajout) reste visible ici : c'est
-      // cette page qui offre de le définir, ci-dessous.
-      const c = all.filter((x) => x.type !== "HC" && x.type !== "EXC");
-      setCampagnes(c);
-      if (selectId) setCampagneId(selectId);
-      else if (!campagneId && c.length > 0) setCampagneId(c[0].id);
-    });
+  /** Rafraîchit la liste via le contexte global (partagé avec le sélecteur d'en-tête et toutes les
+   * autres pages) plutôt que de refetcher indépendamment. `selectId` force la sélection d'une
+   * campagne qui vient d'être créée — nécessaire ici (jamais pour une campagne déjà sélectionnée
+   * dont on vient juste de changer le type/les dates) car l'effet d'auto-sélection ci-dessus ne
+   * choisit que le PREMIER candidat quand l'actuel disparaît, pas un id précis. */
+  async function refreshCampagnes(selectId?: string) {
+    await refreshContextCampagnes();
+    if (selectId) setCampagneId(selectId);
   }
-
-  useEffect(() => {
-    refreshCampagnes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function createCampagne(e: React.FormEvent) {
     e.preventDefault();
@@ -124,6 +130,10 @@ export function ImportPage() {
       const created = await api.createCampagne(newCampagne);
       setShowNewCampagne(false);
       setNewCampagne({ anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: todayIso(), type: "CCMA" });
+      // La nouvelle campagne peut appartenir à une année scolaire différente de celle actuellement
+      // sélectionnée en en-tête — sans ça, `campagnes` (filtré sur l'année sélectionnée) ne la
+      // contiendrait pas et `created.id` ne correspondrait à aucune option du sélecteur ci-dessous.
+      setSelectedAnneeScolaire(created.anneeScolaire);
       refreshCampagnes(created.id);
     } catch (e) {
       setCampagneError(String(e));
@@ -175,15 +185,12 @@ export function ImportPage() {
     setDeleteCampagneError(null);
     try {
       await api.deleteCampagne(selectedCampagne.id);
-      // Not refreshCampagnes(): its own "pick a default" fallback only fires when campagneId is
-      // already falsy, which it isn't yet here (still the just-deleted id, from this render's
-      // closure) — so the just-deleted campagne could remain selected until some LATER unrelated
-      // state change reruns that check. Recomputing the filtered list directly here always lands
-      // on a valid next selection (or none) immediately.
-      const all = await api.campagnes();
-      const remaining = all.filter((x) => x.type !== "HC" && x.type !== "EXC");
-      setCampagnes(remaining);
-      setCampagneId(remaining.length > 0 ? remaining[0].id : null);
+      // Désélectionne tout de suite plutôt que d'attendre le round-trip de refreshContextCampagnes :
+      // sinon la campagne qui vient d'être supprimée resterait affichée comme sélectionnée pendant
+      // ce court intervalle. L'effet d'auto-sélection ci-dessus reprend la main une fois `campagnes`
+      // mis à jour (un autre candidat de cette année scolaire, ou aucun).
+      setCampagneId(null);
+      await refreshContextCampagnes();
     } catch (e) {
       setDeleteCampagneError(String(e));
     } finally {
@@ -276,12 +283,15 @@ export function ImportPage() {
             <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
               {campagnes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.type ?? "?"} {c.anneeScolaire} ({c._count.teacherSnapshots} enseignants)
+                  {labelForCampagneCandidate(c, 1)} ({c._count.teacherSnapshots} enseignants)
                 </option>
               ))}
             </select>
           ) : (
-            <span className="hint">Aucune campagne — créez-en une pour commencer.</span>
+            <span className="hint">
+              Aucune campagne d'avancement d'échelon pour l'année scolaire sélectionnée — créez-en une ci-dessous, ou
+              changez d'année scolaire dans l'en-tête.
+            </span>
           )}
           <button type="button" className="secondary" onClick={() => setShowNewCampagne((v) => !v)}>
             {showNewCampagne ? "Annuler" : "Nouvelle campagne"}

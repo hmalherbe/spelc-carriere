@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, downloadBlob, type AdherentEligible, type Campagne } from "../api.js";
+import { api, downloadBlob, type AdherentEligible } from "../api.js";
+import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null): string {
@@ -16,8 +17,7 @@ function commissionLabel(degre: 1 | 2 | null): string {
 type PresenceFilter = "all" | "oui" | "non";
 
 export function AdherentsEligiblesPage() {
-  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
-  const [campagneId, setCampagneId] = useState<string | null>(null);
+  const { candidates: campagnes, campagneId, setCampagneId } = useCampagneSelection(["ECHELON"]);
   const [adherents, setAdherents] = useState<AdherentEligible[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,15 +26,11 @@ export function AdherentsEligiblesPage() {
   const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.campagnes().then((c) => {
-      setCampagnes(c);
-      if (c.length > 0) setCampagneId(c[0].id);
-      else setLoading(false);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!campagneId) return;
+    if (!campagneId) {
+      setAdherents([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     api
       .adherentsEligibles(campagneId)
@@ -71,16 +67,22 @@ export function AdherentsEligiblesPage() {
     <div>
       <div className="toolbar">
         <h2>Adhérents éligibles à la CCMA/CCMI</h2>
-        {campagnes.length > 0 && (
+        {campagnes.length > 1 && (
           <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
             {campagnes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.type ?? "?"} {c.anneeScolaire}
+                {labelForCampagneCandidate(c, 1)}
               </option>
             ))}
           </select>
         )}
       </div>
+      {campagnes.length === 0 && (
+        <p className="hint">
+          Aucune campagne d'avancement d'échelon (CCMA/CCMI) pour l'année scolaire sélectionnée — créez-la depuis la
+          page Import, ou changez d'année scolaire dans l'en-tête.
+        </p>
+      )}
       <p className="hint">
         Adhérents dont la prochaine promotion d'échelon (date de dernier changement + durée de l'échelon) tombe dans
         la période de cette campagne — qu'ils soient déjà rapprochés d'un enseignant ou non.

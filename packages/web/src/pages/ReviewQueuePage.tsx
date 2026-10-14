@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react";
-import { api, type Campagne, type MatchCandidate } from "../api.js";
+import { api, type MatchCandidate } from "../api.js";
 import { useAuth } from "../AuthContext.js";
+import { useCampagneContext, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom } from "../format.js";
 
 type MatchStats = { totalAdherents: number; totalTeachers: number; adherentsWithNoGradeInPool: number; adherentsWithUnknownGrade: number };
 
 export function ReviewQueuePage() {
   const { user } = useAuth();
-  const [campagnes, setCampagnes] = useState<Campagne[]>([]);
+  // Ne filtre pas par nature (échelon/HC/EXC) : un adhérent peut se rapprocher d'un enseignant de
+  // n'importe quel type de campagne de l'année scolaire sélectionnée.
+  const { campagnesAnneeSelectionnee: campagnes } = useCampagneContext();
   const [campagneId, setCampagneId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (campagnes.some((c) => c.id === campagneId)) return;
+    setCampagneId(campagnes[0]?.id ?? null);
+    // Gardé sur la liste jointe des id : `campagnes` est un nouveau tableau à chaque rendu (dérivé
+    // du contexte) — ne doit se redéclencher que si l'ENSEMBLE des id change réellement.
+  }, [campagnes.map((c) => c.id).join("|")]);
   // Par décision produit : la file se limite par défaut aux adhérents estimés éligibles à la
   // campagne sélectionnée (sinon, elle noyait l'essentiel des rapprochements réellement utiles
   // sous des centaines d'adhérents pas encore concernés par une promotion). L'estimation
@@ -25,13 +35,6 @@ export function ReviewQueuePage() {
   const [rescanResult, setRescanResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canReview = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
-
-  useEffect(() => {
-    api.campagnes().then((c) => {
-      setCampagnes(c);
-      if (c.length > 0) setCampagneId(c[0].id);
-    });
-  }, []);
 
   function refresh() {
     setLoading(true);
@@ -96,7 +99,7 @@ export function ReviewQueuePage() {
             <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)} disabled={showAll}>
               {campagnes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.type ?? "?"} {c.anneeScolaire}
+                  {labelForCampagneCandidate(c, 2)}
                 </option>
               ))}
             </select>
