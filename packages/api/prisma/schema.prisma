@@ -88,8 +88,32 @@ enum CampagneType {
   EXC
 }
 
+// CCMA (commission académique, second degré) / CCMI (commission interdépartementale, premier
+// degré) — which commission actually runs this campagne. Distinct from CampagneType/CampagneNature
+// below: `type` conflates "which commission" with "which process" (échelon vs HC vs EXC) into one
+// value, which worked as long as CCMA/CCMI only ever meant "échelon advancement, by commission" —
+// but HC/EXC campagnes need the SAME commission split too (a CCMA-HC and a CCMI-HC are two
+// different campagnes, not one shared one), which `type: HC`/`type: EXC` alone can't express at
+// all. See `nature` for the other half of this split.
+enum Commission {
+  CCMA
+  CCMI
+}
+
+// ECHELON (avancement d'échelon — what `type: CCMA`/`type: CCMI` meant on their own before this
+// field existed) / HC (hors classe) / EXC (classe exceptionnelle). Paired with `commission` above,
+// this reproduces every value `type` already had (CCMA = commission CCMA + nature ECHELON, etc.)
+// while additionally letting HC/EXC be commission-scoped — the union's explicit ask (2026-10-15):
+// 6 campagnes per année scolaire (CCMA-échelon, CCMI-échelon, CCMA-HC, CCMA-EXC, CCMI-HC, CCMI-EXC)
+// instead of today's 4 (CCMA, CCMI, HC, EXC, the last two shared across both degrés).
+enum CampagneNature {
+  ECHELON
+  HC
+  EXC
+}
+
 model Campagne {
-  id            String        @id @default(cuid())
+  id            String          @id @default(cuid())
   anneeScolaire String // e.g. "2024-2025"
   periodeDebut  DateTime
   periodeFin    DateTime
@@ -97,9 +121,22 @@ model Campagne {
   // Drives which commission's élus (see Elu) are inserted in every mailing sent for this campagne
   // (routes/mailing.ts) — campagne-wide, not derived per recipient from their own grade. Nullable
   // only because existing campagnes created before this field existed have no value yet; the
-  // create-campagne form requires it for every new one (see routes/campagnes.ts).
+  // create-campagne form requires it for every new one (see routes/campagnes.ts). Kept, computed
+  // from commission+nature below on every write, purely for backward compatibility with every
+  // existing call site/reader that still checks `type` directly (see those fields' own doc
+  // comments for the newer, more precise split this is being migrated towards) — never hand-edited
+  // independently of commission/nature once both are known for a campagne.
   type          CampagneType?
-  createdAt     DateTime      @default(now())
+  // Always derivable from `type` for CCMA/CCMI (ECHELON, commission = type itself) — nullable only
+  // because an HC/EXC campagne's commission can't be inferred from `type` alone (that's exactly the
+  // ambiguity this field exists to resolve) until it's set explicitly, either at creation or via a
+  // later PATCH (see routes/campagnes.ts's deriveCommissionNature). A null commission on an HC/EXC
+  // campagne means "not yet split by degré" — the legacy shape `type` alone already allowed.
+  commission    Commission?
+  // Always derivable from `type` alone (CCMA/CCMI -> ECHELON, HC -> HC, EXC -> EXC) — never null for
+  // a campagne that has a `type`, null only alongside it for a pre-type legacy campagne.
+  nature        CampagneNature?
+  createdAt     DateTime        @default(now())
 
   imports            RectoratImport[]
   teacherSnapshots   TeacherSnapshot[]

@@ -195,9 +195,10 @@ function buildRecipientEmail(
   ccmaExtras: CcmaModelExtras | null,
 ): { subject: string; html: string } {
   if (template === "ccma_avancement" && ccmaExtras) {
-    // Callers only ever pass ccmaExtras when campagne.type is CCMA or CCMI (see each route's own
-    // guard above its loadCcmaModelExtras call) — buildCcmaModelContext/buildCcmaModelEmail render
-    // either commission, so campagne.type is passed through as-is, no cast needed.
+    // Callers only ever pass ccmaExtras when campagne.nature is ECHELON, i.e. campagne.type is CCMA
+    // or CCMI (see each route's own guard above its loadCcmaModelExtras call) —
+    // buildCcmaModelContext/buildCcmaModelEmail render either commission, so campagne.type is passed
+    // through as-is, no cast needed.
     return buildCcmaModelEmail(buildCcmaModelContext(recipient, campagne, ccmaExtras, shared));
   }
   return buildPromotionEmail({
@@ -410,7 +411,7 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
   // This route (and eligibleRecipients below) is built entirely around échelon-advancement
   // campagnes (CCMA/CCMI) — a Hors Classe/Classe exceptionnelle campagne has no
   // ComputedPromotionState to read from and needs its own dedicated mailing, not this one.
-  if (campagne.type === "HC" || campagne.type === "EXC") {
+  if (campagne.nature === "HC" || campagne.nature === "EXC") {
     return res.status(400).json({ error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." });
   }
 
@@ -422,11 +423,11 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
     loadElusByCommission(),
     loadSocialLinks(),
   ]);
-  const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
+  const shared = { elus: campagne.commission ? elusByCommission[campagne.commission] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
 
   let email: { subject: string; html: string };
   if (template === "ccma_avancement") {
-    if (campagne.type !== "CCMA" && campagne.type !== "CCMI") {
+    if (campagne.nature !== "ECHELON") {
       return res.status(400).json({ error: "Ce modèle n'est disponible que pour une campagne CCMA ou CCMI." });
     }
     const extras = await loadCcmaModelExtras(campagneId);
@@ -448,7 +449,7 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
       dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
       anneeScolaire: campagne.anneeScolaire,
       isAdherent: recipient.isAdherent,
-      commission: campagne.type,
+      commission: campagne.commission,
       elus: shared.elus,
       t1Text: shared.t1Text,
       logoDataUrl: shared.logoDataUrl,
@@ -553,11 +554,11 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
   // This route (and eligibleRecipients below) is built entirely around échelon-advancement
   // campagnes (CCMA/CCMI) — a Hors Classe/Classe exceptionnelle campagne has no
   // ComputedPromotionState to read from and needs its own dedicated mailing, not this one.
-  if (campagne.type === "HC" || campagne.type === "EXC") {
+  if (campagne.nature === "HC" || campagne.nature === "EXC") {
     return res.status(400).json({ error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." });
   }
 
-  if (template === "ccma_avancement" && campagne.type !== "CCMA" && campagne.type !== "CCMI") {
+  if (template === "ccma_avancement" && campagne.nature !== "ECHELON") {
     return res.status(400).json({ error: "Ce modèle n'est disponible que pour une campagne CCMA ou CCMI." });
   }
 
@@ -586,7 +587,7 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
     loadElusByCommission(),
     loadSocialLinks(),
   ]);
-  const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
+  const shared = { elus: campagne.commission ? elusByCommission[campagne.commission] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
   const ccmaExtras = template === "ccma_avancement" ? await loadCcmaModelExtras(campagneId) : null;
 
   const results: { teacherId: string; nom: string; prenom: string; email: string | null; status: "SENT" | "FAILED"; error?: string }[] = [];
@@ -665,10 +666,10 @@ async function buildMailingLetters(
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return { status: 404, error: "Campagne introuvable" };
-  if (campagne.type === "HC" || campagne.type === "EXC") {
+  if (campagne.nature === "HC" || campagne.nature === "EXC") {
     return { status: 400, error: "Le mailing d'avancement d'échelon ne s'applique pas aux campagnes Hors Classe / Classe exceptionnelle." };
   }
-  if (template === "ccma_avancement" && campagne.type !== "CCMA" && campagne.type !== "CCMI") {
+  if (template === "ccma_avancement" && campagne.nature !== "ECHELON") {
     return { status: 400, error: "Ce modèle n'est disponible que pour une campagne CCMA ou CCMI." };
   }
 
@@ -681,7 +682,7 @@ async function buildMailingLetters(
     loadElusByCommission(),
     loadSocialLinks(),
   ]);
-  const shared = { elus: campagne.type ? elusByCommission[campagne.type] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
+  const shared = { elus: campagne.commission ? elusByCommission[campagne.commission] : [], t1Text: branding.t1Text, logoDataUrl: branding.logoDataUrl, socialLinks };
   const ccmaExtras = template === "ccma_avancement" ? await loadCcmaModelExtras(campagneId) : null;
 
   const letters = targets.map((recipient) => {

@@ -24,20 +24,22 @@ describe("deriveDepartementFromFileName", () => {
 });
 
 // Real case that forced this guard: campagne CCMI 2025-2026 ended up with second-degré teachers
-// (CERTIFIE et al.) imported by mistake alongside the legitimate "Prof. Ecoles" ones.
+// (CERTIFIE et al.) imported by mistake alongside the legitimate "Prof. Ecoles" ones. Takes
+// Campagne.commission directly (not the whole campagne/type) — same guard reused for both the
+// échelon import (commission = type for CCMA/CCMI) and the HC/EXC import (commission, once set).
 describe("checkDegreMismatch", () => {
-  it("rejects a premier degré grade (CCMI) imported into a CCMA campagne", () => {
+  it("rejects a premier degré grade (CCMI) imported with commission CCMA", () => {
     expect(checkDegreMismatch("CCMA", "Prof. Ecoles")).toMatch(/premier degré.*CCMI/);
     expect(checkDegreMismatch("CCMA", "Prof. Ecoles HC")).toMatch(/premier degré/);
   });
 
-  it("rejects a second degré grade (CCMA) imported into a CCMI campagne — real case, campagne CCMI 2025-2026", () => {
+  it("rejects a second degré grade (CCMA) imported with commission CCMI — real case, campagne CCMI 2025-2026", () => {
     expect(checkDegreMismatch("CCMI", "CERTIFIE")).toMatch(/second degré.*CCMA/);
     expect(checkDegreMismatch("CCMI", "AGREGE")).toMatch(/second degré/);
     expect(checkDegreMismatch("CCMI", "PLP")).toMatch(/second degré/);
   });
 
-  it("allows a matching degré/campagne combination", () => {
+  it("allows a matching degré/commission combination", () => {
     expect(checkDegreMismatch("CCMA", "CERTIFIE")).toBeNull();
     expect(checkDegreMismatch("CCMA", "AGREGE HC")).toBeNull();
     expect(checkDegreMismatch("CCMI", "Prof. Ecoles")).toBeNull();
@@ -49,7 +51,7 @@ describe("checkDegreMismatch", () => {
     expect(checkDegreMismatch("CCMI", "MD 2")).toBeNull();
   });
 
-  it("never rejects on a legacy campagne with no type set (type unknown, nothing to check against)", () => {
+  it("never rejects when commission is null (not yet scoped, or a legacy campagne) — nothing to check against", () => {
     expect(checkDegreMismatch(null, "Prof. Ecoles")).toBeNull();
     expect(checkDegreMismatch(null, "CERTIFIE")).toBeNull();
   });

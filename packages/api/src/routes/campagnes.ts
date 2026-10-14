@@ -1,9 +1,27 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { CampagneType, Commission, CampagneNature } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 
 export const campagnesRouter = Router();
+
+/**
+ * Derives (nature, commission) from a campagne's `type` — the one axis `type` always determines —
+ * plus, for an HC/EXC campagne only, an explicit `commissionInput` the caller may supply (since
+ * `type: "HC"`/`type: "EXC"` alone can't say which commission runs it — see Campagne.commission's
+ * own doc comment in schema.prisma). For CCMA/CCMI, `commissionInput` is ignored outright: the
+ * commission is the type itself, never a separate choice.
+ */
+export function deriveCommissionNature(
+  type: CampagneType,
+  commissionInput?: Commission | null,
+): { nature: CampagneNature; commission: Commission | null } {
+  if (type === "CCMA" || type === "CCMI") {
+    return { nature: "ECHELON", commission: type };
+  }
+  return { nature: type, commission: commissionInput ?? null };
+}
 
 campagnesRouter.use(requireAuth);
 
@@ -33,6 +51,9 @@ const createCampagneSchema = z.object({
   // Avancement" imports (see routes/imports.ts's /hc-exc) and reject the échelon-import routes.
   // Existing campagnes created before this field existed keep it null until set via PATCH below.
   type: z.enum(["CCMA", "CCMI", "HC", "EXC"]),
+  // Only meaningful (and optional) when type is HC/EXC — see deriveCommissionNature's own doc
+  // comment. Ignored outright for CCMA/CCMI, whose commission is the type itself.
+  commission: z.enum(["CCMA", "CCMI"]).optional(),
 });
 
 campagnesRouter.post("/", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
@@ -40,7 +61,8 @@ campagnesRouter.post("/", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res)
   if (!parsed.success) {
     return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
   }
-  const { anneeScolaire, periodeDebut, periodeFin, dateCcma, type } = parsed.data;
+  const { anneeScolaire, periodeDebut, periodeFin, dateCcma, type, commission: commissionInput } = parsed.data;
+  const { nature, commission } = deriveCommissionNature(type, commissionInput);
   const campagne = await prisma.campagne.create({
     data: {
       anneeScolaire,
@@ -48,6 +70,8 @@ campagnesRouter.post("/", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res)
       periodeFin: new Date(periodeFin),
       dateCcma: new Date(dateCcma),
       type,
+      nature,
+      commission,
     },
   });
   res.status(201).json(campagne);
@@ -64,6 +88,9 @@ const updateCampagneSchema = z.object({
   periodeFin: z.string().datetime().or(z.string().date()).optional(),
   dateCcma: z.string().datetime().or(z.string().date()).optional(),
   type: z.enum(["CCMA", "CCMI", "HC", "EXC"]).optional(),
+  // See createCampagneSchema's own comment — same rule, plus it can also be patched on its own
+  // (type unchanged) to split an already-existing HC/EXC campagne by commission after the fact.
+  commission: z.enum(["CCMA", "CCMI"]).optional(),
 });
 
 campagnesRouter.patch("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
@@ -74,7 +101,27 @@ campagnesRouter.patch("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, 
   const existing = await prisma.campagne.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "Campagne introuvable" });
 
-  const { anneeScolaire, periodeDebut, periodeFin, dateCcma, type } = parsed.data;
+  const { anneeScolaire, periodeDebut, periodeFin, dateCcma, type, commission: commissionInput } = parsed.data;
+
+  // A standalone `commission` patch (type unchanged) only makes sense for an HC/EXC campagne — a
+  // CCMA/CCMI (nature ECHELON) campagne's commission IS its type, never a separate choice (see
+  // deriveCommissionNature's own doc comment).
+  if (type === undefined && commissionInput !== undefined && existing.nature === "ECHELON") {
+    return res.status(400).json({
+      error: "La commission d'une campagne CCMA/CCMI d'avancement d'échelon est son propre type — elle ne se change pas séparément.",
+    });
+  }
+
+  let natureUpdate: CampagneNature | undefined;
+  let commissionUpdate: Commission | null | undefined;
+  if (type !== undefined) {
+    const derived = deriveCommissionNature(type, commissionInput ?? existing.commission);
+    natureUpdate = derived.nature;
+    commissionUpdate = derived.commission;
+  } else if (commissionInput !== undefined) {
+    commissionUpdate = commissionInput;
+  }
+
   const campagne = await prisma.campagne.update({
     where: { id: req.params.id },
     data: {
@@ -83,6 +130,8 @@ campagnesRouter.patch("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, 
       ...(periodeFin !== undefined ? { periodeFin: new Date(periodeFin) } : {}),
       ...(dateCcma !== undefined ? { dateCcma: new Date(dateCcma) } : {}),
       ...(type !== undefined ? { type } : {}),
+      ...(natureUpdate !== undefined ? { nature: natureUpdate } : {}),
+      ...(commissionUpdate !== undefined ? { commission: commissionUpdate } : {}),
     },
   });
   res.json(campagne);

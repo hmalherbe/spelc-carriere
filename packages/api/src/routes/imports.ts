@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import type { CampagneType } from "@prisma/client";
+import type { Commission } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
@@ -77,25 +77,28 @@ export function deriveDepartementFromFileName(fileName: string): string | null {
 
 /**
  * Guards against a real mis-manipulation (campagne CCMI 2025-2026 : des enseignants du second degré
- * s'y sont retrouvés) : un grade du premier degré (CCMI, GradeMapping.degre === 1) importé dans une
- * campagne CCMA, ou un grade du second degré (degre === 2) importé dans une campagne CCMI. Renvoie
- * le message d'erreur explicite à afficher/stocker sur ce bloc de grade, ou null si rien ne cloche.
- * campagneType === null (campagnes créées avant l'existence de ce champ, voir schema.prisma) ne
- * déclenche jamais de refus : le type attendu est alors inconnu, pas de contrôle possible.
+ * s'y sont retrouvés) : un grade du premier degré (GradeMapping.degre === 1) importé dans une
+ * campagne commission=CCMA, ou un grade du second degré (degre === 2) importé dans une campagne
+ * commission=CCMI. Renvoie le message d'erreur explicite à afficher/stocker sur ce bloc de grade, ou
+ * null si rien ne cloche. Prend `commission` (Campagne.commission — voir schema.prisma) plutôt que
+ * `type` directement : couvre aussi bien l'import échelon (CCMA/CCMI, commission = type) que l'import
+ * HC/EXC une fois une telle campagne scopée par commission (voir la route /hc-exc ci-dessous).
+ * commission === null (campagne pas encore scopée, ou créée avant l'existence de ce champ) ne
+ * déclenche jamais de refus : le degré attendu est alors inconnu, pas de contrôle possible.
  */
-export function checkDegreMismatch(campagneType: CampagneType | null, grade: string): string | null {
+export function checkDegreMismatch(commission: Commission | null, grade: string): string | null {
   const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === grade);
   if (!gradeMapping) return null;
-  if (campagneType === "CCMA" && gradeMapping.degre !== 2) {
+  if (commission === "CCMA" && gradeMapping.degre !== 2) {
     return (
-      `Import refusé : "${grade}" est un grade du premier degré (CCMI), incompatible avec cette campagne ` +
-      `CCMA (second degré). Importez ce fichier dans une campagne CCMI plutôt que dans celle-ci.`
+      `Import refusé : "${grade}" est un grade du premier degré (CCMI), incompatible avec une commission ` +
+      `CCMA (second degré). Importez ce fichier dans une campagne scopée CCMI plutôt que dans celle-ci.`
     );
   }
-  if (campagneType === "CCMI" && gradeMapping.degre !== 1) {
+  if (commission === "CCMI" && gradeMapping.degre !== 1) {
     return (
-      `Import refusé : "${grade}" est un grade du second degré (CCMA), incompatible avec cette campagne ` +
-      `CCMI (premier degré). Importez ce fichier dans une campagne CCMA plutôt que dans celle-ci.`
+      `Import refusé : "${grade}" est un grade du second degré (CCMA), incompatible avec une commission ` +
+      `CCMI (premier degré). Importez ce fichier dans une campagne scopée CCMA plutôt que dans celle-ci.`
     );
   }
   return null;
@@ -108,7 +111,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
 
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
-  if (campagne.type === "HC" || campagne.type === "EXC") {
+  if (campagne.nature === "HC" || campagne.nature === "EXC") {
     return res.status(400).json({ error: "Cette campagne est de type Hors Classe / Classe exceptionnelle — utilisez plutôt l'import dédié." });
   }
 
@@ -191,7 +194,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
 
     // Rejeté par bloc de grade, plutôt que silencieusement mélangé aux enseignants légitimes de la
     // campagne (voir checkDegreMismatch's own doc comment — cas réel, campagne CCMI 2025-2026).
-    const degreError = checkDegreMismatch(campagne.type, grade);
+    const degreError = checkDegreMismatch(campagne.commission, grade);
     if (degreError) {
       results.push({ gradeCode: gradeBlock.gradeCode, grade, imported: 0, warnings: [], error: degreError });
       continue;
@@ -349,7 +352,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
  * "PROF.EPS", "P.L.P." — see hcExcBaremeParser.ts's `gradeLabel`) to our normalized classe-normale
  * grade label (GradeMapping.grade). Only the labels actually observed in imported files are
  * mapped — an unrecognized one fails the import loudly rather than silently misfiling records
- * under the wrong grille. The campagne's own type (HC/EXC) then decides whether this is used as-is
+ * under the wrong grille. The campagne's own nature (HC/EXC) then decides whether this is used as-is
  * (a Hors Classe campagne promotes FROM classe normale) or with " HC" appended (a Classe
  * Exceptionnelle campagne promotes FROM hors classe) — matches GRADE_MAPPINGS' own "X" vs "X HC"
  * entries.
@@ -376,7 +379,7 @@ importsRouter.post(
 
     const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
     if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
-    if (campagne.type !== "HC" && campagne.type !== "EXC") {
+    if (campagne.nature !== "HC" && campagne.nature !== "EXC") {
       return res.status(400).json({ error: "Cette campagne n'est pas de type Hors Classe / Classe exceptionnelle." });
     }
 
@@ -394,7 +397,13 @@ importsRouter.post(
         .status(422)
         .json({ error: `Grade "${parsed.gradeLabel ?? "inconnu"}" non reconnu — ajoutez-le à HC_EXC_GRADE_LABEL_MAP avant de réimporter.` });
     }
-    const grade = campagne.type === "EXC" ? `${baseGrade} HC` : baseGrade;
+    const grade = campagne.nature === "EXC" ? `${baseGrade} HC` : baseGrade;
+
+    // Même garde-fou que l'import échelon (voir checkDegreMismatch's own doc comment) — ne
+    // s'applique qu'une fois cette campagne HC/EXC scopée par commission (commission non null) ;
+    // une campagne pas encore scopée n'a pas de degré attendu à vérifier.
+    const degreError = checkDegreMismatch(campagne.commission, grade);
+    if (degreError) return res.status(422).json({ error: degreError });
 
     // Same teacher-identity rule as the échelon import (exact match on normalized nom+prénom+grade
     // — see that route's own comment for why), extended to also match against every HcExcSnapshot
@@ -478,7 +487,7 @@ importsRouter.post(
     // hcExcBaremeParser.ts's module doc comment) — compute it now that every record of this import
     // has a teacherId to source their avis from. A no-op for a Hors Classe campagne (nothing to
     // compute: every snapshot already has totalBareme straight from the file).
-    const bareme = campagne.type === "EXC" ? await computeEtStockerBaremeExc(campagneId) : null;
+    const bareme = campagne.nature === "EXC" ? await computeEtStockerBaremeExc(campagneId) : null;
 
     res.status(201).json({ processus: parsed.processus, grade, vivier: parsed.vivier, imported, warnings, bareme });
   }),

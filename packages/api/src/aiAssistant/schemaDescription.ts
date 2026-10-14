@@ -17,7 +17,13 @@ Tables disponibles :
 
 "Campagne" (une campagne d'avancement d'échelon, par année scolaire et par commission)
   - "id" text, "anneeScolaire" text (ex "2024-2025"), "periodeDebut" timestamp, "periodeFin" timestamp
-  - "dateCcma" timestamp, "type" text ('CCMA' = second degré, 'CCMI' = premier degré, peut être NULL)
+  - "dateCcma" timestamp
+  - "type" text ('CCMA'/'CCMI' = avancement d'échelon, 'HC' = hors classe, 'EXC' = classe exceptionnelle,
+    peut être NULL pour une campagne créée avant l'existence de ce champ) — conservé pour compatibilité,
+    préférer "commission"/"nature" ci-dessous pour une requête, plus précis
+  - "commission" text ('CCMA' = second degré, 'CCMI' = premier degré) — NULL pour une campagne HC/EXC
+    pas encore rattachée à un degré (aucune campagne de ce type n'existe encore à ce jour)
+  - "nature" text ('ECHELON' = avancement d'échelon, 'HC' = hors classe, 'EXC' = classe exceptionnelle)
   - "createdAt" timestamp
 
 "RectoratImport" (un fichier du rectorat importé pour une campagne, un grade à la fois)
