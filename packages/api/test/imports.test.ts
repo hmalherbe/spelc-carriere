@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveDepartementFromFileName } from "../src/routes/imports.js";
+import { deriveDepartementFromFileName, checkDegreMismatch } from "../src/routes/imports.js";
 
 describe("deriveDepartementFromFileName", () => {
   it("recognizes a real CCMI file name for each département — confirmed by the union", () => {
@@ -20,5 +20,42 @@ describe("deriveDepartementFromFileName", () => {
   it("doesn't misfire on a name merely containing \"var\" as a substring, not as its own word", () => {
     expect(deriveDepartementFromFileName("variation_test.txt")).toBeNull();
     expect(deriveDepartementFromFileName("Edouard VARIN - fiche.txt")).toBeNull();
+  });
+});
+
+// Real case that forced this guard: campagne CCMI 2025-2026 ended up with second-degré teachers
+// (CERTIFIE et al.) imported by mistake alongside the legitimate "Prof. Ecoles" ones.
+describe("checkDegreMismatch", () => {
+  it("rejects a premier degré grade (CCMI) imported into a CCMA campagne", () => {
+    expect(checkDegreMismatch("CCMA", "Prof. Ecoles")).toMatch(/premier degré.*CCMI/);
+    expect(checkDegreMismatch("CCMA", "Prof. Ecoles HC")).toMatch(/premier degré/);
+  });
+
+  it("rejects a second degré grade (CCMA) imported into a CCMI campagne — real case, campagne CCMI 2025-2026", () => {
+    expect(checkDegreMismatch("CCMI", "CERTIFIE")).toMatch(/second degré.*CCMA/);
+    expect(checkDegreMismatch("CCMI", "AGREGE")).toMatch(/second degré/);
+    expect(checkDegreMismatch("CCMI", "PLP")).toMatch(/second degré/);
+  });
+
+  it("allows a matching degré/campagne combination", () => {
+    expect(checkDegreMismatch("CCMA", "CERTIFIE")).toBeNull();
+    expect(checkDegreMismatch("CCMA", "AGREGE HC")).toBeNull();
+    expect(checkDegreMismatch("CCMI", "Prof. Ecoles")).toBeNull();
+    expect(checkDegreMismatch("CCMI", "Prof. Ecoles EXC")).toBeNull();
+  });
+
+  it("the premier-degré MD 1/MD 2 (maître auxiliaire) grades count as CCMI, not CCMA", () => {
+    expect(checkDegreMismatch("CCMA", "MD 1")).toMatch(/premier degré/);
+    expect(checkDegreMismatch("CCMI", "MD 2")).toBeNull();
+  });
+
+  it("never rejects on a legacy campagne with no type set (type unknown, nothing to check against)", () => {
+    expect(checkDegreMismatch(null, "Prof. Ecoles")).toBeNull();
+    expect(checkDegreMismatch(null, "CERTIFIE")).toBeNull();
+  });
+
+  it("never rejects an unrecognized grade — that's RECTORAT_GRADE_CODE_MAP's own error to raise, not this guard's", () => {
+    expect(checkDegreMismatch("CCMA", "Un grade inconnu")).toBeNull();
+    expect(checkDegreMismatch("CCMI", "Un grade inconnu")).toBeNull();
   });
 });

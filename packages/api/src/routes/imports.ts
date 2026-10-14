@@ -1,5 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
+import type { CampagneType } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
@@ -71,6 +72,32 @@ const RECTORAT_GRADE_CODE_MAP: Record<string, string> = {
 export function deriveDepartementFromFileName(fileName: string): string | null {
   if (/\balpes-maritimes\b/i.test(fileName)) return "06";
   if (/\bvar\b/i.test(fileName)) return "83";
+  return null;
+}
+
+/**
+ * Guards against a real mis-manipulation (campagne CCMI 2025-2026 : des enseignants du second degré
+ * s'y sont retrouvés) : un grade du premier degré (CCMI, GradeMapping.degre === 1) importé dans une
+ * campagne CCMA, ou un grade du second degré (degre === 2) importé dans une campagne CCMI. Renvoie
+ * le message d'erreur explicite à afficher/stocker sur ce bloc de grade, ou null si rien ne cloche.
+ * campagneType === null (campagnes créées avant l'existence de ce champ, voir schema.prisma) ne
+ * déclenche jamais de refus : le type attendu est alors inconnu, pas de contrôle possible.
+ */
+export function checkDegreMismatch(campagneType: CampagneType | null, grade: string): string | null {
+  const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === grade);
+  if (!gradeMapping) return null;
+  if (campagneType === "CCMA" && gradeMapping.degre !== 2) {
+    return (
+      `Import refusé : "${grade}" est un grade du premier degré (CCMI), incompatible avec cette campagne ` +
+      `CCMA (second degré). Importez ce fichier dans une campagne CCMI plutôt que dans celle-ci.`
+    );
+  }
+  if (campagneType === "CCMI" && gradeMapping.degre !== 1) {
+    return (
+      `Import refusé : "${grade}" est un grade du second degré (CCMA), incompatible avec cette campagne ` +
+      `CCMI (premier degré). Importez ce fichier dans une campagne CCMA plutôt que dans celle-ci.`
+    );
+  }
   return null;
 }
 
@@ -161,6 +188,14 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
       continue;
     }
     const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === grade)!;
+
+    // Rejeté par bloc de grade, plutôt que silencieusement mélangé aux enseignants légitimes de la
+    // campagne (voir checkDegreMismatch's own doc comment — cas réel, campagne CCMI 2025-2026).
+    const degreError = checkDegreMismatch(campagne.type, grade);
+    if (degreError) {
+      results.push({ gradeCode: gradeBlock.gradeCode, grade, imported: 0, warnings: [], error: degreError });
+      continue;
+    }
 
     // For agrégés hors-classe/classe-exceptionnelle (HC_AGR, EXC_AGR, EXC_PROFS), the rectorat's
     // own PDF keeps counting échelons numerically past the grille's own plain-numeric range, where
