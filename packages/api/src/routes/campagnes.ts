@@ -23,6 +23,28 @@ export function deriveCommissionNature(
   return { nature: type, commission: commissionInput ?? null };
 }
 
+/**
+ * The 6 (commission, nature) slots a complete "année scolaire" covers — the union's own ask (voir
+ * l'étude de faisabilité "année scolaire comme entité de premier niveau", 2026-10-15) : une CCMA et
+ * une CCMI d'avancement d'échelon, plus une CCMA et une CCMI pour chacune de HC et EXC. Order here
+ * is purely the order createAnneeScolaire below creates them in — doesn't drive anything else.
+ */
+export const ANNEE_SCOLAIRE_SLOTS: { commission: Commission; nature: CampagneNature }[] = [
+  { commission: "CCMA", nature: "ECHELON" },
+  { commission: "CCMI", nature: "ECHELON" },
+  { commission: "CCMA", nature: "HC" },
+  { commission: "CCMA", nature: "EXC" },
+  { commission: "CCMI", nature: "HC" },
+  { commission: "CCMI", nature: "EXC" },
+];
+
+/** The `type` a given slot maps to — inverse of deriveCommissionNature: ECHELON's type IS the
+ * commission itself, HC/EXC's type is the nature itself (commission is the extra info `type` alone
+ * never carried for those two — see Campagne.commission's own doc comment in schema.prisma). */
+export function campagneTypeForSlot(slot: { commission: Commission; nature: CampagneNature }): CampagneType {
+  return slot.nature === "ECHELON" ? slot.commission : slot.nature;
+}
+
 campagnesRouter.use(requireAuth);
 
 campagnesRouter.get("/", async (_req, res) => {
@@ -75,6 +97,59 @@ campagnesRouter.post("/", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res)
     },
   });
   res.status(201).json(campagne);
+});
+
+const createAnneeScolaireSchema = z.object({
+  anneeScolaire: z.string().min(1),
+  periodeDebut: z.string().datetime().or(z.string().date()),
+  periodeFin: z.string().datetime().or(z.string().date()),
+  dateCcma: z.string().datetime().or(z.string().date()),
+});
+
+/**
+ * Creates every one of the 6 ANNEE_SCOLAIRE_SLOTS campagnes for a given année scolaire in one call
+ * — the "Nouvelle année scolaire" button in the header selector (Layout.tsx), instead of an admin
+ * creating CCMA, then CCMI, then CCMA-HC, etc. one at a time across two different pages as before.
+ * Idempotent/safe to re-run: a slot already covered by an existing campagne for this anneeScolaire
+ * (matched on commission+nature, set for every campagne since the 2026-10-14 migration) is skipped,
+ * never duplicated — so this also works to "fill in the gaps" for an année scolaire only partially
+ * created today (e.g. only CCMA/CCMI échelon exist so far). Every created campagne shares the same
+ * periodeDebut/periodeFin/dateCcma given here; each commission's actual CCMA/CCMI meeting date
+ * typically differs in practice, so the admin is expected to adjust individual campagnes' dateCcma
+ * afterward via the existing PATCH /:id — same as any other post-creation date fix.
+ */
+campagnesRouter.post("/annee-scolaire", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const parsed = createAnneeScolaireSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+  }
+  const { anneeScolaire, periodeDebut, periodeFin, dateCcma } = parsed.data;
+
+  const existing = await prisma.campagne.findMany({ where: { anneeScolaire } });
+
+  const created: Awaited<ReturnType<typeof prisma.campagne.create>>[] = [];
+  const skipped: { commission: Commission; nature: CampagneNature }[] = [];
+  for (const slot of ANNEE_SCOLAIRE_SLOTS) {
+    const alreadyExists = existing.some((c) => c.commission === slot.commission && c.nature === slot.nature);
+    if (alreadyExists) {
+      skipped.push(slot);
+      continue;
+    }
+    const campagne = await prisma.campagne.create({
+      data: {
+        anneeScolaire,
+        periodeDebut: new Date(periodeDebut),
+        periodeFin: new Date(periodeFin),
+        dateCcma: new Date(dateCcma),
+        type: campagneTypeForSlot(slot),
+        commission: slot.commission,
+        nature: slot.nature,
+      },
+    });
+    created.push(campagne);
+  }
+
+  res.status(201).json({ created, skipped });
 });
 
 // Every field but all optional — a PATCH only updates whatever it includes, so the same route

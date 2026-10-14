@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./AuthContext.js";
+import { CampagneProvider } from "./CampagneContext.js";
 import { Layout } from "./components/Layout.js";
 import { LoginPage } from "./pages/LoginPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
@@ -33,7 +34,9 @@ export function App() {
         path="/"
         element={
           <RequireAuth>
-            <Layout />
+            <CampagneProvider>
+              <Layout />
+            </CampagneProvider>
           </RequireAuth>
         }
       >

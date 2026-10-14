@@ -1,5 +1,9 @@
+import { useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../AuthContext.js";
+import { useCampagneContext } from "../CampagneContext.js";
+import { api } from "../api.js";
+import { derivePeriodeFromAnneeScolaire } from "../format.js";
 
 // Level 3 of the tree, in practice: everything already built under "Suivi de la carrière >
 // Avancement" (échelon CCMA/CCMI). Kept as a flat list of paths so both the "Avancement" dropdown
@@ -17,6 +21,114 @@ const AVANCEMENT_PATHS = [
   "/statistiques",
 ];
 
+type AnneeScolaireDraft = { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string };
+const EMPTY_DRAFT: AnneeScolaireDraft = { anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: "" };
+
+/**
+ * Sélecteur global d'année scolaire — remplace, à terme, le sélecteur de campagne local que chaque
+ * page (Dashboard/Mailing/Reliquats/Stats/Import/Hors classe) gère aujourd'hui indépendamment (voir
+ * l'étude de faisabilité "année scolaire comme entité de premier niveau", 2026-10-15). Première
+ * étape : visible et fonctionnel ici, mais aucune page n'y est encore branchée — elles gardent leur
+ * propre sélecteur de campagne inchangé pour l'instant, pour ne rien casser pendant la migration
+ * progressive. Le compteur "X/6" à côté de chaque année rend tout de suite service en l'état : il
+ * montre d'un coup d'œil quelles années scolaires restent incomplètes (ex. seules les CCMA/CCMI
+ * d'échelon existent, pas encore HC/EXC).
+ */
+function AnneeScolairePicker() {
+  const { user } = useAuth();
+  const canCreate = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
+  const { campagnes, anneesScolaires, selectedAnneeScolaire, setSelectedAnneeScolaire, refresh } = useCampagneContext();
+
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [draft, setDraft] = useState<AnneeScolaireDraft>(EMPTY_DRAFT);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const countByAnnee = new Map<string, number>();
+  for (const c of campagnes) countByAnnee.set(c.anneeScolaire, (countByAnnee.get(c.anneeScolaire) ?? 0) + 1);
+
+  async function submitCreate(e: FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const { created } = await api.createAnneeScolaire(draft);
+      await refresh();
+      setSelectedAnneeScolaire(draft.anneeScolaire);
+      setShowCreateForm(false);
+      setDraft(EMPTY_DRAFT);
+      if (created.length === 0) {
+        setCreateError(`"${draft.anneeScolaire}" existait déjà en entier (6/6) — rien de nouveau créé.`);
+      }
+    } catch (err) {
+      setCreateError(String(err));
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="annee-scolaire-picker">
+      {anneesScolaires.length > 0 && (
+        <select
+          aria-label="Année scolaire"
+          value={selectedAnneeScolaire ?? ""}
+          onChange={(e) => setSelectedAnneeScolaire(e.target.value)}
+        >
+          {anneesScolaires.map((a) => (
+            <option key={a} value={a}>
+              {a} ({countByAnnee.get(a) ?? 0}/6)
+            </option>
+          ))}
+        </select>
+      )}
+      {canCreate && (
+        <button type="button" className="annee-scolaire-create-button" onClick={() => setShowCreateForm((s) => !s)}>
+          + Année scolaire
+        </button>
+      )}
+      {showCreateForm && (
+        <form className="annee-scolaire-form-panel" onSubmit={submitCreate}>
+          <label>
+            Année scolaire
+            <input
+              required
+              placeholder="2026-2027"
+              value={draft.anneeScolaire}
+              onChange={(e) => {
+                const anneeScolaire = e.target.value;
+                const derived = derivePeriodeFromAnneeScolaire(anneeScolaire);
+                setDraft((s) => ({ ...s, anneeScolaire, ...(derived ?? {}) }));
+              }}
+            />
+          </label>
+          <label>
+            Début de période
+            <input required type="date" value={draft.periodeDebut} onChange={(e) => setDraft((s) => ({ ...s, periodeDebut: e.target.value }))} />
+          </label>
+          <label>
+            Fin de période
+            <input required type="date" value={draft.periodeFin} onChange={(e) => setDraft((s) => ({ ...s, periodeFin: e.target.value }))} />
+          </label>
+          <label>
+            Date CCMA/CCMI de référence
+            <input required type="date" value={draft.dateCcma} onChange={(e) => setDraft((s) => ({ ...s, dateCcma: e.target.value }))} />
+          </label>
+          <p className="hint">
+            Crée les 6 campagnes de cette année (CCMA/CCMI échelon, HC, EXC) avec cette même date de référence — à ajuster
+            ensuite au cas par cas depuis Import / Hors classe-Classe exceptionnelle, chaque commission se réunissant en
+            général à une date différente. Sans effet sur les campagnes déjà créées pour cette année scolaire.
+          </p>
+          <button type="submit" disabled={creating}>
+            {creating ? "Création..." : "Créer"}
+          </button>
+          {createError && <p className="error-text">{createError}</p>}
+        </form>
+      )}
+    </div>
+  );
+}
+
 export function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -28,6 +140,7 @@ export function Layout() {
     <div className="app-shell">
       <header className="app-header">
         <h1>Spelc Côte d'Azur</h1>
+        <AnneeScolairePicker />
         <nav>
           <div className="nav-group">
             <button type="button" className={`nav-group-label${inCarriere ? " active" : ""}`}>

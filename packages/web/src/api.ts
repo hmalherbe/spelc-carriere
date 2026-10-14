@@ -102,8 +102,16 @@ export interface Campagne {
   /** CCMA (second degré) / CCMI (premier degré) — avancement d'échelon, détermine les élus
    * insérés dans les mailings de cette campagne (page Élus CCMA/CCMI) — ou HC/EXC — Hors Classe /
    * Classe exceptionnelle, voir HorsClasseExceptionnellePage. null seulement pour une campagne
-   * créée avant l'ajout de ce champ. */
+   * créée avant l'ajout de ce champ. Conservé pour compatibilité — préférer `commission`/`nature`
+   * ci-dessous (plus précis, voir leurs propres commentaires). */
   type: "CCMA" | "CCMI" | "HC" | "EXC" | null;
+  /** CCMA (second degré) / CCMI (premier degré) — quelle commission gère cette campagne, quelle
+   * que soit sa nature (échelon, HC ou EXC). null pour une campagne HC/EXC pas encore rattachée à
+   * un degré (aucune campagne de ce type n'existe encore à ce jour). */
+  commission: "CCMA" | "CCMI" | null;
+  /** ECHELON (avancement d'échelon) / HC (hors classe) / EXC (classe exceptionnelle) — quel
+   * processus cette campagne couvre, indépendamment de la commission. */
+  nature: "ECHELON" | "HC" | "EXC" | null;
   _count: { teacherSnapshots: number; imports: number };
 }
 
@@ -536,6 +544,14 @@ export const api = {
     dateCcma: string;
     type: "CCMA" | "CCMI" | "HC" | "EXC";
   }) => request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
+  /** Crée les 6 campagnes d'une année scolaire en un appel (CCMA/CCMI échelon + CCMA/CCMI HC +
+   * CCMA/CCMI EXC) — idempotent : une case déjà couverte pour cette année scolaire est renvoyée
+   * dans `skipped`, jamais dupliquée (voir routes/campagnes.ts's own doc comment). */
+  createAnneeScolaire: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }) =>
+    request<{ created: Campagne[]; skipped: { commission: "CCMA" | "CCMI"; nature: "ECHELON" | "HC" | "EXC" }[] }>(
+      "/campagnes/annee-scolaire",
+      { method: "POST", body: JSON.stringify(data) },
+    ),
   updateCampagneType: (id: string, type: "CCMA" | "CCMI" | "HC" | "EXC") =>
     request<Campagne>(`/campagnes/${id}`, { method: "PATCH", body: JSON.stringify({ type }) }),
   updateCampagne: (
