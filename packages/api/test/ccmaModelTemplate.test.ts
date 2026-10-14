@@ -25,6 +25,7 @@ const BASE: CcmaModelContext = {
   dateEffetCcm: "2026-04-07",
   typePromotion: "AN",
   dureeRestanteEncoded: null,
+  ancienneteAReporterManuelle: null,
   bonification: "ANCIENNETE",
   dateEligibiliteBA: null,
   pourcentagePromusBa: null,
@@ -138,6 +139,37 @@ describe("buildCcmaModelEmail", () => {
     expect(buildCcmaModelEmail({ ...BASE, typePromotion: "BA", dureeRestanteEncoded: "01a00m00j" }).html).not.toContain(
       "report d'ancienneté",
     );
+  });
+
+  // Confirmed by the union (2026-10-14): editing "ancienneté à reporter" from the Enseignants page
+  // immediately recomputes the announced date, but the "report d'ancienneté" sentence still quoted
+  // the rectorat's own raw marker — showing a report figure inconsistent with the date right after
+  // it whenever an admin corrected a wrong/missing automatic derivation.
+  it("prefers the manual ancienneté-à-reporter correction over the rectorat's raw marker in the report d'ancienneté sentence", () => {
+    const html = buildCcmaModelEmail({
+      ...BASE,
+      typePromotion: "RE",
+      dureeRestanteEncoded: "00a11m05j", // the rectorat's own (wrong/incomplete) figure
+      ancienneteAReporterManuelle: "01a02m10j", // the admin's correction — must win
+    }).html;
+    expect(html).toContain("vous aviez un report d'ancienneté de 1 an 2 mois 10 jours");
+    expect(html).not.toContain("11 mois 5 jours");
+  });
+
+  it("shows the manual correction even when typePromotion is BA or null — the correction is a deliberate override, not gated on the rectorat's own marker", () => {
+    expect(
+      buildCcmaModelEmail({ ...BASE, typePromotion: "BA", dureeRestanteEncoded: null, ancienneteAReporterManuelle: "00a06m00j" }).html,
+    ).toContain("vous aviez un report d'ancienneté de 6 mois");
+    expect(
+      buildCcmaModelEmail({ ...BASE, typePromotion: null, dureeRestanteEncoded: null, ancienneteAReporterManuelle: "00a06m00j" }).html,
+    ).toContain("vous aviez un report d'ancienneté de 6 mois");
+  });
+
+  it("omits the report d'ancienneté paragraph when the manual correction is literally zero, even if typePromotion wouldn't otherwise show it", () => {
+    expect(
+      buildCcmaModelEmail({ ...BASE, typePromotion: "BA", dureeRestanteEncoded: "01a00m00j", ancienneteAReporterManuelle: "00a00m00j" })
+        .html,
+    ).not.toContain("report d'ancienneté");
   });
 
   it("shows the accelerated future-promotion variant when landing on a BA window (échelon 6 or 8)", () => {

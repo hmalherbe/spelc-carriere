@@ -171,6 +171,7 @@ function buildCcmaModelContext(
     dateEffetCcm,
     typePromotion: recipient.typePromotion,
     dureeRestanteEncoded: recipient.dureeRestante,
+    ancienneteAReporterManuelle: recipient.ancienneteAReporterManuelle,
     bonification,
     dateEligibiliteBA,
     pourcentagePromusBa,
@@ -291,6 +292,13 @@ async function eligibleRecipients(campagneId: string) {
     dateAccesEchelon: Date;
     typePromotion: string | null;
     dureeRestante: string | null;
+    /** Correction manuelle "ancienneté à reporter" (Teacher.ancienneteAReporter's doc comment) —
+     * REMPLACE entièrement le marqueur brut du rectorat (typePromotion/dureeRestante ci-dessus) dans
+     * la phrase "report d'ancienneté" du courrier quand elle est présente (voir
+     * ccmaModelTemplate.ts's buildReportAncienneteBlock), exactement comme elle remplace déjà la
+     * dérivation automatique dans le calcul de date (promotionState.ts) — sinon la lettre citerait un
+     * report différent de celui qui a réellement déterminé la date annoncée juste après. */
+    ancienneteAReporterManuelle: string | null;
     proTypePromotion: string | null;
     proConfirmee: boolean;
     dateProchainePromotionRectorat: Date | null;
@@ -368,6 +376,7 @@ async function eligibleRecipients(campagneId: string) {
       dateAccesEchelon: snap.dateAccesEchelon,
       typePromotion: snap.typePromotion,
       dureeRestante: snap.dureeRestante,
+      ancienneteAReporterManuelle: teacher.ancienneteAReporter,
       proTypePromotion: snap.proTypePromotion,
       proConfirmee: snap.proConfirmee,
       dateProchainePromotionRectorat: snap.dateProchainePromotionRectorat,
