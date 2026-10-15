@@ -103,7 +103,6 @@ const createAnneeScolaireSchema = z.object({
   anneeScolaire: z.string().min(1),
   periodeDebut: z.string().datetime().or(z.string().date()),
   periodeFin: z.string().datetime().or(z.string().date()),
-  dateCcma: z.string().datetime().or(z.string().date()),
 });
 
 /**
@@ -113,17 +112,22 @@ const createAnneeScolaireSchema = z.object({
  * Idempotent/safe to re-run: a slot already covered by an existing campagne for this anneeScolaire
  * (matched on commission+nature, set for every campagne since the 2026-10-14 migration) is skipped,
  * never duplicated — so this also works to "fill in the gaps" for an année scolaire only partially
- * created today (e.g. only CCMA/CCMI échelon exist so far). Every created campagne shares the same
- * periodeDebut/periodeFin/dateCcma given here; each commission's actual CCMA/CCMI meeting date
- * typically differs in practice, so the admin is expected to adjust individual campagnes' dateCcma
- * afterward via the existing PATCH /:id — same as any other post-creation date fix.
+ * created today (e.g. only CCMA/CCMI échelon exist so far).
+ *
+ * No `dateCcma` here (confirmed by the union, 2026-10-15) : each commission's CCMA/CCMI meeting
+ * date is always decided separately — there is no single shared "date de référence" to ask for up
+ * front, only 6 dates to fill in once each is actually known. `periodeDebut` is used as a harmless
+ * placeholder (same convention as routes/imports.ts's own dateAccesEchelon fallback) — every
+ * created campagne genuinely needs its own real date set afterward via the existing PATCH /:id
+ * (ImportPage's "Modifier les dates" / HorsClasseExceptionnellePage's own equivalent), same as any
+ * other post-creation date fix.
  */
 campagnesRouter.post("/annee-scolaire", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
   const parsed = createAnneeScolaireSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
   }
-  const { anneeScolaire, periodeDebut, periodeFin, dateCcma } = parsed.data;
+  const { anneeScolaire, periodeDebut, periodeFin } = parsed.data;
 
   const existing = await prisma.campagne.findMany({ where: { anneeScolaire } });
 
@@ -140,7 +144,7 @@ campagnesRouter.post("/annee-scolaire", requireRole("ADMIN", "GESTIONNAIRE"), as
         anneeScolaire,
         periodeDebut: new Date(periodeDebut),
         periodeFin: new Date(periodeFin),
-        dateCcma: new Date(dateCcma),
+        dateCcma: new Date(periodeDebut),
         type: campagneTypeForSlot(slot),
         commission: slot.commission,
         nature: slot.nature,

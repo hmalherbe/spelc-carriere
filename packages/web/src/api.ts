@@ -549,8 +549,10 @@ export const api = {
   }) => request<Campagne>("/campagnes", { method: "POST", body: JSON.stringify(data) }),
   /** Crée les 6 campagnes d'une année scolaire en un appel (CCMA/CCMI échelon + CCMA/CCMI HC +
    * CCMA/CCMI EXC) — idempotent : une case déjà couverte pour cette année scolaire est renvoyée
-   * dans `skipped`, jamais dupliquée (voir routes/campagnes.ts's own doc comment). */
-  createAnneeScolaire: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string }) =>
+   * dans `skipped`, jamais dupliquée (voir routes/campagnes.ts's own doc comment). Pas de dateCcma
+   * ici : chaque commission a sa propre date de réunion, à renseigner individuellement une fois
+   * connue (page Import / Hors classe-Classe exceptionnelle). */
+  createAnneeScolaire: (data: { anneeScolaire: string; periodeDebut: string; periodeFin: string }) =>
     request<{ created: Campagne[]; skipped: { commission: "CCMA" | "CCMI"; nature: "ECHELON" | "HC" | "EXC" }[] }>(
       "/campagnes/annee-scolaire",
       { method: "POST", body: JSON.stringify(data) },

@@ -21,18 +21,16 @@ const AVANCEMENT_PATHS = [
   "/statistiques",
 ];
 
-type AnneeScolaireDraft = { anneeScolaire: string; periodeDebut: string; periodeFin: string; dateCcma: string };
-const EMPTY_DRAFT: AnneeScolaireDraft = { anneeScolaire: "", periodeDebut: "", periodeFin: "", dateCcma: "" };
+type AnneeScolaireDraft = { anneeScolaire: string; periodeDebut: string; periodeFin: string };
+const EMPTY_DRAFT: AnneeScolaireDraft = { anneeScolaire: "", periodeDebut: "", periodeFin: "" };
 
 /**
- * Sélecteur global d'année scolaire — remplace, à terme, le sélecteur de campagne local que chaque
- * page (Dashboard/Mailing/Reliquats/Stats/Import/Hors classe) gère aujourd'hui indépendamment (voir
- * l'étude de faisabilité "année scolaire comme entité de premier niveau", 2026-10-15). Première
- * étape : visible et fonctionnel ici, mais aucune page n'y est encore branchée — elles gardent leur
- * propre sélecteur de campagne inchangé pour l'instant, pour ne rien casser pendant la migration
- * progressive. Le compteur "X/6" à côté de chaque année rend tout de suite service en l'état : il
- * montre d'un coup d'œil quelles années scolaires restent incomplètes (ex. seules les CCMA/CCMI
- * d'échelon existent, pas encore HC/EXC).
+ * Sélecteur global d'année scolaire (voir l'étude de faisabilité "année scolaire comme entité de
+ * premier niveau", 2026-10-15) — pilote le contexte (CampagneContext) dont dérivent toutes les
+ * pages d'avancement/adhérents (Dashboard, Revue, Adhérents éligibles, Import, Mailing, Reliquats,
+ * Statistiques, Hors classe/Classe exceptionnelle), chacune filtrant à son tour sur la nature qui la
+ * concerne. Le compteur "X/6" à côté de chaque année montre d'un coup d'œil quelles années scolaires
+ * restent incomplètes (ex. seules les CCMA/CCMI d'échelon existent, pas encore HC/EXC).
  */
 function AnneeScolairePicker() {
   const { user } = useAuth();
@@ -110,14 +108,10 @@ function AnneeScolairePicker() {
             Fin de période
             <input required type="date" value={draft.periodeFin} onChange={(e) => setDraft((s) => ({ ...s, periodeFin: e.target.value }))} />
           </label>
-          <label>
-            Date CCMA/CCMI de référence
-            <input required type="date" value={draft.dateCcma} onChange={(e) => setDraft((s) => ({ ...s, dateCcma: e.target.value }))} />
-          </label>
           <p className="hint">
-            Crée les 6 campagnes de cette année (CCMA/CCMI échelon, HC, EXC) avec cette même date de référence — à ajuster
-            ensuite au cas par cas depuis Import / Hors classe-Classe exceptionnelle, chaque commission se réunissant en
-            général à une date différente. Sans effet sur les campagnes déjà créées pour cette année scolaire.
+            Crée les 6 campagnes de cette année (CCMA/CCMI échelon, HC, EXC) — chaque commission ayant sa propre date de
+            réunion, à renseigner ensuite individuellement depuis Import / Hors classe-Classe exceptionnelle une fois
+            connue. Sans effet sur les campagnes déjà créées pour cette année scolaire.
           </p>
           <button type="submit" disabled={creating}>
             {creating ? "Création..." : "Créer"}
