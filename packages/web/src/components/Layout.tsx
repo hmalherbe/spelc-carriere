@@ -35,12 +35,18 @@ const EMPTY_DRAFT: AnneeScolaireDraft = { anneeScolaire: "", periodeDebut: "", p
 function AnneeScolairePicker() {
   const { user } = useAuth();
   const canCreate = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
-  const { campagnes, anneesScolaires, selectedAnneeScolaire, setSelectedAnneeScolaire, refresh } = useCampagneContext();
+  const { campagnes, campagnesAnneeSelectionnee, anneesScolaires, selectedAnneeScolaire, setSelectedAnneeScolaire, refresh } =
+    useCampagneContext();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [draft, setDraft] = useState<AnneeScolaireDraft>(EMPTY_DRAFT);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const countByAnnee = new Map<string, number>();
   for (const c of campagnes) countByAnnee.set(c.anneeScolaire, (countByAnnee.get(c.anneeScolaire) ?? 0) + 1);
@@ -65,13 +71,36 @@ function AnneeScolairePicker() {
     }
   }
 
+  async function confirmDeleteAnneeScolaire() {
+    if (!selectedAnneeScolaire || deleteConfirmText !== selectedAnneeScolaire) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteAnneeScolaire(selectedAnneeScolaire);
+      await refresh();
+      setShowDeleteConfirm(false);
+      setDeleteConfirmText("");
+    } catch (err) {
+      setDeleteError(String(err));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const totalTeachers = campagnesAnneeSelectionnee.reduce((sum, c) => sum + c._count.teacherSnapshots, 0);
+  const totalImports = campagnesAnneeSelectionnee.reduce((sum, c) => sum + c._count.imports, 0);
+
   return (
     <div className="annee-scolaire-picker">
       {anneesScolaires.length > 0 && (
         <select
           aria-label="Année scolaire"
           value={selectedAnneeScolaire ?? ""}
-          onChange={(e) => setSelectedAnneeScolaire(e.target.value)}
+          onChange={(e) => {
+            setSelectedAnneeScolaire(e.target.value);
+            setShowDeleteConfirm(false);
+            setDeleteConfirmText("");
+          }}
         >
           {anneesScolaires.map((a) => (
             <option key={a} value={a}>
@@ -83,6 +112,11 @@ function AnneeScolairePicker() {
       {canCreate && (
         <button type="button" className="annee-scolaire-create-button" onClick={() => setShowCreateForm((s) => !s)}>
           + Année scolaire
+        </button>
+      )}
+      {canCreate && selectedAnneeScolaire && campagnesAnneeSelectionnee.length > 0 && (
+        <button type="button" className="secondary annee-scolaire-delete-button" onClick={() => setShowDeleteConfirm((s) => !s)}>
+          Supprimer cette année scolaire
         </button>
       )}
       {showCreateForm && (
@@ -118,6 +152,42 @@ function AnneeScolairePicker() {
           </button>
           {createError && <p className="error-text">{createError}</p>}
         </form>
+      )}
+      {showDeleteConfirm && selectedAnneeScolaire && (
+        <div className="annee-scolaire-form-panel annee-scolaire-delete-panel">
+          <p className="error-text">
+            <strong>Action irréversible.</strong> Supprime les {campagnesAnneeSelectionnee.length} campagne(s) de l'année
+            scolaire « {selectedAnneeScolaire} » (avancement d'échelon CCMA/CCMI, hors classe, classe exceptionnelle) et
+            TOUTES leurs données : {totalTeachers} enseignant(s) importé(s) au total, {totalImports} fichier(s) rectorat
+            importé(s), les promotions calculées, les reliquats, les contingents et l'historique d'envois de mailing de
+            chacune.
+          </p>
+          <label>
+            Retapez « {selectedAnneeScolaire} » pour confirmer
+            <input value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} placeholder={selectedAnneeScolaire} />
+          </label>
+          <div className="annee-scolaire-delete-actions">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                setDeleteConfirmText("");
+                setDeleteError(null);
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={deleteConfirmText !== selectedAnneeScolaire || deleting}
+              onClick={confirmDeleteAnneeScolaire}
+            >
+              {deleting ? "Suppression..." : "Supprimer définitivement"}
+            </button>
+          </div>
+          {deleteError && <p className="error-text">{deleteError}</p>}
+        </div>
       )}
     </div>
   );

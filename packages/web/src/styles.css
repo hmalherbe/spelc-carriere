@@ -184,6 +184,17 @@ button.chip:hover {
   white-space: nowrap;
 }
 
+.annee-scolaire-delete-panel {
+  right: 0;
+  left: auto;
+  min-width: 340px;
+}
+
+.annee-scolaire-delete-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .annee-scolaire-form-panel {
   position: absolute;
   top: 100%;

@@ -557,6 +557,12 @@ export const api = {
       "/campagnes/annee-scolaire",
       { method: "POST", body: JSON.stringify(data) },
     ),
+  /** Irreversible : supprime les 6 campagnes (au plus) de cette année scolaire et toutes leurs
+   * données (enseignants importés, promotions calculées, reliquats, contingents, historique de
+   * mailing) — voir routes/campagnes.ts's own doc comment. Le caller (Layout.tsx) est responsable
+   * d'avoir déjà prévenu l'admin avant d'appeler ceci. */
+  deleteAnneeScolaire: (anneeScolaire: string) =>
+    request<void>(`/campagnes/annee-scolaire/${encodeURIComponent(anneeScolaire)}`, { method: "DELETE" }),
   updateCampagneType: (id: string, type: "CCMA" | "CCMI" | "HC" | "EXC") =>
     request<Campagne>(`/campagnes/${id}`, { method: "PATCH", body: JSON.stringify({ type }) }),
   updateCampagne: (

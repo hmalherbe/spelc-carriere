@@ -217,19 +217,20 @@ campagnesRouter.patch("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, 
 });
 
 /**
- * Permanently deletes a campagne and every piece of data tied to it: imports, teacher/HC-EXC
+ * Permanently deletes ONE campagne and every piece of data tied to it: imports, teacher/HC-EXC
  * snapshots, computed promotion states, contingents, reliquats, mailing logs. A Teacher this
  * campagne's own data touched is deleted too, but ONLY if this campagne was its sole remaining data
  * — a teacher who also appears in another, still-existing campagne (and their adherent match,
- * manual ancienneté corrections, civilité override...) must survive untouched. Irreversible: no
- * confirmation at this layer, the caller (ImportPage.tsx) is expected to have already warned the
- * admin before calling this.
+ * manual ancienneté corrections, civilité override...) must survive untouched. Shared by the
+ * single-campagne DELETE /:id and the whole-année-scolaire DELETE /annee-scolaire/:anneeScolaire
+ * below (called once per campagne, sequentially — see that route's own doc comment for why running
+ * this per-campagne, live each time, is what keeps the orphan-teacher check correct across several
+ * campagnes sharing a teacher, e.g. the same person in both this année's CCMA-échelon and CCMA-HC).
+ * Irreversible: no confirmation at this layer, the callers (ImportPage.tsx,
+ * HorsClasseExceptionnellePage.tsx, Layout.tsx's "Supprimer cette année scolaire") are expected to
+ * have already warned the admin before calling this.
  */
-campagnesRouter.delete("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
-  const campagneId = req.params.id;
-  const existing = await prisma.campagne.findUnique({ where: { id: campagneId } });
-  if (!existing) return res.status(404).json({ error: "Campagne introuvable" });
-
+async function deleteCampagneAndItsData(campagneId: string): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const touchedTeacherIds = new Set<string>();
     for (const s of await tx.teacherSnapshot.findMany({ where: { campagneId }, select: { teacherId: true } })) touchedTeacherIds.add(s.teacherId);
@@ -261,7 +262,32 @@ campagnesRouter.delete("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req,
 
     await tx.campagne.delete({ where: { id: campagneId } });
   });
+}
 
+campagnesRouter.delete("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const campagneId = req.params.id;
+  const existing = await prisma.campagne.findUnique({ where: { id: campagneId } });
+  if (!existing) return res.status(404).json({ error: "Campagne introuvable" });
+  await deleteCampagneAndItsData(campagneId);
+  res.status(204).end();
+});
+
+/**
+ * Permanently deletes EVERY campagne of a given année scolaire (up to the 6 ANNEE_SCOLAIRE_SLOTS)
+ * and all their data, one campagne at a time via deleteCampagneAndItsData above — the "Supprimer
+ * cette année scolaire" button in the header selector (Layout.tsx), instead of an admin repeating
+ * the single-campagne delete up to 6 times across Import and Hors classe-Classe exceptionnelle.
+ * Sequential, not parallel: each deleteCampagneAndItsData call re-queries live snapshot data to
+ * decide which teachers are now orphaned, which must see the PREVIOUS campagne's deletions already
+ * applied to be correct for a teacher shared across two of this année's campagnes.
+ */
+campagnesRouter.delete("/annee-scolaire/:anneeScolaire", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const { anneeScolaire } = req.params;
+  const campagnes = await prisma.campagne.findMany({ where: { anneeScolaire }, select: { id: true } });
+  if (campagnes.length === 0) return res.status(404).json({ error: "Aucune campagne pour cette année scolaire" });
+  for (const c of campagnes) {
+    await deleteCampagneAndItsData(c.id);
+  }
   res.status(204).end();
 });
 
