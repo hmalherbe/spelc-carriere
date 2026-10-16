@@ -45,14 +45,17 @@ adelRouter.get("/last", asyncHandler(async (req, res) => {
   res.json(last);
 }));
 
-const syncSchema = z.object({ type: z.enum(["CCMA", "CCMI"]) });
+// campagneId: the campagne selected in the UI when the sync was triggered — needed so the just-
+// imported adherents get matched only against teachers from that same année scolaire (see
+// importAdherentRecords / matchUnresolvedAdherents), not against every teacher ever imported.
+const syncSchema = z.object({ type: z.enum(["CCMA", "CCMI"]), campagneId: z.string().min(1) });
 
 adelRouter.post("/sync", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
   const parsed = syncSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
   }
-  const type: AdelSyncType = parsed.data.type;
+  const { type, campagneId }: { type: AdelSyncType; campagneId: string } = parsed.data;
 
   let config;
   try {
@@ -67,7 +70,7 @@ adelRouter.post("/sync", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(asyn
     const { records, unmappedFields } = await parseAdherentXlsx(buffer);
     // prune: false — this file only ever covers one commission (CCMA or CCMI), never the whole
     // roster; see importAdherentRecords's own doc comment for the real incident this avoids.
-    const { created, updated, deleted, matching } = await importAdherentRecords(records, { prune: false });
+    const { created, updated, deleted, matching } = await importAdherentRecords(records, { prune: false }, campagneId);
 
     const log = await prisma.adelSyncLog.create({
       data: { type, status: "SUCCESS", created, updated, triggeredById: req.auth!.userId },

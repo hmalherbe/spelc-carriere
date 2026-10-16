@@ -64,10 +64,11 @@ export function ReviewQueuePage() {
   }
 
   async function rescan() {
+    if (!campagneId) return;
     setRescanning(true);
     setRescanResult(null);
     try {
-      const result = await api.rescanMatches();
+      const result = await api.rescanMatches(campagneId);
       setRescanResult(
         `${result.autoConfirmed} confirmé(s) automatiquement, ${result.pendingReview} en attente, ` +
           `${result.clearedLowConfidence} suggestion(s) faible(s) retirée(s) (sous le seuil configuré dans Paramètres).`,
@@ -87,7 +88,7 @@ export function ReviewQueuePage() {
       <div className="toolbar">
         <h2>File de révision des rapprochements adhérents ↔ enseignants</h2>
         {canReview && (
-          <button className="secondary" onClick={rescan} disabled={rescanning}>
+          <button className="secondary" onClick={rescan} disabled={rescanning || !campagneId}>
             {rescanning ? "Recalcul..." : "Recalculer les rapprochements"}
           </button>
         )}

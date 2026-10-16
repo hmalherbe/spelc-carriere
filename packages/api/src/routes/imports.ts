@@ -342,7 +342,7 @@ importsRouter.post("/rectorat", requireRole("ADMIN", "GESTIONNAIRE"), upload.sin
   // A rectorat import is exactly what can resolve an adhérent whose matching attempt previously
   // found "Aucune correspondance trouvée" simply because their teacher hadn't been imported yet —
   // retry every adhérent still stuck that way now that this file added (potentially) new teachers.
-  await matchUnresolvedAdherents();
+  await matchUnresolvedAdherents(campagneId);
 
   res.status(201).json({ results });
 }));
@@ -481,7 +481,7 @@ importsRouter.post(
 
     // Same reasoning as the échelon import above — a fresh batch of teachers may resolve adhérents
     // previously stuck on "Aucune correspondance trouvée".
-    await matchUnresolvedAdherents();
+    await matchUnresolvedAdherents(campagneId);
 
     // Classe Exceptionnelle snapshots never carry a rectorat-provided score (see
     // hcExcBaremeParser.ts's module doc comment) — compute it now that every record of this import
@@ -497,6 +497,8 @@ importsRouter.post(
 // (Excel) or the older CSV format, uploaded and matched through the exact same engine.
 importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.single("file"), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Fichier requis (champ 'file')" });
+  const { campagneId } = req.body as { campagneId?: string };
+  if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
 
   const isXlsx = /\.xlsx$/i.test(req.file.originalname);
   const { records, unmappedFields } = isXlsx
@@ -504,7 +506,7 @@ importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.si
     : parseAdherentCsv(req.file.buffer.toString("utf-8"));
   // prune: false — same reason as the automatic ADEL sync in routes/adel.ts: this manual fallback
   // uploads "the same export" per-commission, never the whole roster.
-  const { created, updated, deleted, matching } = await importAdherentRecords(records, { prune: false });
+  const { created, updated, deleted, matching } = await importAdherentRecords(records, { prune: false }, campagneId);
 
   res.status(201).json({ created, updated, deleted, unmappedFields, matching });
 }));

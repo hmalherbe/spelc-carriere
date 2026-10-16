@@ -55,8 +55,28 @@ export interface ImportAdherentRecordsResult {
  * import — only the just-touched rows can possibly need it yet); omitted, it reconsiders every
  * stuck or stale adherent in the DB (used after a rectorat import, since that's what actually
  * changes the pool of candidate teachers).
+ *
+ * `campagneId` scopes the candidate teacher pool to that campagne's année scolaire — every
+ * TeacherSnapshot/HcExcSnapshot from a DIFFERENT année scolaire is excluded, regardless of
+ * commission. Real confusion this fixes: before this scoping existed, Teacher rows persisted
+ * (correctly) across années scolaires, but matching searched ALL of them regardless of year, so an
+ * adherent imported for an année with no rectorat file yet still got suggested a teacher from a
+ * completely different, years-old campagne — technically findable, but surfaced as if it were
+ * current, which is confusing and not what a reviewer wants to see. A single année-scolaire-wide
+ * pool (not further narrowed to one commission) is enough on its own: the existing grade hard-filter
+ * in matchAdherents() already rejects a CCMA grade (e.g. "CERTIFIE") against a CCMI one (e.g. "Prof.
+ * Ecoles"), so cross-commission pairs within the same année scolaire are excluded as a natural side
+ * effect, without needing a second, redundant filter here. Confirmed/auto-confirmed links already
+ * made are never affected — this only changes which NEW suggestions get proposed.
  */
-export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<{ autoConfirmed: number; pendingReview: number }> {
+export async function matchUnresolvedAdherents(
+  campagneId: string,
+  adherentIds?: string[],
+): Promise<{ autoConfirmed: number; pendingReview: number }> {
+  const scopeCampagne = await prisma.campagne.findUnique({ where: { id: campagneId }, select: { anneeScolaire: true } });
+  if (!scopeCampagne) throw new Error(`Campagne introuvable (id: ${campagneId})`);
+  const { anneeScolaire } = scopeCampagne;
+
   const candidates = await prisma.adherent.findMany({
     where: {
       ...(adherentIds ? { id: { in: adherentIds } } : {}),
@@ -136,14 +156,18 @@ export async function matchUnresolvedAdherents(adherentIds?: string[]): Promise<
   // adhérent. Distinct per (teacherId, grade): unlike TeacherSnapshot's history-across-campagnes
   // dedup, a teacher genuinely CAN legitimately appear under two different grades here at once
   // (e.g. "PEPS" from an échelon campagne and "PEPS HC" from a Hors Classe one, mid-promotion) —
-  // both are real, distinct matching candidates, not duplicates of each other.
+  // both are real, distinct matching candidates, not duplicates of each other. Scoped to
+  // `anneeScolaire` (see this function's own doc comment) — both snapshot models carry their own
+  // campagne relation, so this is a straight join, not a second pass over unrelated data.
   const [allTeacherSnapshots, allHcExcSnapshots] = await Promise.all([
     prisma.teacherSnapshot.findMany({
+      where: { campagne: { anneeScolaire } },
       distinct: ["teacherId"],
       orderBy: { dateAccesEchelon: "desc" },
       select: { teacherId: true, nomUsage: true, prenom: true, grade: true },
     }),
     prisma.hcExcSnapshot.findMany({
+      where: { campagne: { anneeScolaire } },
       distinct: ["teacherId", "grade"],
       select: { teacherId: true, nomUsage: true, prenom: true, grade: true },
     }),
@@ -249,10 +273,15 @@ export async function purgeStaleLowConfidenceMatches(): Promise<{ cleared: numbe
  * key; MailingLog.adherentId is a plain historical string, not a real FK (same pattern as
  * sentById/triggeredById elsewhere in this schema), so past mailing history for that person would
  * stay untouched either way.
+ *
+ * `campagneId` is the campagne this import run is FOR (the one selected in the UI when the sync/
+ * upload was triggered) — forwarded to matchUnresolvedAdherents to scope its teacher pool to that
+ * campagne's année scolaire, not a choice this function makes on its own.
  */
 export async function importAdherentRecords(
   records: AdherentRecord[],
   options: { prune: boolean },
+  campagneId: string,
 ): Promise<ImportAdherentRecordsResult> {
   let created = 0;
   let updated = 0;
@@ -302,9 +331,10 @@ export async function importAdherentRecords(
 
   // Whether an adherent is actually due this campaign (CCMA/CCMI-eligible) is filtered
   // downstream, at display time, against a specific campagne's period — see
-  // adherentEligibility.ts and its use in routes/matches.ts and routes/adherents.ts — not here,
-  // since matching itself is campagne-agnostic.
-  const matching = await matchUnresolvedAdherents(adherentIds);
+  // adherentEligibility.ts and its use in routes/matches.ts and routes/adherents.ts. The teacher
+  // POOL used for matching, on the other hand, is scoped to `campagneId`'s année scolaire — see
+  // matchUnresolvedAdherents's own doc comment.
+  const matching = await matchUnresolvedAdherents(campagneId, adherentIds);
 
   return { created, updated, deleted: staleIds.length, matching };
 }

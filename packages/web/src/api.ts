@@ -610,8 +610,11 @@ export const api = {
   confirmMatch: (id: string, teacherId?: string) =>
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),
   rejectMatch: (id: string) => request(`/matches/${id}/reject`, { method: "POST" }),
-  rescanMatches: () =>
-    request<{ autoConfirmed: number; pendingReview: number; clearedLowConfidence: number }>(`/matches/rescan`, { method: "POST" }),
+  rescanMatches: (campagneId: string) =>
+    request<{ autoConfirmed: number; pendingReview: number; clearedLowConfidence: number }>(`/matches/rescan`, {
+      method: "POST",
+      body: JSON.stringify({ campagneId }),
+    }),
   importRectorat: (campagneId: string, file: File) => {
     const form = new FormData();
     form.append("campagneId", campagneId);
@@ -628,9 +631,10 @@ export const api = {
   hcExcContingents: (campagneId: string) => request<Contingent[]>(`/campagnes/${campagneId}/contingents`),
   updateHcExcContingents: (campagneId: string, contingents: ContingentInput[]) =>
     request<Contingent[]>(`/campagnes/${campagneId}/contingents`, { method: "PUT", body: JSON.stringify({ contingents }) }),
-  importAdherents: (file: File) => {
+  importAdherents: (file: File, campagneId: string) => {
     const form = new FormData();
     form.append("file", file);
+    form.append("campagneId", campagneId);
     return upload<AdherentImportResult>("/imports/adherents", form);
   },
   importAcademicEmails: (file: File) => {
@@ -639,7 +643,8 @@ export const api = {
     return upload<AcademicEmailImportResult>("/imports/academic-emails", form);
   },
   adelLastSync: (type: AdelSyncType) => request<AdelSyncLogEntry | null>(`/adel/last?type=${type}`),
-  adelSync: (type: AdelSyncType) => request<AdelSyncResult>("/adel/sync", { method: "POST", body: JSON.stringify({ type }) }),
+  adelSync: (type: AdelSyncType, campagneId: string) =>
+    request<AdelSyncResult>("/adel/sync", { method: "POST", body: JSON.stringify({ type, campagneId }) }),
   mailingEligible: (campagneId: string) => request<MailingRecipient[]>(`/mailing/eligible?campagneId=${campagneId}`),
   mailingPreview: (campagneId: string, teacherId: string, template?: MailingTemplate) =>
     request<MailingPreview>(

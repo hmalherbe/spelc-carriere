@@ -91,13 +91,19 @@ matchesRouter.get("/", async (req, res) => {
  * the queue until someone imports a new rectorat file — which can be weeks away — even though the
  * fix to clear it is already deployed.
  *
+ * `campagneId` (the one selected in the Review Queue's own campagne picker) scopes the teacher pool
+ * to that campagne's année scolaire, same as every other matchUnresolvedAdherents() call site — see
+ * its own doc comment.
+ *
  * Also runs purgeStaleLowConfidenceMatches() — a separate cleanup matchUnresolvedAdherents()
  * deliberately never does on its own (see that function's doc comment) — so raising
  * minSuggestionThreshold in Paramètres has a visible effect here, on demand, rather than only ever
  * applying to brand new suggestions.
  */
-matchesRouter.post("/rescan", requireRole("ADMIN", "GESTIONNAIRE"), async (_req, res) => {
-  const result = await matchUnresolvedAdherents();
+matchesRouter.post("/rescan", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const { campagneId } = req.body as { campagneId?: string };
+  if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
+  const result = await matchUnresolvedAdherents(campagneId);
   const { cleared } = await purgeStaleLowConfidenceMatches();
   res.json({ ...result, clearedLowConfidence: cleared });
 });

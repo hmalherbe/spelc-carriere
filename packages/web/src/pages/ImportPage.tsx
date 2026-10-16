@@ -226,7 +226,7 @@ export function ImportPage() {
     setAdelError(null);
     setAdelResult(null);
     try {
-      const result = await api.adelSync(selectedCampagne.type);
+      const result = await api.adelSync(selectedCampagne.type, selectedCampagne.id);
       setAdelResult(result);
       refreshAdelLast(selectedCampagne.type);
     } catch (e) {
@@ -238,12 +238,12 @@ export function ImportPage() {
 
   async function submitAdherentFile(e: React.FormEvent) {
     e.preventDefault();
-    if (!adherentFile) return;
+    if (!adherentFile || !campagneId) return;
     setAdherentBusy(true);
     setAdherentError(null);
     setAdherentResult(null);
     try {
-      const result = await api.importAdherents(adherentFile);
+      const result = await api.importAdherents(adherentFile, campagneId);
       setAdherentResult(result);
       setAdherentFile(null);
     } catch (e) {
