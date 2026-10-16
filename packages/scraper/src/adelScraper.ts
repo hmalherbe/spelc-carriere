@@ -1,5 +1,5 @@
 import { chromium, type Page } from "playwright";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -52,6 +52,11 @@ export interface AdelExportResult {
 async function captureFailureScreenshot(page: Page, debugDir: string | undefined, step: string): Promise<void> {
   if (!debugDir) return;
   try {
+    // Without this, a debugDir that doesn't exist yet (e.g. a fresh container, or ADEL_DEBUG_DIR
+    // pointing at an unmounted path) makes page.screenshot() fail with ENOENT — silently, since
+    // this whole function is best-effort — leaving a real failure with no screenshot to diagnose
+    // it from, which is exactly the one thing this function exists to prevent.
+    await mkdir(debugDir, { recursive: true });
     const path = join(debugDir, `adel-failure-${step}-${Date.now()}.png`);
     await page.screenshot({ path, fullPage: true });
   } catch {
