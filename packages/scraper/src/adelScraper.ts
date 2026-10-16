@@ -166,7 +166,16 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
       .or(spelcInputByProximity)
       .first()
       .fill(config.spelcName);
-    await page.getByRole("button", { name: /appliquer/i }).first().click();
+    // Not just getByRole("button", ...): confirmed live (debug screenshot from a real CCMA
+    // failure) that "Appliquer" here is rendered as an icon + blue underlined text, the same
+    // styled-<a> convention as the query tree's own entries — not a real <button> — so the role
+    // query alone finds nothing and just times out, exactly like the login button elsewhere in
+    // this file.
+    await page
+      .getByRole("button", { name: /appliquer/i })
+      .or(page.locator("a").filter({ hasText: /appliquer/i }))
+      .first()
+      .click();
     await page.waitForLoadState("networkidle");
 
     // --- 4. Export ---
