@@ -97,7 +97,15 @@ export async function matchUnresolvedAdherents(
         select: {
           status: true,
           teacherId: true,
-          teacher: { select: { snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" }, select: { grade: true } } } },
+          teacher: {
+            select: {
+              snapshots: {
+                take: 1,
+                orderBy: { dateAccesEchelon: "desc" },
+                select: { grade: true, campagne: { select: { anneeScolaire: true } } },
+              },
+            },
+          },
         },
       },
     },
@@ -108,16 +116,23 @@ export async function matchUnresolvedAdherents(
     if (!candidate) return true; // never attempted
     if (candidate.status === "REJECTED") return true; // always worth a fresh attempt — see doc comment above
     if (!candidate.teacherId) return true; // attempted and found nothing
-    const suggestedGrade = candidate.teacher?.snapshots[0]?.grade;
+    const suggestion = candidate.teacher?.snapshots[0];
     // The suggested teacher has no snapshot at all anymore — e.g. a corrected rectorat re-import
     // wholesale-replaced their (campagne, grade)'s fiches and the new file no longer lists them.
     // That's never a real suggestion to leave sitting in the queue (real case: ATAYAN Lianna,
     // shown "Aucune correspondance trouvée" — teacherId null-checks pass — while still carrying a
     // stale confidence/teacherId from before that teacher's only snapshot was deleted, leaving
     // "Confirmer" wrongly enabled) — always worth retrying, unlike a genuine grade mismatch below.
-    if (!suggestedGrade) return true;
+    if (!suggestion) return true;
+    // Pre-existing suggestion pointing at a teacher from a DIFFERENT année scolaire than the one
+    // this call is scoped to — exactly the confusion this scoping exists to fix (see this
+    // function's own doc comment): deploying the scoped pool alone only affects NEW matching
+    // attempts, so a PENDING_REVIEW/AUTO_CONFIRMED row created before that deploy, with a
+    // same-grade teacher, would otherwise sit there forever looking legitimate. Always worth
+    // retrying, same as a missing snapshot above — this is staleness, not a borderline human call.
+    if (suggestion.campagne?.anneeScolaire !== anneeScolaire) return true;
     if (!a.grade) return false; // adherent's own grade unknown — can't judge, leave the existing suggestion as-is
-    return normalizeGrade(a.grade) !== normalizeGrade(suggestedGrade); // stale cross-grade suggestion
+    return normalizeGrade(a.grade) !== normalizeGrade(suggestion.grade); // stale cross-grade suggestion
   });
 
   if (toRetry.length === 0) return { autoConfirmed: 0, pendingReview: 0 };
