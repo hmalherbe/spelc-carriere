@@ -1,5 +1,11 @@
 import { computeEchelonPromotion, GRADE_MAPPINGS, isEligibleCampagne, type GrilleCode } from "@spelc/domain";
 
+// Maîtres délégués (1er et 2nd degré) : présents dans GRADE_MAPPINGS pour leur grille de
+// rémunération (donc toujours affichés ailleurs dans l'appli), mais explicitement confirmés par le
+// syndicat comme relevant d'une procédure d'avancement différente de la CCMA/CCMI — jamais
+// éligibles à l'un ou l'autre, quelle que soit leur date de dernier changement d'échelon.
+const GRADES_EXCLUS_CCMA_CCMI = new Set(["MD 1", "MD 2"]);
+
 export interface AdherentEligibility {
   /** 2 = second degré (CCMA), 1 = premier degré (CCMI), null = grade inconnu (impossible à classer). */
   degre: 1 | 2 | null;
@@ -21,6 +27,9 @@ export interface AdherentEligibility {
  * CCMI, les deux campagnes d'une année scolaire partageant typiquement la même période. Reste
  * permissif (aucun filtre) quand la commission de la campagne n'est pas renseignée, pour ne pas
  * faire disparaître les données d'anciennes campagnes créées avant ce champ.
+ *
+ * Exclut aussi systématiquement les maîtres délégués (grades "MD 1"/"MD 2", voir
+ * GRADES_EXCLUS_CCMA_CCMI) — pas un oubli de mapping, une exclusion métier délibérée.
  */
 export function computeAdherentEligibility(
   adherent: { grade: string | null; ancienEchelon: string | null; dateEffet: Date | null },
@@ -33,6 +42,9 @@ export function computeAdherentEligibility(
   const mapping = GRADE_MAPPINGS.find((g) => g.grade.toUpperCase() === adherent.grade!.trim().toUpperCase());
   if (!mapping) {
     return { degre: null, dateProchainePromotion: null, eligible: false };
+  }
+  if (GRADES_EXCLUS_CCMA_CCMI.has(mapping.grade)) {
+    return { degre: mapping.degre, dateProchainePromotion: null, eligible: false };
   }
 
   let dateProchainePromotion: string | null;

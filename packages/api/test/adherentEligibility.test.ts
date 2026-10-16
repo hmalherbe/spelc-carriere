@@ -40,3 +40,20 @@ describe("computeAdherentEligibility — filtre par commission", () => {
     expect(computeAdherentEligibility(adherentCCMI, campagneSansPeriodeRestrictive).eligible).toBe(true);
   });
 });
+
+describe("computeAdherentEligibility — maîtres délégués (MD 1/MD 2) exclus (procédure d'avancement séparée)", () => {
+  const md1 = { grade: "MD 1", ancienEchelon: "3", dateEffet: new Date("2023-09-01") };
+  const md2 = { grade: "MD 2", ancienEchelon: "3", dateEffet: new Date("2023-09-01") };
+
+  it("MD 1 n'est jamais éligible, ni CCMA ni CCMI", () => {
+    expect(computeAdherentEligibility(md1, { ...campagneSansPeriodeRestrictive, commission: "CCMI" }).eligible).toBe(false);
+    expect(computeAdherentEligibility(md1, { ...campagneSansPeriodeRestrictive, commission: "CCMA" }).eligible).toBe(false);
+    expect(computeAdherentEligibility(md1, campagneSansPeriodeRestrictive).eligible).toBe(false);
+  });
+
+  it("MD 2 n'est jamais éligible, ni CCMA ni CCMI", () => {
+    expect(computeAdherentEligibility(md2, { ...campagneSansPeriodeRestrictive, commission: "CCMI" }).eligible).toBe(false);
+    expect(computeAdherentEligibility(md2, { ...campagneSansPeriodeRestrictive, commission: "CCMA" }).eligible).toBe(false);
+    expect(computeAdherentEligibility(md2, campagneSansPeriodeRestrictive).eligible).toBe(false);
+  });
+});
