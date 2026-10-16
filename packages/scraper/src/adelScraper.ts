@@ -195,9 +195,17 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
     await selectOptionByPattern(popup, exportSelect, /export excel.*recherche/i);
 
     // --- 6. Generate, then download ---
+    // Confirmed live (debug screenshot from a real failure): "Générer" is an icon + text <a>, the
+    // same convention as "Appliquer" above and the login button — not a real <button> — so the
+    // role query alone finds nothing, the click never fires, and the popup just sits there
+    // forever waiting to be told to generate, which is exactly what the screenshot showed.
     step = "génération et téléchargement du fichier";
     const downloadPromise = popup.waitForEvent("download", { timeout: timeoutMs });
-    await popup.getByRole("button", { name: /g[ée]n[ée]rer/i }).first().click();
+    await popup
+      .getByRole("button", { name: /g[ée]n[ée]rer/i })
+      .or(popup.locator("a").filter({ hasText: /g[ée]n[ée]rer/i }))
+      .first()
+      .click();
     // Some export tools show a separate "enregistrer / télécharger" link once generation
     // finishes rather than starting the download directly — click it if it shows up while we
     // also keep waiting on the original download promise.
