@@ -198,15 +198,16 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
     await selectOptionByPattern(popup, exportSelect, /export excel.*recherche/i);
 
     // --- 6. Generate, then download ---
-    // Confirmed live (debug screenshot from a real failure): "Générer" is an icon + text <a>, the
-    // same convention as "Appliquer" above and the login button — not a real <button> — so the
-    // role query alone finds nothing, the click never fires, and the popup just sits there
-    // forever waiting to be told to generate, which is exactly what the screenshot showed.
+    // Confirmed live (debug screenshots from two real failures): "Générer" isn't a real <button>,
+    // and for the larger CCMA export not even an <a> containing the text — same situation as
+    // "Appliquer" above, which needed a third, text-only fallback to reach whatever element
+    // actually holds the click handler. Same fix here.
     step = "génération et téléchargement du fichier";
     const downloadPromise = popup.waitForEvent("download", { timeout: timeoutMs });
     await popup
       .getByRole("button", { name: /g[ée]n[ée]rer/i })
       .or(popup.locator("a").filter({ hasText: /g[ée]n[ée]rer/i }))
+      .or(popup.getByText("Générer", { exact: true }))
       .first()
       .click();
     // Some export tools show a separate "enregistrer / télécharger" link once generation
