@@ -12,21 +12,21 @@ import { join } from "node:path";
  *
  * Login and the CCMA navigation path (Gestion -> Outil de recherche -> "Enseignants second degré
  * (ENS 2°D)" -> filtre "Nom du SPELC" -> Appliquer) are confirmed against the real site. The CCMI
- * query label is inferred by the same naming pattern but not yet confirmed, and the export step
- * itself (what happens after clicking "Export" — a popup with a format choice, or a direct
- * download) is still unconfirmed. Every step captures a screenshot to `debugDir` on failure so a
- * broken selector is a one-look fix, not a guessing game.
+ * query leaf is now confirmed too ("Enseignants 1°D" — it doesn't follow CCMA's naming pattern).
+ * The export step itself (what happens after clicking "Export" — a popup with a format choice, or
+ * a direct download) is still unconfirmed for CCMI. Every step captures a screenshot to `debugDir`
+ * on failure so a broken selector is a one-look fix, not a guessing game.
  */
 
 export type AdelSyncType = "CCMA" | "CCMI";
 
 // The saved query's exact label in ADEL's "Arbre des requêtes" (query tree), under Gestion ->
-// Outil de recherche -> Générale -> ENSEIGNANTS / SALARIES / RETRAITES. Confirmed live for CCMA
-// (second degré) against the real site; CCMI (premier degré) is inferred by the same naming
-// pattern and NOT yet confirmed — check the debug screenshot if a CCMI sync fails at this step.
+// Outil de recherche -> Générale -> ENSEIGNANTS / SALARIES / RETRAITES. Both confirmed live
+// against the real site (CCMI's label turned out not to follow CCMA's naming pattern — it's
+// "Enseignants 1°D", not "Enseignants premier degré (ENS 1°D)").
 const QUERY_LABEL: Record<AdelSyncType, string> = {
   CCMA: "Enseignants second degré (ENS 2°D)",
-  CCMI: "Enseignants premier degré (ENS 1°D)",
+  CCMI: "Enseignants 1°D",
 };
 
 export interface AdelScraperConfig {
