@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type TeacherListItem } from "../api.js";
 import { useAuth } from "../AuthContext.js";
-import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
+import { useCampagneSelection } from "../CampagneContext.js";
 import { formatPrenom, formatEchelonLabel } from "../format.js";
 
 const MATCHING_LABEL: Record<string, string> = {
@@ -77,7 +77,7 @@ const CORRECTION_LABEL: Record<ManualCorrectionField, string> = {
 export function DashboardPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
-  const { candidates: campagnes, campagneId, setCampagneId } = useCampagneSelection(["ECHELON"]);
+  const { candidates: campagnes, campagneId } = useCampagneSelection(["ECHELON"]);
   const [teachers, setTeachers] = useState<TeacherListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -276,15 +276,6 @@ export function DashboardPage() {
     <div>
       <div className="toolbar">
         <h2>Enseignants promouvables</h2>
-        {campagnes.length > 1 && (
-          <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
-            {campagnes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {labelForCampagneCandidate(c, 1)}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
       {campagnes.length === 0 && (
         <p className="hint">

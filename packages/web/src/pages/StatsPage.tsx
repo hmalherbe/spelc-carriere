@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type CampagneStats } from "../api.js";
-import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
+import { useCampagneSelection } from "../CampagneContext.js";
 
 function GenreTable({ genre }: { genre: CampagneStats["ba"]["genre"] }) {
   return (
@@ -32,7 +32,7 @@ function GenreTable({ genre }: { genre: CampagneStats["ba"]["genre"] }) {
 }
 
 export function StatsPage() {
-  const { candidates: campagnes, campagneId, setCampagneId } = useCampagneSelection(["ECHELON"]);
+  const { candidates: campagnes, campagneId } = useCampagneSelection(["ECHELON"]);
   const [gradeFilter, setGradeFilter] = useState<string>("all");
   const [stats, setStats] = useState<CampagneStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,15 +65,6 @@ export function StatsPage() {
     <div>
       <div className="toolbar">
         <h2>Statistiques</h2>
-        {campagnes.length > 1 && (
-          <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
-            {campagnes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {labelForCampagneCandidate(c, 1)}
-              </option>
-            ))}
-          </select>
-        )}
         {stats && stats.grades.length > 0 && (
           <select value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
             <option value="all">Tous les grades</option>

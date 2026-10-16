@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../AuthContext.js";
-import { useCampagneContext } from "../CampagneContext.js";
+import { useCampagneContext, type Commission } from "../CampagneContext.js";
 import { api } from "../api.js";
 import { derivePeriodeFromAnneeScolaire } from "../format.js";
 
@@ -193,6 +193,35 @@ function AnneeScolairePicker() {
   );
 }
 
+/**
+ * Choix global de commission (CCMA/CCMI), à côté du sélecteur d'année scolaire — pilote
+ * useCampagneSelection, donc les pages Dashboard ("Enseignants"), Mailing, Reliquats,
+ * Statistiques et Adhérents éligibles, qui avaient chacune leur propre sélecteur local
+ * jusqu'ici : choisir CCMI sur l'une n'avait aucun effet sur les autres. Import, Hors
+ * classe/Classe exceptionnelle et la file de révision gardent leur propre sélection (rôle
+ * différent — cibler un import précis, ou mélanger les natures), donc n'en dépendent pas.
+ * Masqué quand une seule commission (ou aucune) existe pour l'année scolaire sélectionnée : rien à
+ * choisir.
+ */
+function CommissionPicker() {
+  const { commissionsDisponibles, selectedCommission, setSelectedCommission } = useCampagneContext();
+  if (commissionsDisponibles.length <= 1) return null;
+
+  return (
+    <select
+      aria-label="Commission"
+      value={selectedCommission ?? ""}
+      onChange={(e) => setSelectedCommission(e.target.value as Commission)}
+    >
+      {commissionsDisponibles.map((c) => (
+        <option key={c} value={c}>
+          {c}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -205,6 +234,7 @@ export function Layout() {
       <header className="app-header">
         <h1>Spelc Côte d'Azur</h1>
         <AnneeScolairePicker />
+        <CommissionPicker />
         <nav>
           <div className="nav-group">
             <button type="button" className={`nav-group-label${inCarriere ? " active" : ""}`}>

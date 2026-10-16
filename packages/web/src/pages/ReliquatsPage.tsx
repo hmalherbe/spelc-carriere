@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type ReliquatCandidate, type ReliquatGroup } from "../api.js";
 import { useAuth } from "../AuthContext.js";
-import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
+import { useCampagneSelection } from "../CampagneContext.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null): string {
@@ -18,7 +18,7 @@ export function ReliquatsPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
-  const { candidates: campagnes, campagneId, setCampagneId } = useCampagneSelection(["ECHELON"]);
+  const { candidates: campagnes, campagneId } = useCampagneSelection(["ECHELON"]);
   const [groups, setGroups] = useState<ReliquatGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,15 +63,6 @@ export function ReliquatsPage() {
     <div>
       <div className="toolbar">
         <h2>Reliquats — bonification d'ancienneté</h2>
-        {campagnes.length > 1 && (
-          <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
-            {campagnes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {labelForCampagneCandidate(c, 1)}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
       {campagnes.length === 0 && (
         <p className="hint">

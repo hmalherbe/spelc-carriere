@@ -9,7 +9,7 @@ import {
   type MailingTemplate,
 } from "../api.js";
 import { useAuth } from "../AuthContext.js";
-import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
+import { useCampagneSelection } from "../CampagneContext.js";
 import { formatPrenom, formatEchelonLabel } from "../format.js";
 
 function euros(n: number): string {
@@ -44,7 +44,7 @@ export function MailingPage() {
   const { user } = useAuth();
   const canSend = user?.role === "ADMIN" || user?.role === "GESTIONNAIRE";
 
-  const { candidates: campagnes, campagneId, setCampagneId } = useCampagneSelection(["ECHELON"]);
+  const { candidates: campagnes, campagneId } = useCampagneSelection(["ECHELON"]);
   const [recipients, setRecipients] = useState<MailingRecipient[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -268,15 +268,6 @@ export function MailingPage() {
     <div>
       <div className="toolbar">
         <h2>Mailing — notification des changements d'échelon</h2>
-        {campagnes.length > 1 && (
-          <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
-            {campagnes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {labelForCampagneCandidate(c, 1)}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
       {campagnes.length === 0 && (
         <p className="hint">
