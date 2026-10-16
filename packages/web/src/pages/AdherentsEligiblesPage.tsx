@@ -63,10 +63,13 @@ export function AdherentsEligiblesPage() {
 
   if (error) return <p className="error-text">{error}</p>;
 
+  const selectedCampagne = campagnes.find((c) => c.id === campagneId);
+  const titreCommission = selectedCampagne?.commission ?? "CCMA/CCMI";
+
   return (
     <div>
       <div className="toolbar">
-        <h2>Adhérents éligibles à la CCMA/CCMI</h2>
+        <h2>Adhérents éligibles à la {titreCommission}</h2>
         {campagnes.length > 1 && (
           <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
             {campagnes.map((c) => (

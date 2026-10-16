@@ -13,14 +13,18 @@ export interface AdherentEligibility {
  * échelon et sa date de dernier changement d'échelon ("Date_Effet" dans l'export ADEL), avec le
  * même moteur que pour les enseignants importés du rectorat (computeEchelonPromotion).
  *
- * Ne préjuge pas de la commission réellement compétente au-delà du simple degré (CCMA = second
- * degré, CCMI = premier degré) — c'est une étiquette informative, pas un filtre : un adhérent du
- * premier degré éligible reste éligible même si l'app ne suit pour l'instant aucune donnée
- * rectorat CCMI (voir `nonPresentDansRectorat` côté appelant, plutôt qu'une exclusion silencieuse).
+ * Filtre aussi par commission quand celle de la campagne est connue (CCMA = second degré, CCMI =
+ * premier degré) : un adhérent du premier degré n'est éligible que pour une campagne CCMI, jamais
+ * CCMA, et réciproquement. Ce filtre n'a pu être activé qu'une fois la synchronisation ADEL
+ * elle-même scindée par commission (le fichier récupéré suit celle de la campagne sélectionnée) —
+ * avant ça, un même adhérent premier degré apparaissait comme "éligible" aussi bien côté CCMA que
+ * CCMI, les deux campagnes d'une année scolaire partageant typiquement la même période. Reste
+ * permissif (aucun filtre) quand la commission de la campagne n'est pas renseignée, pour ne pas
+ * faire disparaître les données d'anciennes campagnes créées avant ce champ.
  */
 export function computeAdherentEligibility(
   adherent: { grade: string | null; ancienEchelon: string | null; dateEffet: Date | null },
-  campagne: { periodeDebut: Date; periodeFin: Date },
+  campagne: { periodeDebut: Date; periodeFin: Date; commission?: "CCMA" | "CCMI" | null },
 ): AdherentEligibility {
   if (!adherent.grade || !adherent.ancienEchelon || !adherent.dateEffet) {
     return { degre: null, dateProchainePromotion: null, eligible: false };
@@ -46,9 +50,14 @@ export function computeAdherentEligibility(
   const periodeDebut = campagne.periodeDebut.toISOString().slice(0, 10);
   const periodeFin = campagne.periodeFin.toISOString().slice(0, 10);
 
+  const degreCorrespondACommission =
+    campagne.commission == null ||
+    (campagne.commission === "CCMA" && mapping.degre === 2) ||
+    (campagne.commission === "CCMI" && mapping.degre === 1);
+
   return {
     degre: mapping.degre,
     dateProchainePromotion,
-    eligible: isEligibleCampagne(dateProchainePromotion, periodeDebut, periodeFin),
+    eligible: degreCorrespondACommission && isEligibleCampagne(dateProchainePromotion, periodeDebut, periodeFin),
   };
 }
