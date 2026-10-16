@@ -166,14 +166,17 @@ export async function scrapeAdelExport(config: AdelScraperConfig, type: AdelSync
       .or(spelcInputByProximity)
       .first()
       .fill(config.spelcName);
-    // Not just getByRole("button", ...): confirmed live (debug screenshot from a real CCMA
-    // failure) that "Appliquer" here is rendered as an icon + blue underlined text, the same
-    // styled-<a> convention as the query tree's own entries — not a real <button> — so the role
-    // query alone finds nothing and just times out, exactly like the login button elsewhere in
-    // this file.
+    // Not just getByRole("button", ...) or a text-filtered <a>: confirmed live (two separate debug
+    // screenshots, same CCMA page, both after already adding the <a> fallback) that neither finds
+    // this control — the icon and the "Appliquer" text are apparently not both inside a real
+    // <button> or <a> at all (likely a <td>/<div> with a JS click handler instead, a step further
+    // than the already-nonstandard login button elsewhere in this file). getByText matches purely
+    // on rendered text regardless of the element it sits in, so it reaches the control either way;
+    // `exact` avoids also matching a longer string like "Appliquer le filtre" elsewhere on the page.
     await page
       .getByRole("button", { name: /appliquer/i })
       .or(page.locator("a").filter({ hasText: /appliquer/i }))
+      .or(page.getByText("Appliquer", { exact: true }))
       .first()
       .click();
     await page.waitForLoadState("networkidle");
