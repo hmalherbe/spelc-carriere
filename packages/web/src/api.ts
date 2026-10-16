@@ -184,7 +184,18 @@ export interface MatchCandidate {
   status: string;
   confidence: number;
   adherent: { id: string; nom: string; prenom: string; grade: string | null; mailPersonnel: string | null };
-  teacher: { id: string; snapshots: { nomUsage: string; prenom: string; grade: string }[] } | null;
+  teacher: {
+    id: string;
+    snapshots: {
+      nomUsage: string;
+      prenom: string;
+      grade: string;
+      /** La campagne (et donc l'année scolaire) d'où vient cette fiche — un Teacher persiste d'une
+       * année sur l'autre, donc sa dernière fiche connue peut dater d'une campagne différente de
+       * celle actuellement sélectionnée. null si cette campagne a depuis été supprimée. */
+      campagne: { anneeScolaire: string; commission: "CCMA" | "CCMI" | null } | null;
+    }[];
+  } | null;
   teacherId: string | null;
 }
 

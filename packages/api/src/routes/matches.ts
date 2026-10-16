@@ -60,7 +60,18 @@ matchesRouter.get("/", async (req, res) => {
 
   const candidates = await prisma.matchCandidate.findMany({
     where: { status: status as never },
-    include: { adherent: true, teacher: { include: { snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" } } } } },
+    include: {
+      adherent: true,
+      teacher: {
+        include: {
+          // La campagne d'où vient cette fiche : un Teacher persiste d'une année sur l'autre, donc
+          // sa dernière fiche connue peut très bien dater d'une campagne (et d'une année scolaire)
+          // différente de celle actuellement sélectionnée — voir ReviewQueuePage.tsx, qui l'affiche
+          // pour éviter de laisser croire qu'un fichier rectorat existe déjà pour l'année en cours.
+          snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" }, include: { campagne: { select: { anneeScolaire: true, commission: true } } } },
+        },
+      },
+    },
     orderBy: { createdAt: "asc" },
   });
 

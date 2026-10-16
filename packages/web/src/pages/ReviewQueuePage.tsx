@@ -167,7 +167,13 @@ export function ReviewQueuePage() {
                       <>
                         {suggestion.nomUsage} {formatPrenom(suggestion.prenom)}
                         <br />
-                        <span className="hint">{suggestion.grade}</span>
+                        <span className="hint">
+                          {suggestion.grade}
+                          {" — dernière fiche connue : "}
+                          {suggestion.campagne
+                            ? `${suggestion.campagne.anneeScolaire}${suggestion.campagne.commission ? ` ${suggestion.campagne.commission}` : ""}`
+                            : "campagne supprimée depuis"}
+                        </span>
                       </>
                     ) : c.teacherId ? (
                       <em>Enseignant introuvable (fiche supprimée depuis la suggestion)</em>
