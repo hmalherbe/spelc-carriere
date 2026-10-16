@@ -502,7 +502,9 @@ importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.si
   const { records, unmappedFields } = isXlsx
     ? await parseAdherentXlsx(req.file.buffer)
     : parseAdherentCsv(req.file.buffer.toString("utf-8"));
-  const { created, updated, deleted, matching } = await importAdherentRecords(records);
+  // prune: false — same reason as the automatic ADEL sync in routes/adel.ts: this manual fallback
+  // uploads "the same export" per-commission, never the whole roster.
+  const { created, updated, deleted, matching } = await importAdherentRecords(records, { prune: false });
 
   res.status(201).json({ created, updated, deleted, unmappedFields, matching });
 }));

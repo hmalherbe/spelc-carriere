@@ -5,7 +5,8 @@ export interface ImportAdherentRecordsResult {
   created: number;
   updated: number;
   /** Adherent rows deleted because they no longer appeared in this import — someone who left the
-   * union since the last sync. See importAdherentRecords's own doc comment. */
+   * union since the last sync. See importAdherentRecords's own doc comment. Currently always 0:
+   * both callers pass `prune: false` (see that parameter's own doc comment for why). */
   deleted: number;
   matching: { autoConfirmed: number; pendingReview: number };
 }
@@ -234,18 +235,25 @@ export async function purgeStaleLowConfidenceMatches(): Promise<{ cleared: numbe
  * ones just touched. Shared by both adherent import paths — the manual CSV upload and the ADEL
  * scraper — so the upsert/matching logic only lives in one place.
  *
- * `records` is trusted to be the union's ENTIRE current roster, not a partial/incremental list —
- * true for both callers (the automatic ADEL sync and the manual fallback, which ImportPage.tsx's
- * own copy already describes as "exporte l'annuaire des adhérents", the whole directory). Any
- * existing Adherent not present in it this time has therefore left the union since the last
- * import/sync and is deleted outright — its MatchCandidate (a required, non-nullable relation) is
- * deleted first to satisfy the foreign key; MailingLog.adherentId is a plain historical string, not
- * a real FK (same pattern as sentById/triggeredById elsewhere in this schema), so past mailing
- * history for that person is untouched. No partial-file safety net by product decision: an admin
- * uploading a filtered/incomplete file by mistake would deactivate real members with no warning —
- * accepted because both import paths are always expected to carry the full roster.
+ * `prune: true` deletes every existing Adherent NOT present in `records` this time — correct only
+ * when `records` is genuinely the union's ENTIRE current roster in one file, never a partial one.
+ * That used to be true for both callers before the ADEL sync (and its manual fallback, which
+ * downloads/uploads "the same export" per ImportPage.tsx's own copy) was split one file per
+ * commission (CCMA / CCMI): a CCMI sync's file covers only premier-degré adherents, so pruning
+ * against it deleted every second-degré adherent not in that file — and the next CCMA sync then
+ * deleted every premier-degré one right back, each sync wiping out what the other had just
+ * imported. Real production incident, 2026-10-16: an entire CCMI import (premier degré) vanished
+ * after the following CCMA sync. Both current callers now pass `prune: false`; a genuine
+ * whole-roster import path, if one is ever reintroduced, is the only safe place to pass `true`.
+ * Its MatchCandidate (a required, non-nullable relation) is deleted first to satisfy the foreign
+ * key; MailingLog.adherentId is a plain historical string, not a real FK (same pattern as
+ * sentById/triggeredById elsewhere in this schema), so past mailing history for that person would
+ * stay untouched either way.
  */
-export async function importAdherentRecords(records: AdherentRecord[]): Promise<ImportAdherentRecordsResult> {
+export async function importAdherentRecords(
+  records: AdherentRecord[],
+  options: { prune: boolean },
+): Promise<ImportAdherentRecordsResult> {
   let created = 0;
   let updated = 0;
   const adherentIds: string[] = [];
@@ -280,9 +288,10 @@ export async function importAdherentRecords(records: AdherentRecord[]): Promise<
 
   // An empty `records` (a genuinely empty or unparseable file) is never "the union now has zero
   // members" — skip pruning rather than let `notIn: []` match, and delete, every adherent in the
-  // database.
+  // database. See importAdherentRecords's own doc comment for why `options.prune` is false for
+  // every current caller.
   let staleIds: string[] = [];
-  if (adherentIds.length > 0) {
+  if (options.prune && adherentIds.length > 0) {
     const stale = await prisma.adherent.findMany({ where: { id: { notIn: adherentIds } }, select: { id: true } });
     staleIds = stale.map((a) => a.id);
     if (staleIds.length > 0) {
