@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type TeacherListItem } from "../api.js";
+import { api, downloadBlob, type TeacherListItem } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 import { useCampagneSelection } from "../CampagneContext.js";
 import { formatPrenom, formatEchelonLabel } from "../format.js";
@@ -92,6 +92,9 @@ export function DashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("fichier");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
   // Édition des corrections manuelles "ancienneté à déduire" / "ancienneté à reporter" (voir
   // Teacher.ancienneteADeduire/ancienneteAReporter côté API) — un seul champ, un seul enseignant à
   // la fois, comme le montre le pattern équivalent pour l'email dans MailingPage. Les deux
@@ -120,6 +123,20 @@ export function DashboardPage() {
   }
 
   useEffect(refreshTeachers, [campagneId]);
+
+  async function exportTeachers() {
+    if (!campagneId) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const blob = await api.teachersExportXlsx(campagneId);
+      downloadBlob(blob, "enseignants_promouvables.xlsx");
+    } catch (e) {
+      setExportError(String(e));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   function startEditCorrection(t: TeacherListItem, field: ManualCorrectionField) {
     setEditingCorrection({ teacherId: t.teacherId, field });
@@ -276,6 +293,10 @@ export function DashboardPage() {
     <div>
       <div className="toolbar">
         <h2>Enseignants promouvables</h2>
+        <button type="button" className="secondary" onClick={exportTeachers} disabled={!campagneId || exporting}>
+          {exporting ? "Export en cours..." : "Export Excel"}
+        </button>
+        {exportError && <span className="error-text">{exportError}</span>}
       </div>
       {campagnes.length === 0 && (
         <p className="hint">

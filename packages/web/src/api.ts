@@ -607,6 +607,8 @@ export const api = {
   /** Export Excel des adhérents éligibles mais absents de tout fichier rectorat de cette campagne
    * (voir routes/adherents.ts's own doc comment pour ce que ça couvre exactement). */
   adherentsEligiblesNonPresentsXlsx: (campagneId: string) => requestBlob(`/adherents/eligibles-non-presents.xlsx?campagneId=${campagneId}`),
+  /** Export Excel des enseignants promouvables de la campagne, avec les mêmes colonnes que le tableau du Dashboard. */
+  teachersExportXlsx: (campagneId: string) => requestBlob(`/teachers/export.xlsx?campagneId=${campagneId}`),
   confirmMatch: (id: string, teacherId?: string) =>
     request(`/matches/${id}/confirm`, { method: "POST", body: JSON.stringify({ teacherId }) }),
   rejectMatch: (id: string) => request(`/matches/${id}/reject`, { method: "POST" }),

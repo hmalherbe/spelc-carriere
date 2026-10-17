@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import ExcelJS from "exceljs";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import {
@@ -6,6 +7,8 @@ import {
   isEligibleClasseExceptionnelle,
   computeEchelonPromotion,
   parseAncienneteText,
+  formatPrenom,
+  formatEchelonLabel,
   GRADE_MAPPINGS,
   type GrilleCode,
 } from "@spelc/domain";
@@ -37,13 +40,15 @@ function rectoratReportAncienneteRaw(typePromotion: string | null, dureeRestante
   return dureeRestante;
 }
 
+export type TeacherListRow = Awaited<ReturnType<typeof computeTeacherList>>[number];
+
 /**
  * List teachers for a campagne, joined with their latest snapshot, computed promotion state,
- * BA status (when applicable), and adhérent-matching status.
+ * BA status (when applicable), and adhérent-matching status — the data behind both GET / (JSON,
+ * for DashboardPage) and GET /export.xlsx (the "Export Excel" button on that same page), so the
+ * two can never drift apart on what a teacher's row actually contains.
  */
-teachersRouter.get("/", async (req, res) => {
-  const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
-
+async function computeTeacherList(campagneId?: string) {
   const snapshots = await prisma.teacherSnapshot.findMany({
     where: campagneId ? { campagneId } : undefined,
     include: {
@@ -190,7 +195,107 @@ teachersRouter.get("/", async (req, res) => {
     };
   });
 
-  res.json(result);
+  return result;
+}
+
+teachersRouter.get("/", async (req, res) => {
+  const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
+  res.json(await computeTeacherList(campagneId));
+});
+
+const MATCHING_LABEL: Record<string, string> = {
+  AUTO_CONFIRMED: "Adhérent (auto)",
+  CONFIRMED: "Adhérent (confirmé)",
+  PENDING_REVIEW: "À vérifier",
+  REJECTED: "Non lié",
+  NON_ADHERENT: "Non adhérent",
+};
+
+function formatDateFr(d: Date | string | null): string {
+  if (!d) return "";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleDateString("fr-FR");
+}
+
+/** Mirrors DashboardPage.tsx's own baCell() exactly — same gating on baStatus (not baEligible,
+ * see that function's doc comment) and the same "(départ éch. X)" suffix when still at the BA's
+ * own starting échelon — so the exported "Éligibilité BA" column reads identically to the screen. */
+function baLabel(t: TeacherListRow): string {
+  if (t.baStatus === null) return "—";
+  const atDepart = t.baEchelonDepart != null && Number(t.echelonActuel) === t.baEchelonDepart;
+  const dep = atDepart ? ` (départ éch. ${t.baEchelonDepart})` : "";
+  if (t.baStatus === "promu") return `Promu BA${dep}`;
+  return `Éligible à la BA - non promu${dep}`;
+}
+
+/**
+ * Excel export of "Enseignants promouvables" (DashboardPage.tsx) — every column shown there, for
+ * the campagne's full teacher list (not scoped to whatever filters/sort are active on screen at
+ * the time, same "export everything for this campagne" stance as
+ * /adherents/eligibles-non-presents.xlsx).
+ */
+teachersRouter.get("/export.xlsx", async (req, res) => {
+  const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
+  if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
+
+  const teachers = await computeTeacherList(campagneId);
+  const hasDepartement = teachers.some((t) => t.departement != null);
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Enseignants promouvables");
+  const headers = [
+    "Nom",
+    "Prénom",
+    "Grade",
+    ...(hasDepartement ? ["Département"] : []),
+    "Échelon actuel",
+    "Échelon suivant",
+    "Date échelon actuel",
+    "Ancienneté échelon (années)",
+    "Anc. à déduire",
+    "Anc. à reporter",
+    "Prochaine promotion",
+    "Gain net",
+    "Adhérent",
+    "Éligibilité BA",
+  ];
+  sheet.addRow(headers).font = { bold: true };
+
+  for (const t of teachers) {
+    sheet.addRow([
+      t.nom,
+      formatPrenom(t.prenom),
+      t.grade,
+      ...(hasDepartement ? [t.departement ?? ""] : []),
+      formatEchelonLabel(t.echelonActuel),
+      t.computedState ? formatEchelonLabel(t.computedState.echelonSuivant) : "",
+      formatDateFr(t.dateAccesEchelon),
+      t.ancienneteEchelon ?? "",
+      t.ancienneteADeduire ?? "",
+      t.ancienneteAReporter ?? "",
+      formatDateFr(t.computedState?.dateProchainePromotion ?? null),
+      t.computedState ? t.computedState.gainSalaireNet : "",
+      MATCHING_LABEL[t.matching.status],
+      baLabel(t),
+    ]);
+  }
+
+  sheet.columns.forEach((col) => {
+    let max = 10;
+    for (const v of col.values ?? []) {
+      if (v == null) continue;
+      max = Math.max(max, String(v).length);
+    }
+    col.width = Math.min(max + 2, 40);
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="enseignants_promouvables.xlsx"`);
+  // Same cross-@types/node Buffer/ArrayBuffer mismatch worked around identically in
+  // routes/adherents.ts and packages/import/src/adherentXlsxParser.ts.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  res.send(Buffer.from(buffer as any));
 });
 
 teachersRouter.get("/:id", async (req, res) => {
