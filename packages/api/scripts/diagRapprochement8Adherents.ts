@@ -51,7 +51,11 @@ async function main() {
       where: { nom, prenom },
       include: {
         matchCandidate: {
-          include: { teacher: { select: { snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" }, select: { grade: true, nomUsage: true, prenom: true } } } } } },
+          include: {
+            teacher: {
+              select: { snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" }, select: { grade: true, nomUsage: true, prenom: true } } },
+            },
+          },
         },
       },
     });
