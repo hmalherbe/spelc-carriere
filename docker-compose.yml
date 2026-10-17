@@ -40,14 +40,37 @@ services:
       context: .
       dockerfile: packages/web/Dockerfile
     restart: unless-stopped
-    ports:
-      - "80:80"
+    # No host port here anymore — caddy is now the sole public entrypoint (80/443) and reverse
+    # proxies to web:80 over the internal network; see Caddyfile.
     depends_on:
       - api
     networks: [spelc]
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Optional — only used for Let's Encrypt renewal-problem notices, not required for HTTPS to
+      # work at all. Set in .env if wanted.
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    networks: [spelc]
+
 volumes:
   db_data:
+  # Certificates and ACME account state — must persist across container recreates, or every
+  # `docker compose up --build` would re-request a fresh certificate (Let's Encrypt rate-limits
+  # that) and briefly serve plain HTTP in the meantime.
+  caddy_data:
+  caddy_config:
 
 networks:
   spelc:
