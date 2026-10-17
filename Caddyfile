@@ -9,3 +9,11 @@
 spelcca.fr, www.spelcca.fr {
 	reverse_proxy web:80
 }
+
+# Stack de test (docker-compose.test.yml, /opt/spelc-carriere-test), un déploiement Compose séparé
+# avec son propre réseau Docker — caddy ne peut pas le joindre par nom de service comme web:80
+# ci-dessus. Il expose déjà son port 8080 sur l'hôte, donc host.docker.internal:8080 (voir
+# extra_hosts dans docker-compose.yml) suffit à l'atteindre depuis ce conteneur.
+demo.spelcca.fr {
+	reverse_proxy host.docker.internal:8080
+}

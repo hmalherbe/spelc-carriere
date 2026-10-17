@@ -52,6 +52,10 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # Lets the demo.spelcca.fr site block (Caddyfile) reach the test stack's web:8080, which is a
+    # separate Compose project (different Docker network) only reachable via the host's own port.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
