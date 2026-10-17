@@ -1,5 +1,5 @@
 import { prisma } from "./db.js";
-import { matchAdherents, normalizeGrade, DEFAULT_MIN_SUGGESTION_THRESHOLD, type AdherentRecord } from "@spelc/import";
+import { matchAdherents, normalizeGrade, normalizeName, DEFAULT_MIN_SUGGESTION_THRESHOLD, type AdherentRecord } from "@spelc/import";
 
 export interface ImportAdherentRecordsResult {
   created: number;
@@ -292,12 +292,30 @@ export async function importAdherentRecords(
   options: { prune: boolean },
   campagneId: string,
 ): Promise<ImportAdherentRecordsResult> {
+  // Keyed on normalized nom+prénom (same accent/case-insensitive normalization the matching
+  // engine already uses, see matching.ts's normalizeName), not the exact string — real incident,
+  // 2026-10-18: an exact-match key meant ADEL spelling a name even slightly differently between
+  // two exports (an added/dropped accent, "GOUVERNET" vs "GOURVERNET", "BLASCO MARIN" vs
+  // "BLASCO-MARIN"...) silently created a brand new Adherent row instead of updating the existing
+  // one — 23+ real union members ended up with two live fiches apiece, one going stale the moment
+  // ADEL started spelling their name differently, confusing both the "non présents" report and the
+  // review queue (the stale fiche's own teacher link, if any, blocks the up-to-date fiche from
+  // ever claiming the right teacher — see matchUnresolvedAdherents's greedy, teacher-exclusive
+  // assignment). Loaded once up front (not a per-row query) and kept in sync as rows are
+  // created/found within this same run, so two near-duplicate spellings in the SAME file don't
+  // create two rows either.
+  const existingByNormalizedName = new Map<string, string>();
+  for (const a of await prisma.adherent.findMany({ select: { id: true, nom: true, prenom: true } })) {
+    existingByNormalizedName.set(`${normalizeName(a.nom)}|${normalizeName(a.prenom)}`, a.id);
+  }
+
   let created = 0;
   let updated = 0;
   const adherentIds: string[] = [];
   for (const r of records) {
-    const key = { nom: r.nom, prenom: r.prenom };
-    const existing = await prisma.adherent.findFirst({ where: key });
+    const normalizedKey = `${normalizeName(r.nom)}|${normalizeName(r.prenom)}`;
+    const existingId = existingByNormalizedName.get(normalizedKey);
+    const existing = existingId ? { id: existingId } : null;
     const data = {
       civilite: r.civilite,
       nom: r.nom,
@@ -319,6 +337,7 @@ export async function importAdherentRecords(
       updated++;
     } else {
       const created_ = await prisma.adherent.create({ data });
+      existingByNormalizedName.set(normalizedKey, created_.id);
       adherentIds.push(created_.id);
       created++;
     }
