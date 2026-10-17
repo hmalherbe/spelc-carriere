@@ -80,7 +80,19 @@ matchesRouter.get("/", async (req, res) => {
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
 
-  const filtered = candidates.filter((c) => computeAdherentEligibility(c.adherent, campagne).eligible);
+  const filtered = candidates.filter((c) => {
+    if (!computeAdherentEligibility(c.adherent, campagne).eligible) return false;
+    // Display-only filter, never touches the underlying MatchCandidate: a suggestion whose
+    // teacher's own last-known fiche comes from a DIFFERENT année scolaire than the one selected
+    // here is confusing to review right now (looks like a current-année match, isn't) — but it may
+    // be a perfectly correct, confirmed link for its OWN année, so it must never be cleared just
+    // because it doesn't belong to this view. See matchUnresolvedAdherents's own doc comment for
+    // the real incident caused by doing that at the data layer instead (2026-10-17). Hidden here,
+    // not deleted — it still appears in the unfiltered ("Afficher tous les adhérents") view.
+    const suggestionAnnee = c.teacher?.snapshots[0]?.campagne?.anneeScolaire;
+    if (c.teacherId && suggestionAnnee && suggestionAnnee !== campagne.anneeScolaire) return false;
+    return true;
+  });
   res.json(filtered);
 });
 
