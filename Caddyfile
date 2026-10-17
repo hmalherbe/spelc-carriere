@@ -2,11 +2,10 @@
 # Encrypt certificate via the HTTP-01 challenge (needs port 80 reachable from the internet, which
 # docker-compose.yml already exposes), serves HTTPS on 443, and renews automatically well before
 # expiry — no manual certbot/cron step needed. Plain HTTP requests are redirected to HTTPS
-# automatically; that's Caddy's default for a site block with no explicit "http://" scheme.
-{
-	email {$CADDY_ACME_EMAIL}
-}
-
+# automatically; that's Caddy's default for a site block with no explicit "http://" scheme. No
+# global `email` option: it's only used for Let's Encrypt renewal-problem notices, not required
+# for ACME to work at all, and a Caddyfile `{$VAR}` substitution against an unset/empty env var
+# leaves the `email` directive with no argument, which Caddy refuses to start on.
 spelcca.fr, www.spelcca.fr {
 	reverse_proxy web:80
 }

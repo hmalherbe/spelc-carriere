@@ -52,10 +52,6 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    environment:
-      # Optional — only used for Let's Encrypt renewal-problem notices, not required for HTTPS to
-      # work at all. Set in .env if wanted.
-      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
