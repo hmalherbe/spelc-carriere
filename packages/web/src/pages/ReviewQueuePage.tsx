@@ -108,7 +108,7 @@ export function ReviewQueuePage() {
         )}
         <label>
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />{" "}
-          Afficher tous les adhérents (toutes campagnes, y compris ceux pas encore dus)
+          Afficher aussi les adhérents dont la date de promotion estimée ne correspond pas à cette campagne
         </label>
       </div>
       <p className="hint">
