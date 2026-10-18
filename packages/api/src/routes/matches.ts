@@ -53,6 +53,12 @@ matchesRouter.get("/stats", async (_req, res) => {
  * passing `campagneId` (so day-to-day review focuses on the current campagne), but always with a
  * visible way back to the unfiltered view — never a silent default at this endpoint's own level,
  * so nothing else calling this route inherits the same risk unless it opts in.
+ *
+ * Ce filtre calendaire ne s'applique QU'aux candidats sans suggestion concrète pour cette campagne
+ * (voir le filtre ci-dessous) : une suggestion tirée du vrai fichier rectorat de cette campagne
+ * n'a pas à être revalidée par une estimation qui peut se tromper (2026-10-18 — un adhérent
+ * correctement rapproché à un enseignant de CETTE campagne disparaissait quand même de la file
+ * parce que son estimation calendaire, basée sur SES propres données ADEL, disait "pas dû").
  */
 matchesRouter.get("/", async (req, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : "PENDING_REVIEW";
@@ -81,16 +87,31 @@ matchesRouter.get("/", async (req, res) => {
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
 
   const filtered = candidates.filter((c) => {
+    const suggestionCampagne = c.teacher?.snapshots[0]?.campagne;
+    // Une suggestion dont la fiche enseignant vient bien de CETTE campagne (même année scolaire, et
+    // même commission quand elle est connue des deux côtés) est une preuve concrète et directe de
+    // pertinence — tirée du fichier rectorat réellement importé pour cette campagne, pas d'une
+    // estimation. Elle doit toujours apparaître, SANS passer par le filtre calendaire ci-dessous :
+    // celui-ci se base sur les données ADEL de l'adhérent (grade/échelon/date), potentiellement
+    // incomplètes ou fausses pour un adhérent pas encore rapproché, et n'a pas de raison de
+    // contredire une correspondance déjà trouvée dans les vraies données de cette campagne.
+    if (
+      c.teacherId &&
+      suggestionCampagne &&
+      suggestionCampagne.anneeScolaire === campagne.anneeScolaire &&
+      (campagne.commission == null || suggestionCampagne.commission == null || suggestionCampagne.commission === campagne.commission)
+    ) {
+      return true;
+    }
+
+    // À partir d'ici : pas de suggestion concrète pour cette campagne (soit aucune suggestion du
+    // tout, soit une suggestion issue d'une AUTRE année scolaire/commission). Le filtre calendaire
+    // évite de noyer la file sous les adhérents pas encore dus — display-only, ne touche jamais le
+    // MatchCandidate : une suggestion d'une autre année reste parfaitement valide pour SA propre
+    // année, juste masquée ici. Voir matchUnresolvedAdherents's own doc comment pour l'incident
+    // causé par un filtre équivalent appliqué à la donnée elle-même plutôt qu'à l'affichage
+    // (2026-10-17). Toujours visible via "Afficher tous les adhérents...".
     if (!computeAdherentEligibility(c.adherent, campagne).eligible) return false;
-    // Display-only filter, never touches the underlying MatchCandidate: a suggestion whose
-    // teacher's own last-known fiche comes from a DIFFERENT année scolaire than the one selected
-    // here is confusing to review right now (looks like a current-année match, isn't) — but it may
-    // be a perfectly correct, confirmed link for its OWN année, so it must never be cleared just
-    // because it doesn't belong to this view. See matchUnresolvedAdherents's own doc comment for
-    // the real incident caused by doing that at the data layer instead (2026-10-17). Hidden here,
-    // not deleted — it still appears in the unfiltered ("Afficher tous les adhérents") view.
-    const suggestionAnnee = c.teacher?.snapshots[0]?.campagne?.anneeScolaire;
-    if (c.teacherId && suggestionAnnee && suggestionAnnee !== campagne.anneeScolaire) return false;
     return true;
   });
   res.json(filtered);

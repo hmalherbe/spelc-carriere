@@ -25,6 +25,9 @@ export function ReviewQueuePage() {
   // (computeAdherentEligibility, routes/matches.ts) se base sur les données ADEL de l'adhérent
   // (grade/échelon/date), pas sur une donnée rectorat qui n'existe pas encore tant qu'il n'est pas
   // rapproché — donc potentiellement imprécise pour un adhérent au dossier incomplet ou périmé.
+  // Ce filtre calendaire ne s'applique qu'aux candidats SANS suggestion concrète pour cette
+  // campagne : un candidat dont la suggestion vient bien du fichier rectorat de cette campagne
+  // apparaît toujours, quelle que soit cette estimation (voir routes/matches.ts, 2026-10-18).
   // Cette case permet de retrouver la vue complète (identité pure, sans filtre de calendrier) pour
   // ne jamais perdre de vue un cas réel à cause d'une estimation fausse.
   const [showAll, setShowAll] = useState(false);
