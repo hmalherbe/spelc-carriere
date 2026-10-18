@@ -333,6 +333,7 @@ export function MailingPage() {
         <div className="import-result">
           <p>
             <strong>{sendResult.sent}</strong> envoyé(s), <strong>{sendResult.failed}</strong> échec(s).
+            {sendResult.skippedOptedOut > 0 && ` ${sendResult.skippedOptedOut} désabonné(s) ignoré(s).`}
             {sendResult.testMode && " (mode test — aucun vrai destinataire atteint, rien n'a été marqué comme envoyé)"}
           </p>
           {sendResult.failed > 0 && (
@@ -482,6 +483,11 @@ export function MailingPage() {
                   <span className={`badge ${r.isAdherent ? "badge-auto_confirmed" : "badge-non_adherent"}`}>
                     {r.isAdherent ? "Adhérent" : "Non adhérent"}
                   </span>
+                  {r.optedOut && (
+                    <span className="badge badge-rejected" title="S'est désabonné via le lien en pied de mail — jamais envoyé, même sélectionné.">
+                      {" "}Désabonné
+                    </span>
+                  )}
                 </td>
                 <td>{r.grade}</td>
                 {departements.length > 0 && <td>{r.departement ?? "—"}</td>}

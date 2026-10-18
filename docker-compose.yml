@@ -29,6 +29,10 @@ services:
       ADEL_PASSWORD: ${ADEL_PASSWORD:-}
       ADEL_SPELC_NAME: ${ADEL_SPELC_NAME:-azur}
       ADEL_DEBUG_DIR: /app/adel-debug
+      # Domaine public de CETTE instance — nécessaire pour construire un lien de désabonnement
+      # fonctionnel dans les mails de notification (voir routes/mailing.ts,
+      # buildRecipientUnsubscribeUrl) : sans elle, l'envoi aux non-adhérents est refusé.
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     volumes:
       - ./adel-debug:/app/adel-debug
     depends_on:

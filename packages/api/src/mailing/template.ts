@@ -30,6 +30,10 @@ export interface MailingContext {
   /** Non-adhérent = never explicitly signed up with the union, so unlike an adhérent they get an
    * unsubscribe link in the footer (see buildPromotionEmail). */
   isAdherent: boolean;
+  /** Lien de désabonnement déjà construit par l'appelant (routes/mailing.ts) — null pour un
+   * adhérent (jamais de lien) ou quand aucune adresse n'est connue (rien à désabonner). Voir
+   * buildUnsubscribeLink ci-dessous. */
+  unsubscribeUrl: string | null;
   /** CCMA (second degré) or CCMI (premier degré) per the recipient's grade — decides which élus
    * list to show; null when the grade couldn't be classified (see routes/mailing.ts). */
   commission: "CCMA" | "CCMI" | null;
@@ -172,12 +176,13 @@ export function buildElusFooter(commission: MailingContext["commission"], elus: 
     </table>`;
 }
 
-/** Only shown for a non-adhérent (see MailingContext.isAdherent) — they never explicitly signed up
- * with the union, unlike an adhérent who chose to be a member. */
-export function buildUnsubscribeLink(isAdherent: boolean): string {
-  if (isAdherent) return "";
-  const mailto = `mailto:spelc.cotedazur@gmail.com?subject=${encodeURIComponent("se désabonner")}`;
-  return `<p style="font-size: 0.8rem; margin-bottom: 8px;"><a href="${mailto}">Se désabonner</a></p>`;
+/** Rendu uniquement quand l'appelant a construit un lien (jamais pour un adhérent — voir
+ * routes/mailing.ts) — un clic désabonne définitivement cette adresse/ce nom des notifications de
+ * promotion, sans confirmation supplémentaire requise par e-mail (voir
+ * routes/mailingUnsubscribe.ts, qui affiche sa propre page de confirmation avant d'agir). */
+export function buildUnsubscribeLink(unsubscribeUrl: string | null): string {
+  if (!unsubscribeUrl) return "";
+  return `<p style="font-size: 0.8rem; margin-bottom: 8px;"><a href="${escapeHtml(unsubscribeUrl)}">Se désabonner de ces notifications</a></p>`;
 }
 
 /**
@@ -260,7 +265,7 @@ export function buildPromotionEmail(ctx: MailingContext): { subject: string; htm
 
   const header = buildHeader(ctx.logoDataUrl, ctx.t1Text);
   const elusFooter = buildElusFooter(ctx.commission, ctx.elus);
-  const unsubscribeLink = buildUnsubscribeLink(ctx.isAdherent);
+  const unsubscribeLink = buildUnsubscribeLink(ctx.unsubscribeUrl);
   const socialLinks = buildSocialLinks(ctx.socialLinks);
 
   const html = `

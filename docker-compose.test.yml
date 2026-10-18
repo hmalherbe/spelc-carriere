@@ -39,6 +39,7 @@ services:
       ADEL_PASSWORD: ${ADEL_PASSWORD:-}
       ADEL_SPELC_NAME: ${ADEL_SPELC_NAME:-azur}
       ADEL_DEBUG_DIR: /app/adel-debug
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     volumes:
       - ./adel-debug:/app/adel-debug
     depends_on:

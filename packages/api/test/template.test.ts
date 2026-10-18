@@ -15,6 +15,7 @@ const BASE: MailingContext = {
   dateProchainePromotion: "2025-03-01T00:00:00.000Z",
   anneeScolaire: "2024-2025",
   isAdherent: true,
+  unsubscribeUrl: null,
   commission: null,
   elus: [],
   t1Text: null,
@@ -166,13 +167,13 @@ describe("buildPromotionEmail", () => {
     expect(html).not.toContain("Vos élus");
   });
 
-  it("shows the unsubscribe mailto link only for a non-adhérent", () => {
-    const { html: adherentHtml } = buildPromotionEmail({ ...BASE, isAdherent: true });
-    expect(adherentHtml).not.toContain("Se désabonner");
+  it("shows the unsubscribe link only when the caller provided one — the template trusts the caller's decision (never an adhérent, see routes/mailing.ts's buildRecipientUnsubscribeUrl), it never re-checks isAdherent itself", () => {
+    const { html: noUrlHtml } = buildPromotionEmail({ ...BASE, isAdherent: false, unsubscribeUrl: null });
+    expect(noUrlHtml).not.toContain("Se désabonner");
 
-    const { html: nonAdherentHtml } = buildPromotionEmail({ ...BASE, isAdherent: false });
-    expect(nonAdherentHtml).toContain("Se désabonner");
-    expect(nonAdherentHtml).toContain("mailto:spelc.cotedazur@gmail.com?subject=se%20d%C3%A9sabonner");
+    const { html: withUrlHtml } = buildPromotionEmail({ ...BASE, isAdherent: false, unsubscribeUrl: "https://spelcca.fr/api/mailing/unsubscribe/abc.def" });
+    expect(withUrlHtml).toContain("Se désabonner");
+    expect(withUrlHtml).toContain("https://spelcca.fr/api/mailing/unsubscribe/abc.def");
   });
 
   it("renders social links at the end of the letter, each with an icon matching its network", () => {

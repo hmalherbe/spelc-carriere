@@ -11,6 +11,7 @@ const BASE: CcmaModelContext = {
   nom: "MORIN",
   email: "elise.m83@hotmail.fr",
   isAdherent: true,
+  unsubscribeUrl: null,
   commission: "CCMA",
   elus: [],
   t1Text: null,
@@ -358,6 +359,7 @@ describe("buildCcmaModelEmail", () => {
     const { html } = buildCcmaModelEmail({
       ...BASE,
       isAdherent: false,
+      unsubscribeUrl: "https://spelcca.fr/api/mailing/unsubscribe/abc.def",
       logoDataUrl: "data:image/png;base64,AAAA",
       t1Text: "Section Côte d'Azur",
       elus: [{ role: "TITULAIRE", prenom: "Sophie", nom: "CACHET", telephone: "0682341995", email: null }],

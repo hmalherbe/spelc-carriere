@@ -37,6 +37,8 @@ export interface CcmaModelContext {
   nom: string;
   email: string | null;
   isAdherent: boolean;
+  /** Voir MailingContext.unsubscribeUrl (template.ts) — même contrat. */
+  unsubscribeUrl: string | null;
   commission: "CCMA" | "CCMI";
   elus: MailingElu[];
   t1Text: string | null;
@@ -275,7 +277,7 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
 
   const header = buildHeader(ctx.logoDataUrl, ctx.t1Text);
   const elusFooter = buildElusFooter(ctx.commission, ctx.elus);
-  const unsubscribeLink = buildUnsubscribeLink(ctx.isAdherent);
+  const unsubscribeLink = buildUnsubscribeLink(ctx.unsubscribeUrl);
   const socialLinks = buildSocialLinks(ctx.socialLinks);
 
   const body = [

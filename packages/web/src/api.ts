@@ -357,6 +357,9 @@ export interface MailingRecipient {
   /** Même règle que la colonne "Éligibilité BA" de DashboardPage — voir baCell() dans MailingPage.tsx. */
   baStatus: "promu" | "non_promu" | null;
   baEchelonDepart: 6 | 8 | null;
+  /** S'est désabonné des notifications (lien en pied de mail, non-adhérent uniquement) — /send
+   * l'exclut toujours de l'envoi, même sélectionné explicitement ; voir MailingPage.tsx. */
+  optedOut: boolean;
 }
 
 export interface MailingPreview {
@@ -377,6 +380,8 @@ export interface MailingSendResult {
   results: { teacherId: string; nom: string; prenom: string; email: string | null; status: "SENT" | "FAILED"; error?: string }[];
   /** true when this send was redirected to the test address (Paramètres) rather than real recipients. */
   testMode: boolean;
+  /** Nombre de destinataires désabonnés exclus de cet envoi (toujours, même sélectionnés explicitement). */
+  skippedOptedOut: number;
 }
 
 export interface BrevoSettings {

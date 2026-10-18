@@ -533,6 +533,29 @@ model MailingLog {
   @@index([campagneId])
 }
 
+// Désabonnement des notifications de promotion — uniquement pour les non-adhérents (voir
+// buildUnsubscribeLink dans mailing/template.ts : un adhérent, lui, a explicitement choisi d'être
+// membre, jamais de lien de désabonnement dans son mail). Enregistré via un clic sur le lien en
+// pied de mail (routes/mailingUnsubscribe.ts), identifié par email ET/OU nom+prénom normalisés
+// (voir mailing/unsubscribeToken.ts) puisqu'un non-adhérent n'a pas d'identifiant stable comme un
+// Adherent.id — les deux champs sont remplis quand on les connaît, et eligibleRecipients()
+// (routes/mailing.ts) exclut du prochain envoi quiconque matche sur L'UN OU L'AUTRE, pour rester
+// robuste si l'adresse change d'une campagne à l'autre (ex. mutation académique).
+model MailingOptOut {
+  id         String   @id @default(cuid())
+  email      String? // toujours en minuscules/trim — voir normalizeEmailForOptOut
+  nom        String?
+  prenom     String?
+  createdAt  DateTime @default(now())
+  // Pour traçabilité uniquement (jamais utilisé pour le matching lui-même) — free-text, aucune
+  // relation : la campagne/enseignant d'origine peuvent très bien avoir disparu depuis.
+  campagneId String?
+  teacherId  String?
+
+  @@index([email])
+  @@index([nom, prenom])
+}
+
 // ---------------------------------------------------------------------------
 // ADEL sync — one row per attempt to pull the adhérents export automatically from ADEL (the
 // union's own membership database) via the Playwright scraper in packages/scraper, instead of a

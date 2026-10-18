@@ -17,6 +17,7 @@ import { loadReliquatPromotionsByCampagne, loadReliquatCountByGroup } from "../r
 import { civiliteFromPrenom, normalizeName } from "@spelc/import";
 import { decryptSecret } from "../crypto.js";
 import { loadMailingBranding } from "../mailingBranding.js";
+import { buildUnsubscribeToken } from "../mailing/unsubscribeToken.js";
 import type { GrilleCode } from "@spelc/domain";
 
 const SINGLETON_ID = "singleton";
@@ -69,6 +70,22 @@ async function loadBrevoConfigFromDb(): Promise<{
     testEmail: dbConfig?.testEmail ?? null,
     testMaxSends: dbConfig?.testMaxSends ?? null,
   };
+}
+
+/**
+ * Lien de désabonnement (non-adhérent uniquement, voir buildUnsubscribeLink dans template.ts) —
+ * null pour un adhérent ou quand aucune adresse n'est connue (rien à désabonner), ou quand
+ * PUBLIC_APP_URL n'est pas configuré (voir le garde-fou dans /send ci-dessous, qui refuse l'envoi
+ * plutôt que d'expédier un mail sans lien fonctionnel). Le token est déterministe (même personne ->
+ * même lien à chaque campagne, voir unsubscribeToken.ts), donc appelable sans effet de bord depuis
+ * /preview et /pdf/text aussi bien que /send.
+ */
+function buildRecipientUnsubscribeUrl(recipient: { isAdherent: boolean; email: string | null; nom: string; prenom: string }): string | null {
+  if (recipient.isAdherent || !recipient.email) return null;
+  const base = process.env.PUBLIC_APP_URL?.replace(/\/+$/, "");
+  if (!base) return null;
+  const token = buildUnsubscribeToken({ email: recipient.email, nom: recipient.nom, prenom: recipient.prenom });
+  return `${base}/api/mailing/unsubscribe/${token}`;
 }
 
 type EligibleRecipient = Awaited<ReturnType<typeof eligibleRecipients>>[number];
@@ -157,6 +174,7 @@ function buildCcmaModelContext(
     nom: recipient.nom,
     email: recipient.email,
     isAdherent: recipient.isAdherent,
+    unsubscribeUrl: buildRecipientUnsubscribeUrl(recipient),
     commission: (campagne.type ?? "CCMA") as "CCMA" | "CCMI",
     elus: shared.elus,
     t1Text: shared.t1Text,
@@ -215,6 +233,7 @@ function buildRecipientEmail(
     dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
     anneeScolaire: campagne.anneeScolaire,
     isAdherent: recipient.isAdherent,
+    unsubscribeUrl: buildRecipientUnsubscribeUrl(recipient),
     commission: campagne.type,
     elus: shared.elus,
     t1Text: shared.t1Text,
@@ -259,6 +278,18 @@ async function eligibleRecipients(campagneId: string) {
 
   const logs = await prisma.mailingLog.findMany({ where: { campagneId } });
   const logByTeacherId = new Map(logs.map((l) => [l.teacherId, l]));
+
+  // Désabonnements (non-adhérents uniquement — un adhérent n'a jamais de lien de désabonnement,
+  // voir buildRecipientUnsubscribeUrl) — chargés une fois, matchés par email OU par nom+prénom
+  // normalisés pour rester robuste si l'adresse change d'une campagne à l'autre (voir
+  // MailingOptOut's doc comment dans schema.prisma).
+  const optOuts = await prisma.mailingOptOut.findMany();
+  const optedOutEmails = new Set(optOuts.filter((o) => o.email).map((o) => o.email!));
+  const optedOutNameKeys = new Set(optOuts.filter((o) => o.nom && o.prenom).map((o) => `${normalizeName(o.nom!)}|${normalizeName(o.prenom!)}`));
+  function isOptedOut(email: string | null, nom: string, prenom: string): boolean {
+    if (email && optedOutEmails.has(email.trim().toLowerCase())) return true;
+    return optedOutNameKeys.has(`${normalizeName(nom)}|${normalizeName(prenom)}`);
+  }
 
   const seenTeacherIds = new Set<string>();
   const result: {
@@ -314,6 +345,11 @@ async function eligibleRecipients(campagneId: string) {
     /** Promu via le mécanisme de reliquat du syndicat (page Reliquats) — voir schema.prisma's
      * ReliquatPromotion et reliquats.ts. */
     reliquatPromu: boolean;
+    /** S'est désabonné des notifications (lien en pied de mail, non-adhérent uniquement) — toujours
+     * false pour un adhérent. /send l'exclut systématiquement des envois, même sélectionné
+     * explicitement (voir ce garde-fou plus bas) ; affiché ici surtout pour que MailingPage.tsx
+     * explique pourquoi quelqu'un ne reçoit plus rien. */
+    optedOut: boolean;
   }[] = [];
 
   for (const snap of snapshots) {
@@ -388,6 +424,7 @@ async function eligibleRecipients(campagneId: string) {
       baStatus,
       baEchelonDepart,
       reliquatPromu,
+      optedOut: !isAdherent && isOptedOut(email, nom, prenom),
     });
   }
 
@@ -449,6 +486,7 @@ mailingRouter.get("/preview", asyncHandler(async (req, res) => {
       dateProchainePromotion: recipient.dateProchainePromotion ? recipient.dateProchainePromotion.toISOString() : null,
       anneeScolaire: campagne.anneeScolaire,
       isAdherent: recipient.isAdherent,
+      unsubscribeUrl: buildRecipientUnsubscribeUrl(recipient),
       commission: campagne.commission,
       elus: shared.elus,
       t1Text: shared.t1Text,
@@ -580,7 +618,21 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
   let targets = teacherIds
     ? all.filter((r) => teacherIds.includes(r.teacherId))
     : all.filter((r) => r.lastStatus !== "SENT");
+  // Garde-fou non contournable : un désabonnement doit tenir même si l'admin sélectionne quand
+  // même explicitement cette personne (sélection manuelle, re-sélection par erreur...) — jamais une
+  // simple exclusion par défaut qu'un teacherIds explicite pourrait outrepasser.
+  const skippedOptedOut = targets.filter((r) => r.optedOut).length;
+  targets = targets.filter((r) => !r.optedOut);
   if (testMode && testMaxSends != null) targets = targets.slice(0, testMaxSends);
+
+  // Un non-adhérent doit TOUJOURS recevoir un lien de désabonnement fonctionnel (voir
+  // buildRecipientUnsubscribeUrl) — sans PUBLIC_APP_URL configuré, ce lien ne peut pas être
+  // construit du tout : refuser l'envoi plutôt que d'expédier silencieusement un mail sans lien.
+  if (!process.env.PUBLIC_APP_URL && targets.some((r) => !r.isAdherent && r.email)) {
+    return res.status(400).json({
+      error: "PUBLIC_APP_URL n'est pas configuré : impossible d'envoyer à des non-adhérents sans lien de désabonnement fonctionnel (voir .env.example).",
+    });
+  }
 
   const [branding, elusByCommission, socialLinks] = await Promise.all([
     loadMailingBranding(),
@@ -643,7 +695,7 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
 
   const sent = results.filter((r) => r.status === "SENT").length;
   const failed = results.filter((r) => r.status === "FAILED").length;
-  res.status(201).json({ sent, failed, results, testMode });
+  res.status(201).json({ sent, failed, results, testMode, skippedOptedOut });
 }));
 
 const pdfSchema = z.object({
