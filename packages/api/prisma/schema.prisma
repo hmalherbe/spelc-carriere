@@ -357,6 +357,15 @@ model Teacher {
   // and also covers a non-adhérent, who has no Adherent row to put it on.
   civiliteCorrigee String?
 
+  // Override manuel, AFFICHAGE SEULEMENT, du statut adhérent/non-adhérent montré dans le courrier
+  // (formule "cher adhérent"/"cher collègue", et présence ou non du lien de désabonnement — voir
+  // buildRecipientUnsubscribeUrl dans routes/mailing.ts). Ne change JAMAIS quelle adresse mail est
+  // utilisée pour l'envoi : celle-ci reste entièrement pilotée par le rapprochement adhérent↔
+  // enseignant réel (MatchCandidate), qui seul sait si une fiche Adherent existe pour aller y
+  // chercher mailPersonnel — un simple champ ici ne peut pas inventer une adresse personnelle qui
+  // n'existe pas. null = pas d'override, comportement normal (dérivé de MatchCandidate.status).
+  isAdherentCorrige Boolean?
+
   snapshots          TeacherSnapshot[]
   hcExcSnapshots     HcExcSnapshot[]
   matchCandidate     MatchCandidate?

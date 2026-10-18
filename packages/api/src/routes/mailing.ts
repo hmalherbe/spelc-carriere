@@ -361,18 +361,27 @@ async function eligibleRecipients(campagneId: string) {
     if (!state) continue;
 
     const candidate = teacher.matchCandidate;
-    const isAdherent = candidate != null && (candidate.status === "AUTO_CONFIRMED" || candidate.status === "CONFIRMED");
+    // Statut RÉEL (rapprochement adhérent↔enseignant) — seul à décider quelle fiche Adherent
+    // existe, donc quelle adresse utiliser, le nom/prénom "officiel" et la source de la civilité.
+    // Un override d'affichage (isAdherentCorrige, ci-dessous) ne peut jamais en tenir lieu : il n'y
+    // a aucune fiche Adherent à aller chercher pour quelqu'un qu'on force juste à AFFICHER comme
+    // adhérent.
+    const isAdherentReel = candidate != null && (candidate.status === "AUTO_CONFIRMED" || candidate.status === "CONFIRMED");
+    // Statut AFFICHÉ dans le courrier (formule de politesse, présence du lien de désabonnement) —
+    // voir Teacher.isAdherentCorrige's own doc comment. Par défaut, identique au statut réel.
+    const isAdherent = teacher.isAdherentCorrige ?? isAdherentReel;
 
-    const adherent = isAdherent ? candidate!.adherent : null;
+    const adherent = isAdherentReel ? candidate!.adherent : null;
     const nom = adherent?.nom ?? snap.nomUsage;
     const prenom = adherent?.prenom ?? snap.prenom;
     // Only a non-adhérent's civilité is ever guessed — an adhérent's is a declared field (from the
     // ADEL export's Civ. column), left as-is (including null when that field wasn't filled in)
     // rather than second-guessed from their prénom. Either one can be overridden by hand from the
     // Mailing page itself (Teacher.civiliteCorrigee's own doc comment) — when set, it always wins
-    // and is never flagged "estimé" (it's a deliberate choice, not a guess).
-    const civilite = teacher.civiliteCorrigee ?? (isAdherent ? (adherent?.civilite ?? null) : civiliteFromPrenom(prenom));
-    const civiliteEstimee = !teacher.civiliteCorrigee && !isAdherent && civilite != null;
+    // and is never flagged "estimé" (it's a deliberate choice, not a guess). Basé sur le statut
+    // RÉEL (une civilité déclarée ADEL n'existe que si une vraie fiche Adherent est liée).
+    const civilite = teacher.civiliteCorrigee ?? (isAdherentReel ? (adherent?.civilite ?? null) : civiliteFromPrenom(prenom));
+    const civiliteEstimee = !teacher.civiliteCorrigee && !isAdherentReel && civilite != null;
     const email = adherent
       ? adherent.mailPersonnel
       : (academicEmailByName.get(`${normalizeName(snap.nomUsage)}|${normalizeName(snap.prenom)}`) ?? null);
@@ -424,7 +433,9 @@ async function eligibleRecipients(campagneId: string) {
       baStatus,
       baEchelonDepart,
       reliquatPromu,
-      optedOut: !isAdherent && isOptedOut(email, nom, prenom),
+      // Basé sur le statut RÉEL, jamais l'override d'affichage : un vrai non-adhérent qui s'est
+      // désabonné doit rester exclu même si on le force à s'AFFICHER "Adhérent" dans un courrier.
+      optedOut: !isAdherentReel && isOptedOut(email, nom, prenom),
     });
   }
 
@@ -562,6 +573,27 @@ mailingRouter.put("/:teacherId/civilite", requireRole("ADMIN", "GESTIONNAIRE"), 
 
   await prisma.teacher.update({ where: { id: req.params.teacherId }, data: { civiliteCorrigee: parsed.data.civilite } });
   res.json({ civilite: parsed.data.civilite });
+}));
+
+const updateIsAdherentSchema = z.object({ isAdherent: z.boolean().nullable() });
+
+/**
+ * Force l'affichage "Adhérent"/"Non adhérent" dans le courrier (Teacher.isAdherentCorrige's own
+ * doc comment) — formule de politesse et présence du lien de désabonnement UNIQUEMENT. null
+ * efface l'override, revenant au statut réel dérivé du rapprochement adhérent↔enseignant.
+ * Ne touche JAMAIS à l'adresse d'envoi (toujours celle du vrai statut) ni au statut "désabonné"
+ * (toujours basé sur le vrai statut — voir isOptedOut dans eligibleRecipients).
+ */
+mailingRouter.put("/:teacherId/is-adherent", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
+  const parsed = updateIsAdherentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+  }
+  const teacher = await prisma.teacher.findUnique({ where: { id: req.params.teacherId } });
+  if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
+
+  await prisma.teacher.update({ where: { id: req.params.teacherId }, data: { isAdherentCorrige: parsed.data.isAdherent } });
+  res.json({ isAdherent: parsed.data.isAdherent });
 }));
 
 mailingRouter.get("/log", asyncHandler(async (req, res) => {

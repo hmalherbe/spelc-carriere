@@ -62,6 +62,8 @@ export function MailingPage() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [savingCiviliteId, setSavingCiviliteId] = useState<string | null>(null);
   const [civiliteError, setCiviliteError] = useState<string | null>(null);
+  const [savingIsAdherentId, setSavingIsAdherentId] = useState<string | null>(null);
+  const [isAdherentError, setIsAdherentError] = useState<string | null>(null);
   const [brevoSettings, setBrevoSettings] = useState<BrevoSettings | null>(null);
   const [civiliteFilter, setCiviliteFilter] = useState<"" | "VIDE" | "M" | "Mme">("");
   const [gradeFilter, setGradeFilter] = useState<string>("all");
@@ -209,6 +211,21 @@ export function MailingPage() {
     }
   }
 
+  async function saveIsAdherent(teacherId: string, value: string) {
+    if (!campagneId) return;
+    const isAdherent = value === "adherent" ? true : value === "non_adherent" ? false : null;
+    setSavingIsAdherentId(teacherId);
+    setIsAdherentError(null);
+    try {
+      await api.updateMailingIsAdherent(teacherId, isAdherent);
+      refresh(campagneId);
+    } catch (e) {
+      setIsAdherentError(String(e));
+    } finally {
+      setSavingIsAdherentId(null);
+    }
+  }
+
   async function send() {
     if (!campagneId || selected.size === 0) return;
     const count = selected.size;
@@ -328,6 +345,7 @@ export function MailingPage() {
       )}
 
       {civiliteError && <p className="error-text">{civiliteError}</p>}
+      {isAdherentError && <p className="error-text">{isAdherentError}</p>}
 
       {sendResult && (
         <div className="import-result">
@@ -480,9 +498,24 @@ export function MailingPage() {
                 <td>{r.nom}</td>
                 <td>{formatPrenom(r.prenom)}</td>
                 <td>
-                  <span className={`badge ${r.isAdherent ? "badge-auto_confirmed" : "badge-non_adherent"}`}>
-                    {r.isAdherent ? "Adhérent" : "Non adhérent"}
-                  </span>
+                  {canSend ? (
+                    <div className="row-actions">
+                      <select
+                        value={r.isAdherent ? "adherent" : "non_adherent"}
+                        disabled={savingIsAdherentId === r.teacherId}
+                        onChange={(e) => saveIsAdherent(r.teacherId, e.target.value)}
+                        title="Affichage seulement (formule de politesse + lien de désabonnement) — ne change jamais l'adresse d'envoi, toujours celle du vrai rapprochement adhérent."
+                      >
+                        <option value="">(auto)</option>
+                        <option value="adherent">Adhérent</option>
+                        <option value="non_adherent">Non adhérent</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <span className={`badge ${r.isAdherent ? "badge-auto_confirmed" : "badge-non_adherent"}`}>
+                      {r.isAdherent ? "Adhérent" : "Non adhérent"}
+                    </span>
+                  )}
                   {r.optedOut && (
                     <span className="badge badge-rejected" title="S'est désabonné via le lien en pied de mail — jamais envoyé, même sélectionné.">
                       {" "}Désabonné

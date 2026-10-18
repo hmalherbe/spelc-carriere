@@ -672,6 +672,10 @@ export const api = {
   /** null clears the override, reverting to the declared/estimated civilité. */
   updateMailingCivilite: (teacherId: string, civilite: "M" | "Mme" | null) =>
     request<{ civilite: "M" | "Mme" | null }>(`/mailing/${teacherId}/civilite`, { method: "PUT", body: JSON.stringify({ civilite }) }),
+  /** Affichage seulement (formule de politesse + lien de désabonnement) — ne change jamais
+   * l'adresse d'envoi. null clears the override, reverting to the real adhérent↔enseignant link. */
+  updateMailingIsAdherent: (teacherId: string, isAdherent: boolean | null) =>
+    request<{ isAdherent: boolean | null }>(`/mailing/${teacherId}/is-adherent`, { method: "PUT", body: JSON.stringify({ isAdherent }) }),
   grilles: () => request<GrillesData>("/grilles"),
   updateEchelonIndice: (grilleCode: string, echelon: string, indice: number) =>
     request<EchelonRowApi>(`/grilles/${encodeURIComponent(grilleCode)}/rows/${encodeURIComponent(echelon)}`, {
