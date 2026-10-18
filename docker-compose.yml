@@ -49,6 +49,14 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    # Ce docker-compose.yml est partagé par la prod (/opt/spelc-carriere) ET l'environnement de
+    # test/démo (/opt/spelc-carriere-test), sur le MÊME serveur physique — donc le même port hôte
+    # 80/443 ne peut être lié que par l'un des deux. Caddy est le point d'entrée HTTPS commun
+    # (spelcca.fr/www.spelcca.fr/demo.spelcca.fr, voir Caddyfile), il ne doit tourner que côté prod ;
+    # `profiles` le désactive par défaut (`docker compose up` l'ignore), à activer uniquement côté
+    # prod via COMPOSE_PROFILES=caddy dans son .env (jamais dans celui du test/démo) — voir le
+    # correctif du 2026-10-18 pour l'incident que son absence a causé (conflit de port avec la prod).
+    profiles: ["caddy"]
     ports:
       - "80:80"
       - "443:443"
