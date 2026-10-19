@@ -3,6 +3,7 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { matchUnresolvedAdherents, purgeStaleLowConfidenceMatches } from "../adherentImport.js";
 import { normalizeGrade } from "@spelc/import";
+import { isEligibleCampagne } from "@spelc/domain";
 import { computeAdherentEligibility } from "../adherentEligibility.js";
 
 export const matchesRouter = Router();
@@ -54,11 +55,23 @@ matchesRouter.get("/stats", async (_req, res) => {
  * visible way back to the unfiltered view — never a silent default at this endpoint's own level,
  * so nothing else calling this route inherits the same risk unless it opts in.
  *
- * Ce filtre calendaire ne s'applique QU'aux candidats sans suggestion concrète pour cette campagne
- * (voir le filtre ci-dessous) : une suggestion tirée du vrai fichier rectorat de cette campagne
- * n'a pas à être revalidée par une estimation qui peut se tromper (2026-10-18 — un adhérent
- * correctement rapproché à un enseignant de CETTE campagne disparaissait quand même de la file
- * parce que son estimation calendaire, basée sur SES propres données ADEL, disait "pas dû").
+ * Un candidat avec une suggestion concrète pour cette campagne (même année scolaire, même
+ * commission) est vérifié avec la date de promotion CALCULÉE DU VRAI ENSEIGNANT rapproché
+ * (ComputedPromotionState — dérivée du fichier rectorat réellement importé, voir promotionState.ts,
+ * qui priorise même la date confirmée du rectorat quand elle existe) plutôt qu'avec l'estimation
+ * basée sur les données ADEL de l'adhérent (potentiellement obsolètes) — c'est la source la plus
+ * fiable de tout le produit pour "cette personne est-elle vraiment due ce tour-ci". Un candidat sans
+ * suggestion concrète (ou dont la suggestion vient d'une autre année/commission) retombe sur
+ * l'estimation adhérent, seule disponible dans ce cas.
+ *
+ * Historique : un premier correctif (2026-10-18) contournait entièrement ce contrôle dès qu'une
+ * suggestion de cette campagne existait, en partant du principe qu'être dans le fichier rectorat de
+ * la campagne suffisait à prouver l'éligibilité individuelle — un vrai cas (Evrim EVCI, Hugues
+ * MALHERBE, campagne CCMA 2026-2027, 2026-10-19) a prouvé le contraire : le fichier rectorat peut
+ * très bien contenir des enseignants dont la prochaine promotion individuelle tombe hors de la
+ * période de cette campagne. Vérifier contre la date du VRAI enseignant (au lieu de ne rien
+ * vérifier du tout) résout ce cas tout en conservant la correction du 2026-10-18 (un adhérent
+ * correctement rapproché ne disparaît plus à cause d'une estimation ADHÉRENT fausse/obsolète).
  */
 matchesRouter.get("/", async (req, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : "PENDING_REVIEW";
@@ -75,6 +88,10 @@ matchesRouter.get("/", async (req, res) => {
           // différente de celle actuellement sélectionnée — voir ReviewQueuePage.tsx, qui l'affiche
           // pour éviter de laisser croire qu'un fichier rectorat existe déjà pour l'année en cours.
           snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" }, include: { campagne: { select: { anneeScolaire: true, commission: true } } } },
+          // Toutes les campagnes de cet enseignant — on cherche ensuite celle qui correspond au
+          // campagneId demandé (un Teacher persiste d'une année sur l'autre, donc peut avoir
+          // plusieurs ComputedPromotionState, un par campagne).
+          computedStates: true,
         },
       },
     },
@@ -86,27 +103,30 @@ matchesRouter.get("/", async (req, res) => {
   const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
   if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
 
+  const periodeDebut = campagne.periodeDebut.toISOString().slice(0, 10);
+  const periodeFin = campagne.periodeFin.toISOString().slice(0, 10);
+
   const filtered = candidates.filter((c) => {
     const suggestionCampagne = c.teacher?.snapshots[0]?.campagne;
-    // Une suggestion dont la fiche enseignant vient bien de CETTE campagne (même année scolaire, et
-    // même commission quand elle est connue des deux côtés) est une preuve concrète et directe de
-    // pertinence — tirée du fichier rectorat réellement importé pour cette campagne, pas d'une
-    // estimation. Elle doit toujours apparaître, SANS passer par le filtre calendaire ci-dessous :
-    // celui-ci se base sur les données ADEL de l'adhérent (grade/échelon/date), potentiellement
-    // incomplètes ou fausses pour un adhérent pas encore rapproché, et n'a pas de raison de
-    // contredire une correspondance déjà trouvée dans les vraies données de cette campagne.
-    if (
-      c.teacherId &&
-      suggestionCampagne &&
+    const suggestionMatchesCampagne =
+      c.teacherId != null &&
+      suggestionCampagne != null &&
       suggestionCampagne.anneeScolaire === campagne.anneeScolaire &&
-      (campagne.commission == null || suggestionCampagne.commission == null || suggestionCampagne.commission === campagne.commission)
-    ) {
-      return true;
+      (campagne.commission == null || suggestionCampagne.commission == null || suggestionCampagne.commission === campagne.commission);
+
+    if (suggestionMatchesCampagne) {
+      // Date calculée du VRAI enseignant rapproché, pour CETTE campagne précise — voir le long
+      // commentaire au-dessus de cette route pour pourquoi ce n'est ni "toujours montrer" (l'ancien
+      // comportement, trop permissif) ni l'estimation adhérent (potentiellement obsolète), mais la
+      // vraie donnée rectorat déjà calculée pour ce teacher/cette campagne.
+      const state = c.teacher!.computedStates.find((s) => s.campagneId === campagneId);
+      const dateProchainePromotion = state?.dateProchainePromotion ? state.dateProchainePromotion.toISOString().slice(0, 10) : null;
+      return isEligibleCampagne(dateProchainePromotion, periodeDebut, periodeFin);
     }
 
     // À partir d'ici : pas de suggestion concrète pour cette campagne (soit aucune suggestion du
-    // tout, soit une suggestion issue d'une AUTRE année scolaire/commission). Le filtre calendaire
-    // évite de noyer la file sous les adhérents pas encore dus — display-only, ne touche jamais le
+    // tout, soit une suggestion issue d'une AUTRE année scolaire/commission) — seule l'estimation
+    // basée sur les données ADEL de l'adhérent est disponible. Display-only, ne touche jamais le
     // MatchCandidate : une suggestion d'une autre année reste parfaitement valide pour SA propre
     // année, juste masquée ici. Voir matchUnresolvedAdherents's own doc comment pour l'incident
     // causé par un filtre équivalent appliqué à la donnée elle-même plutôt qu'à l'affichage
