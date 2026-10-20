@@ -366,10 +366,20 @@ export async function importAdherentRecords(
     const targetDegre = options.commission === "CCMA" ? 2 : 1;
     const staleCandidates = await prisma.adherent.findMany({ where: { id: { notIn: adherentIds } }, select: { id: true, grade: true } });
     staleIds = staleCandidates.filter((a) => degreForGrade(a.grade) === targetDegre).map((a) => a.id);
+    // Trace temporaire (2026-10-20) — à retirer une fois l'investigation MEAZZA/TCHA-KONDOR close.
+    console.log("[diag-prune] importAdherentRecords", {
+      commission: options.commission,
+      targetDegre,
+      adherentIdsCount: adherentIds.length,
+      staleCandidatesCount: staleCandidates.length,
+      staleIdsCount: staleIds.length,
+    });
     if (staleIds.length > 0) {
       await prisma.matchCandidate.deleteMany({ where: { adherentId: { in: staleIds } } });
       await prisma.adherent.deleteMany({ where: { id: { in: staleIds } } });
     }
+  } else {
+    console.log("[diag-prune] importAdherentRecords : prune ignoré", { prune: options.prune, adherentIdsCount: adherentIds.length });
   }
 
   // Whether an adherent is actually due this campaign (CCMA/CCMI-eligible) is filtered
