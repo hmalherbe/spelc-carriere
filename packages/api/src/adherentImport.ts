@@ -1,12 +1,23 @@
 import { prisma } from "./db.js";
 import { matchAdherents, normalizeGrade, normalizeName, DEFAULT_MIN_SUGGESTION_THRESHOLD, type AdherentRecord } from "@spelc/import";
+import { GRADE_MAPPINGS } from "@spelc/domain";
+
+/** 2 = second degré (CCMA), 1 = premier degré (CCMI), null = grade inconnu/non mappé — voir
+ * GRADE_MAPPINGS (@spelc/domain). Utilisé pour borner la suppression ("prune") d'un import/sync
+ * d'adhérents à SA SEULE commission (voir importAdherentRecords's own doc comment). */
+function degreForGrade(grade: string | null): 1 | 2 | null {
+  if (!grade) return null;
+  const mapping = GRADE_MAPPINGS.find((g) => g.grade.toUpperCase() === grade.trim().toUpperCase());
+  return mapping?.degre ?? null;
+}
 
 export interface ImportAdherentRecordsResult {
   created: number;
   updated: number;
-  /** Adherent rows deleted because they no longer appeared in this import — someone who left the
-   * union since the last sync. See importAdherentRecords's own doc comment. Currently always 0:
-   * both callers pass `prune: false` (see that parameter's own doc comment for why). */
+  /** Adherent rows deleted because they no longer appeared in this import, within this import's own
+   * commission (someone who left the union, or whose fiche was replaced since the last sync/import
+   * of that SAME commission) — see importAdherentRecords's own doc comment for why it's scoped this
+   * way rather than to the whole roster. */
   deleted: number;
   matching: { autoConfirmed: number; pendingReview: number };
 }
@@ -268,16 +279,19 @@ export async function purgeStaleLowConfidenceMatches(): Promise<{ cleared: numbe
  * ones just touched. Shared by both adherent import paths — the manual CSV upload and the ADEL
  * scraper — so the upsert/matching logic only lives in one place.
  *
- * `prune: true` deletes every existing Adherent NOT present in `records` this time — correct only
- * when `records` is genuinely the union's ENTIRE current roster in one file, never a partial one.
- * That used to be true for both callers before the ADEL sync (and its manual fallback, which
- * downloads/uploads "the same export" per ImportPage.tsx's own copy) was split one file per
- * commission (CCMA / CCMI): a CCMI sync's file covers only premier-degré adherents, so pruning
- * against it deleted every second-degré adherent not in that file — and the next CCMA sync then
- * deleted every premier-degré one right back, each sync wiping out what the other had just
- * imported. Real production incident, 2026-10-16: an entire CCMI import (premier degré) vanished
- * after the following CCMA sync. Both current callers now pass `prune: false`; a genuine
- * whole-roster import path, if one is ever reintroduced, is the only safe place to pass `true`.
+ * `prune: true` deletes every existing Adherent NOT present in `records` this time — but ONLY
+ * within `commission`'s own degré (2 = second degré for CCMA, 1 = premier degré for CCMI, via
+ * GRADE_MAPPINGS/degreForGrade), never the whole roster: an ADEL sync (and its manual fallback,
+ * which downloads/uploads "the same export" per ImportPage.tsx's own copy) always covers only ONE
+ * commission's adherents per file, so pruning against the WHOLE roster deleted every adherent of
+ * the OTHER commission outright — real production incident, 2026-10-16: an entire CCMI import
+ * (premier degré) vanished after the following CCMA sync, and vice versa, each sync wiping out what
+ * the other had just imported. Scoping the deletion to this import's own degré (2026-10-20, per
+ * explicit union decision after the EVCI/MALHERBE stale-fiche case showed the old `prune: false`
+ * everywhere left stale fiches lingering indefinitely) fixes that: a CCMA sync now only ever
+ * deletes stale SECOND-degré fiches, never touching premier-degré ones, and reciprocally for CCMI.
+ * An adherent whose grade doesn't map to either degré at all (unmapped/missing grade) is never
+ * deleted by any import, regardless of commission — nothing proves it's this import's territory.
  * Its MatchCandidate (a required, non-nullable relation) is deleted first to satisfy the foreign
  * key; MailingLog.adherentId is a plain historical string, not a real FK (same pattern as
  * sentById/triggeredById elsewhere in this schema), so past mailing history for that person would
@@ -289,7 +303,7 @@ export async function purgeStaleLowConfidenceMatches(): Promise<{ cleared: numbe
  */
 export async function importAdherentRecords(
   records: AdherentRecord[],
-  options: { prune: boolean },
+  options: { prune: false } | { prune: true; commission: "CCMA" | "CCMI" },
   campagneId: string,
 ): Promise<ImportAdherentRecordsResult> {
   // Keyed on normalized nom+prénom (same accent/case-insensitive normalization the matching
@@ -345,12 +359,13 @@ export async function importAdherentRecords(
 
   // An empty `records` (a genuinely empty or unparseable file) is never "the union now has zero
   // members" — skip pruning rather than let `notIn: []` match, and delete, every adherent in the
-  // database. See importAdherentRecords's own doc comment for why `options.prune` is false for
-  // every current caller.
+  // database. See importAdherentRecords's own doc comment for the commission-scoping this applies
+  // on top of that same safety rule.
   let staleIds: string[] = [];
   if (options.prune && adherentIds.length > 0) {
-    const stale = await prisma.adherent.findMany({ where: { id: { notIn: adherentIds } }, select: { id: true } });
-    staleIds = stale.map((a) => a.id);
+    const targetDegre = options.commission === "CCMA" ? 2 : 1;
+    const staleCandidates = await prisma.adherent.findMany({ where: { id: { notIn: adherentIds } }, select: { id: true, grade: true } });
+    staleIds = staleCandidates.filter((a) => degreForGrade(a.grade) === targetDegre).map((a) => a.id);
     if (staleIds.length > 0) {
       await prisma.matchCandidate.deleteMany({ where: { adherentId: { in: staleIds } } });
       await prisma.adherent.deleteMany({ where: { id: { in: staleIds } } });

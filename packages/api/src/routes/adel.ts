@@ -68,9 +68,9 @@ adelRouter.post("/sync", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(asyn
   try {
     const { buffer } = await scrapeAdelExport(config, type);
     const { records, unmappedFields } = await parseAdherentXlsx(buffer);
-    // prune: false — this file only ever covers one commission (CCMA or CCMI), never the whole
-    // roster; see importAdherentRecords's own doc comment for the real incident this avoids.
-    const { created, updated, deleted, matching } = await importAdherentRecords(records, { prune: false }, campagneId);
+    // prune borné à SA SEULE commission (`type`) — voir importAdherentRecords's own doc comment :
+    // ce fichier ne couvre jamais que CCMA ou CCMI, jamais les deux à la fois.
+    const { created, updated, deleted, matching } = await importAdherentRecords(records, { prune: true, commission: type }, campagneId);
 
     const log = await prisma.adelSyncLog.create({
       data: { type, status: "SUCCESS", created, updated, triggeredById: req.auth!.userId },

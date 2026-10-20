@@ -500,13 +500,20 @@ importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.si
   const { campagneId } = req.body as { campagneId?: string };
   if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
 
+  const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
+  if (!campagne) return res.status(404).json({ error: "Campagne introuvable" });
+
   const isXlsx = /\.xlsx$/i.test(req.file.originalname);
   const { records, unmappedFields } = isXlsx
     ? await parseAdherentXlsx(req.file.buffer)
     : parseAdherentCsv(req.file.buffer.toString("utf-8"));
-  // prune: false — same reason as the automatic ADEL sync in routes/adel.ts: this manual fallback
-  // uploads "the same export" per-commission, never the whole roster.
-  const { created, updated, deleted, matching } = await importAdherentRecords(records, { prune: false }, campagneId);
+  // prune borné à SA SEULE commission — même raison que le sync ADEL automatique dans
+  // routes/adel.ts : ce fallback manuel charge "le même export" par commission, jamais le roster
+  // entier. Repli sur prune: false si la campagne n'a pas (encore) de commission connue — rien ne
+  // prouve alors quelle moitié du roster ce fichier couvre, donc aucune suppression n'est sûre.
+  const options: Parameters<typeof importAdherentRecords>[1] =
+    campagne.commission === "CCMA" || campagne.commission === "CCMI" ? { prune: true, commission: campagne.commission } : { prune: false };
+  const { created, updated, deleted, matching } = await importAdherentRecords(records, options, campagneId);
 
   res.status(201).json({ created, updated, deleted, unmappedFields, matching });
 }));
