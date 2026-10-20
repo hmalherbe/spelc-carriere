@@ -513,19 +513,7 @@ importsRouter.post("/adherents", requireRole("ADMIN", "GESTIONNAIRE"), upload.si
   // prouve alors quelle moitié du roster ce fichier couvre, donc aucune suppression n'est sûre.
   const options: Parameters<typeof importAdherentRecords>[1] =
     campagne.commission === "CCMA" || campagne.commission === "CCMI" ? { prune: true, commission: campagne.commission } : { prune: false };
-  // Trace temporaire (2026-10-20) — à retirer une fois l'investigation MEAZZA/TCHA-KONDOR close :
-  // confirme ce que la route décide réellement (campagne/commission/options) pour ce vrai upload,
-  // à comparer avec scripts/diagTestPruneReel20261020.ts qui prouve la fonction correcte en isolation.
-  console.log("[diag-prune] /imports/adherents", {
-    campagneId,
-    anneeScolaire: campagne.anneeScolaire,
-    campagneCommission: campagne.commission,
-    campagneType: campagne.type,
-    options,
-    recordCount: records.length,
-  });
   const { created, updated, deleted, matching } = await importAdherentRecords(records, options, campagneId);
-  console.log("[diag-prune] /imports/adherents résultat", { created, updated, deleted });
 
   res.status(201).json({ created, updated, deleted, unmappedFields, matching });
 }));
