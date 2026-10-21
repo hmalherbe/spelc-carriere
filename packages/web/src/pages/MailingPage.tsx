@@ -16,6 +16,16 @@ function euros(n: number): string {
   return `${n >= 0 ? "+" : ""}${n} €`;
 }
 
+/** Même convention que routes/mailing.ts's buildMailingExportFileName côté API (le nom proposé par
+ * le navigateur avant enregistrement vient d'ici, pas du Content-Disposition de la réponse — voir
+ * api.ts's downloadBlob) : "<date du jour>_Projet_mailing_CCMA(ou CCMI)_<date de la commission>.pdf". */
+function buildMailingPdfFileName(campagne: { dateCcma: string; commission: "CCMA" | "CCMI" | null } | null | undefined): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const dateCcma = campagne?.dateCcma ? campagne.dateCcma.slice(0, 10) : today;
+  const commission = campagne?.commission ?? "CCMA";
+  return `${today}_Projet_mailing_${commission}_${dateCcma}.pdf`;
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("fr-FR");
@@ -257,7 +267,7 @@ export function MailingPage() {
     setPdfError(null);
     try {
       const blob = await api.mailingPdf(campagneId, Array.from(selected), template);
-      downloadBlob(blob, `mailing-${selectedCampagne?.anneeScolaire ?? campagneId}.pdf`);
+      downloadBlob(blob, buildMailingPdfFileName(selectedCampagne));
     } catch (e) {
       setPdfError(String(e));
     } finally {
