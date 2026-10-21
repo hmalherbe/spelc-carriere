@@ -282,7 +282,7 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
 
   const body = [
     p(`<strong>${escapeHtml(ctx.commission)} du ${dateCcmaFr}</strong>`),
-    ctx.email ? p(escapeHtml(ctx.email)) : "",
+    ctx.email ? `<p style="font-size: 0.8rem;">${escapeHtml(ctx.email)}</p>` : "",
     greeting,
     buildIntroParagraph(ctx),
     p(`Vous étiez à l'échelon <strong>${escapeHtml(formatEchelonLabel(ctx.echelonDepart))}</strong> de l'échelle de rémunération : ${escapeHtml(ctx.grade)}.`),
