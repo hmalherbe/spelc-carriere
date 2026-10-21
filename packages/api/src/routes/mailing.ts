@@ -743,7 +743,9 @@ const pdfSchema = z.object({
  */
 async function buildMailingLetters(
   body: unknown,
-): Promise<{ status: number; error: string } | { campagne: { anneeScolaire: string }; letters: { to: string; subject: string; html: string }[] }> {
+): Promise<
+  { status: number; error: string } | { campagne: { anneeScolaire: string; dateCcma: Date }; letters: { to: string; subject: string; html: string }[] }
+> {
   const parsed = pdfSchema.safeParse(body);
   if (!parsed.success) return { status: 400, error: "Corps de requête invalide" };
   const { campagneId, teacherIds, template = "generique" } = parsed.data;
@@ -813,7 +815,7 @@ mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(as
 
   const pdf = await renderMailingPdf(pages);
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="mailing-${campagne.anneeScolaire}.pdf"`);
+  res.setHeader("Content-Disposition", `attachment; filename="mailing-${campagne.dateCcma.toISOString().slice(0, 10)}.pdf"`);
   res.send(pdf);
 }));
 
