@@ -744,7 +744,8 @@ const pdfSchema = z.object({
 async function buildMailingLetters(
   body: unknown,
 ): Promise<
-  { status: number; error: string } | { campagne: { anneeScolaire: string; dateCcma: Date }; letters: { to: string; subject: string; html: string }[] }
+  | { status: number; error: string }
+  | { campagne: { anneeScolaire: string; dateCcma: Date; commission: "CCMA" | "CCMI" | null }; letters: { to: string; subject: string; html: string }[] }
 > {
   const parsed = pdfSchema.safeParse(body);
   if (!parsed.success) return { status: 400, error: "Corps de requête invalide" };
@@ -785,6 +786,17 @@ async function buildMailingLetters(
   return { campagne, letters };
 }
 
+/** "<date du jour>_Projet_mailing_CCMA(ou CCMI)_<date de la commission>.<ext>" — demandé par
+ * l'union pour distinguer d'un coup d'œil, dans son classement, la date à laquelle l'export a été
+ * généré de celle de la commission elle-même (plusieurs exports peuvent être générés pour la même
+ * CCMA/CCMI, à des dates différentes, en l'affinant au fil des relectures). */
+function buildMailingExportFileName(campagne: { dateCcma: Date; commission: "CCMA" | "CCMI" | null }, ext: "pdf" | "txt"): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const dateCcma = campagne.dateCcma.toISOString().slice(0, 10);
+  const commission = campagne.commission ?? "CCMA";
+  return `${today}_Projet_mailing_${commission}_${dateCcma}.${ext}`;
+}
+
 /**
  * One PDF with one page per selected recipient's letter — the exact content /send would e-mail
  * them, for an admin to archive or proofread offline. Purely a read-only export: unlike /send, it
@@ -815,7 +827,7 @@ mailingRouter.post("/pdf", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(as
 
   const pdf = await renderMailingPdf(pages);
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="mailing-${campagne.dateCcma.toISOString().slice(0, 10)}.pdf"`);
+  res.setHeader("Content-Disposition", `attachment; filename="${buildMailingExportFileName(campagne, "pdf")}"`);
   res.send(pdf);
 }));
 
