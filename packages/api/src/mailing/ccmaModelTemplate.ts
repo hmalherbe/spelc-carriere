@@ -199,19 +199,20 @@ function monthYearFr(iso: string | null): string {
   return new Date(iso).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 }
 
-/** Mois de régularisation financière (confirmé par l'union) : la régularisation ne peut pas être
- * annoncée pour un mois antérieur à celui de la CCMA elle-même (le temps de la traiter), même si la
- * date d'effet de la promotion est plus ancienne (report d'ancienneté, reliquat...) — dans ce cas on
- * affiche le mois de la CCMA à la place. Sinon (date d'effet au mois de la CCMA ou plus tard), c'est
- * bien le mois de la date d'effet qui est annoncé, inchangé. */
+/** Mois de régularisation financière (confirmé par l'union) : le mois de référence ne peut pas être
+ * antérieur à celui de la CCMA elle-même (le temps de la traiter), même si la date d'effet de la
+ * promotion est plus ancienne (report d'ancienneté, reliquat...) — dans ce cas la référence est le
+ * mois de la CCMA. Sinon (date d'effet au mois de la CCMA ou plus tard), la référence est le mois de
+ * la date d'effet. Dans tous les cas, le mois annoncé est celui qui SUIT ce mois de référence. */
 function moisRegularisation(dateEffetCcm: string | null, dateCcma: string | null): string | null {
   if (!dateEffetCcm) return null;
-  if (!dateCcma) return dateEffetCcm;
   const effet = new Date(dateEffetCcm);
-  const ccma = new Date(dateCcma);
+  const ccma = dateCcma ? new Date(dateCcma) : null;
   const moisEffet = effet.getFullYear() * 12 + effet.getMonth();
-  const moisCcma = ccma.getFullYear() * 12 + ccma.getMonth();
-  return moisEffet < moisCcma ? dateCcma : dateEffetCcm;
+  const moisCcma = ccma ? ccma.getFullYear() * 12 + ccma.getMonth() : null;
+  const reference = moisCcma != null && moisEffet < moisCcma ? ccma! : effet;
+  const moisSuivant = new Date(reference.getFullYear(), reference.getMonth() + 1, 1);
+  return moisSuivant.toISOString();
 }
 
 /** Message pour un candidat BA non retenu cette fois-ci — explique s'il n'y a eu aucun promu du
