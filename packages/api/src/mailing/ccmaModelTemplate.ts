@@ -187,7 +187,7 @@ function buildGainEtSuiteBlock(ctx: CcmaModelContext): string {
   const parts: string[] = [
     p(
       `L'écart sur votre traitement de base consécutif à cette promotion pour un temps plein est équivalent à environ <strong>${ctx.gainSalaireNet} € nets</strong> par mois (avant prélèvement à la source).` +
-        ` La régularisation financière devrait intervenir au plus tôt en ${monthYearFr(ctx.dateEffetCcm)}.`,
+        ` La régularisation financière devrait intervenir au plus tôt en ${monthYearFr(moisRegularisation(ctx.dateEffetCcm, ctx.dateCcma))}.`,
     ),
   ];
   parts.push(buildProchainePromotionFutureBlock(ctx));
@@ -197,6 +197,21 @@ function buildGainEtSuiteBlock(ctx: CcmaModelContext): string {
 function monthYearFr(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+}
+
+/** Mois de régularisation financière (confirmé par l'union) : la régularisation ne peut pas être
+ * annoncée pour un mois antérieur à celui de la CCMA elle-même (le temps de la traiter), même si la
+ * date d'effet de la promotion est plus ancienne (report d'ancienneté, reliquat...) — dans ce cas on
+ * affiche le mois de la CCMA à la place. Sinon (date d'effet au mois de la CCMA ou plus tard), c'est
+ * bien le mois de la date d'effet qui est annoncé, inchangé. */
+function moisRegularisation(dateEffetCcm: string | null, dateCcma: string | null): string | null {
+  if (!dateEffetCcm) return null;
+  if (!dateCcma) return dateEffetCcm;
+  const effet = new Date(dateEffetCcm);
+  const ccma = new Date(dateCcma);
+  const moisEffet = effet.getFullYear() * 12 + effet.getMonth();
+  const moisCcma = ccma.getFullYear() * 12 + ccma.getMonth();
+  return moisEffet < moisCcma ? dateCcma : dateEffetCcm;
 }
 
 /** Message pour un candidat BA non retenu cette fois-ci — explique s'il n'y a eu aucun promu du

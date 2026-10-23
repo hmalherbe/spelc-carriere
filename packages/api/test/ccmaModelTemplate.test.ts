@@ -94,6 +94,20 @@ describe("buildCcmaModelEmail", () => {
     expect(html).toContain("régularisation financière devrait intervenir au plus tôt en avril 2026");
   });
 
+  it("announces the CCMA's own month for the régularisation when the promotion's date d'effet falls in an earlier month (report d'ancienneté, reliquat...) — never a month before the CCMA itself", () => {
+    const { html } = buildCcmaModelEmail({ ...BASE, dateCcma: "2026-03-25", dateEffetCcm: "2025-11-01" });
+    expect(html).toContain("régularisation financière devrait intervenir au plus tôt en mars 2026");
+  });
+
+  it("keeps announcing the date d'effet's own month for the régularisation when it falls in the same month as the CCMA, or later", () => {
+    expect(buildCcmaModelEmail({ ...BASE, dateCcma: "2026-03-25", dateEffetCcm: "2026-03-02" }).html).toContain(
+      "régularisation financière devrait intervenir au plus tôt en mars 2026",
+    );
+    expect(buildCcmaModelEmail({ ...BASE, dateCcma: "2026-03-25", dateEffetCcm: "2026-09-15" }).html).toContain(
+      "régularisation financière devrait intervenir au plus tôt en septembre 2026",
+    );
+  });
+
   it("shows the report d'ancienneté paragraph when typePromotion is RE", () => {
     const withReport = buildCcmaModelEmail({
       ...BASE,
