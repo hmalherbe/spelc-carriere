@@ -650,6 +650,11 @@ model Elu {
   nom        String
   telephone  String?
   email      String?
+  // Ordre d'affichage manuel (page Élus, flèches haut/bas), DISTINCT pour chaque groupe
+  // (commission, role) — un titulaire ne se réordonne jamais parmi les suppléants et
+  // réciproquement. Un nouvel élu est créé en fin de son propre groupe (voir routes/elus.ts).
+  // Remplace le tri alphabétique par nom par défaut.
+  ordre      Int          @default(0)
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 

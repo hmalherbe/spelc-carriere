@@ -146,6 +146,23 @@ export function buildHeader(logoDataUrl: string | null, t1Text: string | null): 
     </table>`;
 }
 
+/** Annonce du renouvellement des élus (élections professionnelles du 3 au 10 décembre 2026),
+ * affichée juste avant la liste des élus elle-même — campagne ponctuelle (dates et contenu en dur,
+ * pas de champ Paramètres dédié), mais le mot "CCMA"/"CCMI" s'adapte à la commission du
+ * destinataire comme partout ailleurs dans ce modèle. Rendue même si la commission est inconnue
+ * (texte générique "la commission") ou si aucun élu n'est encore saisi — indépendante de
+ * buildElusFooter, qui ne gère que le tableau des élus lui-même. */
+export function buildElusElectionNotice(commission: MailingContext["commission"]): string {
+  const label = commission ? escapeHtml(commission) : "commission";
+  return `
+    <p>Vos représentants à la ${label} seront renouvelés à l'issue des élections du 3 au 10 décembre 2026.<br>
+    Continuez de nous faire confiance en votant pour les candidats Spelc !<br>
+    Vous pouvez dès à présent, vérifier votre statut d'électeur et avoir accès à nos tutos en cliquant ici :</p>
+    <p style="text-align: center; margin: 16px 0;">
+      <a href="https://electionsprofessionnelles.spelc.fr/" style="display: inline-block; background-color: #1a56db; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 6px; font-weight: bold;">Nos tutos</a>
+    </p>`;
+}
+
 /** The union's élus for the recipient's own commission (CCMA/CCMI) — filtered and ordered
  * (titulaires then suppléants) by the caller. One élu per row, name then téléphone/e-mail on a
  * second line — the titulaire/suppléant distinction is deliberately not shown here (confirmed by
@@ -264,6 +281,7 @@ export function buildPromotionEmail(ctx: MailingContext): { subject: string; htm
       : "";
 
   const header = buildHeader(ctx.logoDataUrl, ctx.t1Text);
+  const electionNotice = buildElusElectionNotice(ctx.commission);
   const elusFooter = buildElusFooter(ctx.commission, ctx.elus);
   const unsubscribeLink = buildUnsubscribeLink(ctx.unsubscribeUrl);
   const socialLinks = buildSocialLinks(ctx.socialLinks);
@@ -277,6 +295,7 @@ export function buildPromotionEmail(ctx: MailingContext): { subject: string; htm
     <p>Ces éléments sont fournis à titre indicatif et calculés à partir des données du rectorat ; ils ne remplacent pas votre
     bulletin de salaire officiel.</p>
     <p>Bien cordialement,<br>Le Spelc</p>
+    ${electionNotice}
     ${elusFooter}
     ${unsubscribeLink}
     ${socialLinks}

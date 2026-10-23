@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPromotionEmail, htmlToPlainText, type MailingContext } from "../src/mailing/template.js";
+import { buildElusElectionNotice, buildPromotionEmail, htmlToPlainText, type MailingContext } from "../src/mailing/template.js";
 
 const BASE: MailingContext = {
   civilite: "Mme",
@@ -235,5 +235,25 @@ describe("htmlToPlainText", () => {
   it("collapses 3+ consecutive blank lines down to a single blank line", () => {
     const html = "<p>Un</p><br><br><br><p>Deux</p>";
     expect(htmlToPlainText(html)).toBe("Un\n\nDeux");
+  });
+});
+
+describe("buildElusElectionNotice", () => {
+  it("adapts CCMA/CCMI in the text to the recipient's own commission", () => {
+    expect(buildElusElectionNotice("CCMA")).toContain("Vos représentants à la CCMA seront renouvelés");
+    expect(buildElusElectionNotice("CCMI")).toContain("Vos représentants à la CCMI seront renouvelés");
+  });
+
+  it("includes the election dates, the voting call-to-action, and the 'Nos tutos' button linking to electionsprofessionnelles.spelc.fr", () => {
+    const html = buildElusElectionNotice("CCMA");
+    expect(html).toContain("élections du 3 au 10 décembre 2026");
+    expect(html).toContain("votant pour les candidats Spelc");
+    expect(html).toContain("Nos tutos");
+    expect(html).toContain('href="https://electionsprofessionnelles.spelc.fr/"');
+  });
+
+  it("falls back to a generic wording when the commission is unknown, rather than omitting the notice", () => {
+    const html = buildElusElectionNotice(null);
+    expect(html).toContain("Vos représentants à la commission seront renouvelés");
   });
 });

@@ -705,6 +705,9 @@ export const api = {
   createElu: (data: EluInput) => request<Elu>("/elus", { method: "POST", body: JSON.stringify(data) }),
   updateElu: (id: string, data: Partial<EluInput>) => request<Elu>(`/elus/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteElu: (id: string) => request<void>(`/elus/${id}`, { method: "DELETE" }),
+  /** Échange la position avec le voisin immédiat au sein du même groupe (commission, role) —
+   * flèches haut/bas de la page Élus. */
+  moveElu: (id: string, direction: "up" | "down") => request<{ ok: boolean }>(`/elus/${id}/move`, { method: "POST", body: JSON.stringify({ direction }) }),
   mailingBranding: () => request<MailingBranding>("/settings/mailing-branding"),
   updateMailingBrandingText: (t1Text: string) =>
     request<MailingBranding>("/settings/mailing-branding", { method: "PUT", body: JSON.stringify({ t1Text }) }),

@@ -21,6 +21,7 @@ export function ElusPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EluInput | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   function refresh() {
     setLoading(true);
@@ -92,10 +93,32 @@ export function ElusPage() {
     }
   }
 
+  /** Position de cet élu au sein de son propre groupe (role) dans `elus` — les flèches haut/bas ne
+   * doivent jamais mélanger titulaires et suppléants. `elus` est déjà filtré à une seule commission
+   * (voir refresh()), donc filtrer par role seul suffit ici. */
+  function roleGroupEdges(elu: Elu): { isFirst: boolean; isLast: boolean } {
+    const group = elus.filter((e) => e.role === elu.role);
+    const index = group.findIndex((e) => e.id === elu.id);
+    return { isFirst: index === 0, isLast: index === group.length - 1 };
+  }
+
+  async function move(id: string, direction: "up" | "down") {
+    setMovingId(id);
+    setError(null);
+    try {
+      await api.moveElu(id, direction);
+      refresh();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setMovingId(null);
+    }
+  }
+
   return (
     <div>
       <div className="toolbar">
-        <h2>Élus CCMA/CCMI</h2>
+        <h2>Élus {commission}</h2>
         <select value={commission} onChange={(e) => setCommission(e.target.value as "CCMA" | "CCMI")}>
           <option value="CCMA">CCMA (second degré)</option>
           <option value="CCMI">CCMI (premier degré)</option>
@@ -203,6 +226,31 @@ export function ElusPage() {
                   {canEdit && (
                     <td>
                       <div className="row-actions">
+                        {(() => {
+                          const { isFirst, isLast } = roleGroupEdges(elu);
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                className="secondary"
+                                onClick={() => move(elu.id, "up")}
+                                disabled={isFirst || movingId === elu.id}
+                                title="Monter"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary"
+                                onClick={() => move(elu.id, "down")}
+                                disabled={isLast || movingId === elu.id}
+                                title="Descendre"
+                              >
+                                ↓
+                              </button>
+                            </>
+                          );
+                        })()}
                         <button type="button" className="secondary" onClick={() => startEdit(elu)}>
                           Modifier
                         </button>

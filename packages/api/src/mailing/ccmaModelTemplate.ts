@@ -1,5 +1,6 @@
 import { AVIS_LABELS, formatAnneesDecimalesText, formatDureeEncodedText, formatEchelonLabel } from "@spelc/domain";
 import {
+  buildElusElectionNotice,
   buildElusFooter,
   buildGreeting,
   buildHeader,
@@ -276,6 +277,7 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
   const subject = `Spelc Côte d'Azur - ${ctx.commission} du ${dateCcmaFr} : avancements`;
 
   const header = buildHeader(ctx.logoDataUrl, ctx.t1Text);
+  const electionNotice = buildElusElectionNotice(ctx.commission);
   const elusFooter = buildElusFooter(ctx.commission, ctx.elus);
   const unsubscribeLink = buildUnsubscribeLink(ctx.unsubscribeUrl);
   const socialLinks = buildSocialLinks(ctx.socialLinks);
@@ -310,6 +312,7 @@ export function buildCcmaModelEmail(ctx: CcmaModelContext): { subject: string; h
   const html = `
     ${header}
     ${body}
+    ${electionNotice}
     ${elusFooter}
     ${unsubscribeLink}
     ${socialLinks}
