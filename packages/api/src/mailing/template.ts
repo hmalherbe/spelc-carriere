@@ -157,7 +157,7 @@ export function buildElusElectionNotice(commission: MailingContext["commission"]
   return `
     <p>Vos représentants à la ${label} seront renouvelés à l'issue des élections du 3 au 10 décembre 2026.<br>
     Continuez de nous faire confiance en votant pour les candidats Spelc !<br>
-    Vous pouvez dès à présent, vérifier votre statut d'électeur et avoir accès à nos tutos en cliquant ici :</p>
+    Vous pouvez dès à présent, vérifier votre statut d'électeur et avoir accès à nos tutos.</p>
     <p style="text-align: center; margin: 16px 0;">
       <a href="https://electionsprofessionnelles.spelc.fr/" style="display: inline-block; background-color: #1a56db; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 6px; font-weight: bold;">Nos tutos</a>
     </p>`;
