@@ -278,11 +278,11 @@ describe("buildElusElectionNotice", () => {
     expect(buildElusElectionNotice("CCMI")).toContain("Vos représentants à la CCMI seront renouvelés");
   });
 
-  it("includes the election dates, the voting call-to-action, and the 'Nos tutos' button linking to electionsprofessionnelles.spelc.fr", () => {
+  it("includes the election dates, the voting call-to-action, and the 'Site dédié aux élections' button linking to electionsprofessionnelles.spelc.fr", () => {
     const html = buildElusElectionNotice("CCMA");
     expect(html).toContain("élections du 3 au 10 décembre 2026");
     expect(html).toContain("votant pour les candidats Spelc");
-    expect(html).toContain("Nos tutos");
+    expect(html).toContain("Site dédié aux élections");
     expect(html).toContain('href="https://electionsprofessionnelles.spelc.fr/"');
   });
 
