@@ -164,9 +164,13 @@ export function buildElusElectionNotice(commission: MailingContext["commission"]
 }
 
 /** The union's élus for the recipient's own commission (CCMA/CCMI) — filtered and ordered
- * (titulaires then suppléants) by the caller. One élu per row, name then téléphone/e-mail on a
- * second line — the titulaire/suppléant distinction is deliberately not shown here (confirmed by
- * the union: the recipient just needs someone to call, not which seat they hold).
+ * (titulaires then suppléants, puis l'ordre manuel de chaque groupe — voir loadElusByCommission
+ * dans routes/mailing.ts) by the caller. One élu per row, name then téléphone/e-mail on a second
+ * line — the titulaire/suppléant distinction is deliberately not shown AS TEXT (confirmed by the
+ * union: the recipient just needs someone to call, not which seat they hold) ; les deux groupes
+ * sont néanmoins affichés dans deux colonnes séparées (titulaires à gauche, suppléant(e)s à
+ * droite, sans libellé) — demande explicite de l'union (2026-10-23) pour que chaque courrier
+ * tienne sur une seule page de PDF.
  *
  * A 3-column table (name/téléphone/e-mail side by side) is unreadable on a phone — a narrow mail
  * client squeezes the téléphone column down to a handful of characters, wrapping a single mobile
@@ -175,22 +179,44 @@ export function buildElusElectionNotice(commission: MailingContext["commission"]
  * normal flowing text instead of being trapped in an undersized column. */
 export function buildElusFooter(commission: MailingContext["commission"], elus: MailingElu[]): string {
   if (elus.length === 0) return "";
-  const rows = elus
-    .map((e) => {
-      const contact = [e.telephone, e.email].filter((v): v is string => Boolean(v)).map(escapeHtml).join(" · ");
-      return `<tr>
-        <td style="padding: 6px 0; border-bottom: 1px solid #eeeeee;">
-          <strong>${escapeHtml(e.prenom)} ${escapeHtml(e.nom)}</strong>${contact ? `<br>${contact}` : ""}
-        </td>
-      </tr>`;
-    })
-    .join("");
+
+  function rowsFor(group: MailingElu[]): string {
+    return group
+      .map((e) => {
+        const contact = [e.telephone, e.email].filter((v): v is string => Boolean(v)).map(escapeHtml).join(" · ");
+        return `<tr>
+          <td style="padding: 6px 0; border-bottom: 1px solid #eeeeee;">
+            <strong>${escapeHtml(e.prenom)} ${escapeHtml(e.nom)}</strong>${contact ? `<br>${contact}` : ""}
+          </td>
+        </tr>`;
+      })
+      .join("");
+  }
+
+  function columnTable(group: MailingElu[]): string {
+    if (group.length === 0) return "";
+    return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse; font-size: 0.9rem;">${rowsFor(group)}</table>`;
+  }
+
+  const titulaires = elus.filter((e) => e.role === "TITULAIRE");
+  const suppleants = elus.filter((e) => e.role === "SUPPLEANT");
   const label = commission ? `Vos élu(e)s ${escapeHtml(commission)}` : "Vos élu(e)s";
+
+  // Deux colonnes seulement quand les deux groupes existent — sinon une seule colonne pleine
+  // largeur, pour ne pas laisser un vide à côté (ex. aucun suppléant encore saisi).
+  const body =
+    titulaires.length > 0 && suppleants.length > 0
+      ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;">
+          <tr>
+            <td width="50%" valign="top" style="padding-right: 12px;">${columnTable(titulaires)}</td>
+            <td width="50%" valign="top" style="padding-left: 12px;">${columnTable(suppleants)}</td>
+          </tr>
+        </table>`
+      : columnTable(titulaires.length > 0 ? titulaires : suppleants);
+
   return `
     <p style="margin-top: 24px; margin-bottom: 4px;"><strong>${label} :</strong></p>
-    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse; margin-top: 0; font-size: 0.9rem;">
-      ${rows}
-    </table>`;
+    ${body}`;
 }
 
 /** Rendu uniquement quand l'appelant a construit un lien (jamais pour un adhérent — voir

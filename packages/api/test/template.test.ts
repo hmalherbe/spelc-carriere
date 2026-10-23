@@ -167,6 +167,40 @@ describe("buildPromotionEmail", () => {
     expect(html).not.toContain("Vos élus");
   });
 
+  it("lays titulaires and suppléant(e)s out in two side-by-side columns when both groups are present", () => {
+    const { html } = buildPromotionEmail({
+      ...BASE,
+      commission: "CCMA",
+      elus: [
+        { role: "TITULAIRE", prenom: "Julien", nom: "MARTIN", telephone: null, email: null },
+        { role: "TITULAIRE", prenom: "Anne", nom: "DUPONT", telephone: null, email: null },
+        { role: "SUPPLEANT", prenom: "Sophie", nom: "DURAND", telephone: null, email: null },
+      ],
+    });
+    // Un seul tableau extérieur à deux cellules (50%/50%) portant chacune son propre tableau de
+    // lignes, plutôt qu'un unique tableau à une colonne comme avant.
+    expect(html).toContain('width="50%"');
+    const outerTableStart = html.indexOf('width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;">');
+    expect(outerTableStart).toBeGreaterThan(-1);
+    const titulaireIndex = html.indexOf("Julien MARTIN");
+    const suppleantIndex = html.indexOf("Sophie DURAND");
+    const columnSplitIndex = html.indexOf('width="50%"', outerTableStart);
+    expect(titulaireIndex).toBeGreaterThan(columnSplitIndex);
+    expect(suppleantIndex).toBeGreaterThan(titulaireIndex);
+    // Les deux titulaires restent bien groupés dans la même (première) colonne, pas éclatés.
+    expect(html.indexOf("Anne DUPONT")).toBeLessThan(suppleantIndex);
+  });
+
+  it("falls back to a single full-width column when only one group (titulaires or suppléant(e)s) has any élu", () => {
+    const { html } = buildPromotionEmail({
+      ...BASE,
+      commission: "CCMA",
+      elus: [{ role: "TITULAIRE", prenom: "Julien", nom: "MARTIN", telephone: null, email: null }],
+    });
+    expect(html).not.toContain('width="50%"');
+    expect(html).toContain("Julien MARTIN");
+  });
+
   it("shows the unsubscribe link only when the caller provided one — the template trusts the caller's decision (never an adhérent, see routes/mailing.ts's buildRecipientUnsubscribeUrl), it never re-checks isAdherent itself", () => {
     const { html: noUrlHtml } = buildPromotionEmail({ ...BASE, isAdherent: false, unsubscribeUrl: null });
     expect(noUrlHtml).not.toContain("Se désabonner");

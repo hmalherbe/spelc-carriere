@@ -22,18 +22,16 @@ import type { GrilleCode } from "@spelc/domain";
 
 const SINGLETON_ID = "singleton";
 
-const ELU_ROLE_ORDER: Record<"TITULAIRE" | "SUPPLEANT", number> = { TITULAIRE: 0, SUPPLEANT: 1 };
-
-/** Every élu, grouped by commission and sorted titulaires-then-suppléants — fetched once per
- * request (send/preview cover many recipients but this content is campaign-wide, not per-person). */
+/** Every élu, grouped by commission and sorted titulaires-then-suppléants, within each group
+ * respecting the manual ordre set from the page Élus (flèches haut/bas) — `nom` is only a
+ * tiebreaker for the ex-aequo default (ordre=0) of an élu never manually reordered, same as the
+ * page Élus's own GET / ordering (routes/elus.ts). Fetched once per request (send/preview cover
+ * many recipients but this content is campaign-wide, not per-person). */
 async function loadElusByCommission(): Promise<Record<"CCMA" | "CCMI", MailingElu[]>> {
-  const all = await prisma.elu.findMany();
+  const all = await prisma.elu.findMany({ orderBy: [{ commission: "asc" }, { role: "asc" }, { ordre: "asc" }, { nom: "asc" }] });
   const byCommission: Record<"CCMA" | "CCMI", MailingElu[]> = { CCMA: [], CCMI: [] };
   for (const e of all) {
     byCommission[e.commission].push({ role: e.role, prenom: e.prenom, nom: e.nom, telephone: e.telephone, email: e.email });
-  }
-  for (const commission of ["CCMA", "CCMI"] as const) {
-    byCommission[commission].sort((a, b) => ELU_ROLE_ORDER[a.role] - ELU_ROLE_ORDER[b.role] || a.nom.localeCompare(b.nom));
   }
   return byCommission;
 }
