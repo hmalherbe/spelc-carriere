@@ -499,14 +499,21 @@ export interface CampagneStats {
   };
 }
 
+export interface MailingLogEvent {
+  type: string;
+  url: string | null;
+  occurredAt: string;
+}
+
 export interface MailingLogEntry {
   id: string;
-  teacherId: string;
-  adherentId: string;
   email: string;
   status: "SENT" | "FAILED";
   error: string | null;
   sentAt: string;
+  nom: string | null;
+  prenom: string | null;
+  events: MailingLogEvent[];
 }
 
 export interface EchelonRowApi {

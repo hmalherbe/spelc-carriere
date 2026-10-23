@@ -7,6 +7,7 @@ import { matchesRouter } from "./routes/matches.js";
 import { importsRouter } from "./routes/imports.js";
 import { mailingRouter } from "./routes/mailing.js";
 import { mailingUnsubscribeRouter } from "./routes/mailingUnsubscribe.js";
+import { mailingWebhookRouter } from "./routes/mailingWebhook.js";
 import { adelRouter } from "./routes/adel.js";
 import { grillesRouter } from "./routes/grilles.js";
 import { adherentsRouter } from "./routes/adherents.js";
@@ -29,11 +30,13 @@ export function createApp() {
   app.use("/teachers", teachersRouter);
   app.use("/matches", matchesRouter);
   app.use("/imports", importsRouter);
-  // Montée AVANT mailingRouter (qui exige requireAuth sur tout son préfixe) : le lien de
-  // désabonnement est cliqué depuis un mail, jamais depuis une session connectée. Express essaie
-  // les middlewares /mailing dans l'ordre de montage — seule /unsubscribe/:token matche ici, tout
-  // le reste retombe sur mailingRouter juste après.
+  // Montées AVANT mailingRouter (qui exige requireAuth sur tout son préfixe) : le lien de
+  // désabonnement est cliqué depuis un mail, et le webhook est appelé directement par les serveurs
+  // Brevo — ni l'un ni l'autre n'a de session connectée à l'appli. Express essaie les middlewares
+  // /mailing dans l'ordre de montage — seules /unsubscribe/:token et /webhook/brevo matchent ici,
+  // tout le reste retombe sur mailingRouter juste après.
   app.use("/mailing", mailingUnsubscribeRouter);
+  app.use("/mailing", mailingWebhookRouter);
   app.use("/mailing", mailingRouter);
   app.use("/adel", adelRouter);
   app.use("/grilles", grillesRouter);

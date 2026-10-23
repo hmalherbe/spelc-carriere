@@ -600,8 +600,28 @@ mailingRouter.get("/log", asyncHandler(async (req, res) => {
   const logs = await prisma.mailingLog.findMany({
     where: { campagneId },
     orderBy: { sentAt: "desc" },
+    include: {
+      // Teacher itself carries no nom/prénom (see TeacherSnapshot's own doc comment) — the snapshot
+      // for THIS campagne is the right source of display name, same as the rest of this file.
+      teacher: { include: { snapshots: { where: { campagneId }, take: 1 } } },
+      events: { orderBy: { occurredAt: "asc" }, select: { type: true, url: true, occurredAt: true } },
+    },
   });
-  res.json(logs);
+  res.json(
+    logs.map((log) => {
+      const snap = log.teacher.snapshots[0];
+      return {
+        id: log.id,
+        email: log.email,
+        status: log.status,
+        error: log.error,
+        sentAt: log.sentAt,
+        nom: snap?.nomUsage ?? null,
+        prenom: snap?.prenom ?? null,
+        events: log.events,
+      };
+    }),
+  );
 }));
 
 const sendSchema = z.object({

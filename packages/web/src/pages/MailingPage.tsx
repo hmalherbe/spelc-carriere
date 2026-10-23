@@ -3,6 +3,7 @@ import {
   api,
   downloadBlob,
   type BrevoSettings,
+  type MailingLogEntry,
   type MailingPreview,
   type MailingRecipient,
   type MailingSendResult,
@@ -29,6 +30,30 @@ function buildMailingPdfFileName(campagne: { dateCcma: string; commission: "CCMA
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("fr-FR");
+}
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("fr-FR");
+}
+
+/** Brevo event "type" values seen so far, mapped to a short French label — see the doc comment on
+ * mailingWebhookRouter (routes/mailingWebhook.ts) for the uncertainty on exact casing; anything
+ * unrecognized falls back to showing the raw value so it's never silently hidden. */
+function eventLabel(type: string): string {
+  const labels: Record<string, string> = {
+    delivered: "Délivré",
+    hardBounce: "Rejet définitif",
+    softBounce: "Rejet temporaire",
+    blocked: "Bloqué",
+    spam: "Signalé spam",
+    invalid: "Adresse invalide",
+    deferred: "Différé",
+    opened: "Ouvert",
+    error: "Erreur",
+    click: "Clic",
+    clicked: "Clic",
+  };
+  return labels[type] ?? type;
 }
 
 /** Numeric-aware échelon ordering — échelon is a free-form string ("06", "6", "A1"...); lettered
@@ -80,6 +105,8 @@ export function MailingPage() {
   const [departementFilter, setDepartementFilter] = useState<string>("all");
   const [echelonFilter, setEchelonFilter] = useState<string>("all");
   const [emailFilter, setEmailFilter] = useState<"" | "VIDE" | "RENSEIGNE">("");
+  const [mailingLog, setMailingLog] = useState<MailingLogEntry[]>([]);
+  const [mailingLogError, setMailingLogError] = useState<string | null>(null);
 
   const selectedCampagne = useMemo(() => campagnes.find((c) => c.id === campagneId) ?? null, [campagnes, campagneId]);
   // Un seul modèle possible par commission, plus de choix exposé à l'admin (per product decision) :
@@ -142,12 +169,23 @@ export function MailingPage() {
       .finally(() => setLoading(false));
   }
 
+  function refreshLog(id: string) {
+    setMailingLogError(null);
+    api
+      .mailingLog(id)
+      .then(setMailingLog)
+      .catch((e) => setMailingLogError(String(e)));
+  }
+
   useEffect(() => {
-    if (campagneId) refresh(campagneId);
-    else {
+    if (campagneId) {
+      refresh(campagneId);
+      refreshLog(campagneId);
+    } else {
       setRecipients([]);
       setSelected(new Set());
       setLoading(false);
+      setMailingLog([]);
     }
   }, [campagneId]);
 
@@ -254,6 +292,7 @@ export function MailingPage() {
       const result = await api.mailingSend(campagneId, Array.from(selected), template);
       setSendResult(result);
       refresh(campagneId);
+      refreshLog(campagneId);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -591,6 +630,77 @@ export function MailingPage() {
             ))}
           </tbody>
         </table>
+      )}
+
+      {mailingLogError && <p className="error-text">{mailingLogError}</p>}
+
+      {mailingLog.length > 0 && (
+        <details className="import-result">
+          <summary>Historique des envois ({mailingLog.length})</summary>
+          <p className="hint">
+            Statut Brevo à l'envoi (OK/échec), et pour chaque événement reçu depuis via le webhook Brevo configuré dans
+            le compte Brevo du Spelc (délivré, clic sur un lien du mail, rejet, etc. — voir le bouton "Nos tutos" et le
+            lien de désabonnement, les deux seuls liens cliquables du mail).
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Destinataire</th>
+                <th>E-mail</th>
+                <th>Envoi</th>
+                <th>Date d'envoi</th>
+                <th>Événements</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mailingLog.map((l) => (
+                <tr key={l.id}>
+                  <td>
+                    {l.nom ? (
+                      <>
+                        {l.nom} {formatPrenom(l.prenom ?? "")}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td>{l.email}</td>
+                  <td>
+                    <span className={`badge ${l.status === "SENT" ? "badge-auto_confirmed" : "badge-non_promu_estime"}`}>
+                      {l.status === "SENT" ? "OK" : "Échec"}
+                    </span>
+                    {l.status === "FAILED" && l.error && <div className="hint">{l.error}</div>}
+                  </td>
+                  <td>{formatDateTime(l.sentAt)}</td>
+                  <td>
+                    {l.events.length === 0 ? (
+                      <span className="hint">—</span>
+                    ) : (
+                      <ul>
+                        {l.events.map((ev, i) => (
+                          <li key={i}>
+                            {eventLabel(ev.type)}
+                            {ev.url && (
+                              <>
+                                {" "}
+                                —{" "}
+                                <a href={ev.url} target="_blank" rel="noreferrer">
+                                  {ev.url}
+                                </a>
+                              </>
+                            )}
+                            {" "}
+                            <span className="hint">({formatDateTime(ev.occurredAt)})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
       )}
 
       {preview && (

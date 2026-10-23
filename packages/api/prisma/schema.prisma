@@ -538,8 +538,37 @@ model MailingLog {
   sentById       String // free-text: User.id at send time, kept even if the user is later deleted
   sentAt         DateTime      @default(now())
 
+  events MailingEvent[]
+
   @@unique([campagneId, teacherId])
   @@index([campagneId])
+  @@index([brevoMessageId])
+}
+
+// Un événement post-envoi notifié par Brevo (webhook transactionnel : "delivered", "click",
+// "hardBounce", "softBounce", "blocked", "spam", "opened", "deferred", "error"...) — un même
+// MailingLog peut recevoir plusieurs événements au fil du temps (ex. "delivered" puis un ou
+// plusieurs "click", un par lien cliqué). `type` est stocké EXACTEMENT tel que reçu de Brevo (pas
+// d'enum ici : la liste précise des valeurs possibles n'est pas garantie stable côté Brevo, et un
+// enum figé casserait silencieusement sur une valeur nouvelle/différente). `raw` garde le payload
+// JSON complet reçu — utile pour diagnostiquer un champ dont le nom exact n'était pas confirmé au
+// moment d'écrire ce webhook (voir routes/mailingWebhook.ts's own doc comment).
+model MailingEvent {
+  id             String      @id @default(cuid())
+  mailingLog     MailingLog? @relation(fields: [mailingLogId], references: [id])
+  // Nullable : un événement dont le message-id Brevo ne correspond à AUCUN MailingLog connu est
+  // quand même conservé (ex. correlation ratée, log déjà supprimé) plutôt que silencieusement jeté.
+  mailingLogId   String?
+  // Dénormalisé — permet de retrouver/diagnostiquer un événement même quand mailingLogId est null.
+  brevoMessageId String?
+  type           String
+  // Lien cliqué, uniquement renseigné pour un événement de type clic.
+  url            String?
+  occurredAt     DateTime    @default(now())
+  raw            Json
+
+  @@index([mailingLogId])
+  @@index([brevoMessageId])
 }
 
 // Désabonnement des notifications de promotion — uniquement pour les non-adhérents (voir
