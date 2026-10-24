@@ -57,11 +57,14 @@ function eventLabel(type: string): string {
 }
 
 /** Numeric-aware échelon ordering — échelon is a free-form string ("06", "6", "A1"...); lettered
- * échelons (hors-classe/classe exceptionnelle) sort after every numeric one. Same convention as
- * DashboardPage's own échelon filter. */
+ * échelons (hors-classe/classe exceptionnelle) sort after every numeric one, ordered by letter then
+ * by the number following it ("A1" < "A2" < "A3" < "B2" < "B3" — see EchelonRow's own doc comment
+ * in schema.prisma for that exact set). Same convention as DashboardPage's own échelon filter. */
 function echelonSortValue(echelon: string): number {
   const n = Number(echelon);
-  return Number.isFinite(n) ? n : 1000 + echelon.charCodeAt(0);
+  if (Number.isFinite(n)) return n;
+  const suffix = Number(echelon.slice(1));
+  return 1000 + echelon.charCodeAt(0) * 100 + (Number.isFinite(suffix) ? suffix : 0);
 }
 
 /** Même règle que la colonne "Éligibilité BA" de DashboardPage (voir baCell() là-bas) — reprise ici

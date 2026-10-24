@@ -35,7 +35,9 @@ function isLinkedToAdherent(t: TeacherListItem): boolean {
  * échelons (hors-classe/classe exceptionnelle) sort after every numeric one. */
 function echelonSortValue(echelon: string): number {
   const n = Number(echelon);
-  return Number.isFinite(n) ? n : 1000 + echelon.charCodeAt(0);
+  if (Number.isFinite(n)) return n;
+  const suffix = Number(echelon.slice(1));
+  return 1000 + echelon.charCodeAt(0) * 100 + (Number.isFinite(suffix) ? suffix : 0);
 }
 
 // La règle BA parle d'échelon 6 ou 8 (rendez-vous de carrière durant la 2e année du 6e échelon /

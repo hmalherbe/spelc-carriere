@@ -22,7 +22,9 @@ function splitGrade(grade: string): { baseGrade: string; echelle: Echelle } {
 
 function echelonSortValue(echelon: string): number {
   const n = Number(echelon);
-  return Number.isFinite(n) ? n : 1000 + echelon.charCodeAt(0);
+  if (Number.isFinite(n)) return n;
+  const suffix = Number(echelon.slice(1));
+  return 1000 + echelon.charCodeAt(0) * 100 + (Number.isFinite(suffix) ? suffix : 0);
 }
 
 export function GrillesPage() {
