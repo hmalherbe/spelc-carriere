@@ -518,17 +518,14 @@ export interface MailingLogEntry {
 
 export type ReclassementCas = "CAS1" | "CAS2" | "CAS3";
 
-export interface ReclassementSauvegardeResume {
+export interface ReclassementSauvegarde {
   id: string;
   cas: ReclassementCas;
   nom: string;
   prenom: string;
-  savedAt: string;
-}
-
-export interface ReclassementSauvegarde extends ReclassementSauvegardeResume {
   parametres: unknown;
   resultat: unknown;
+  savedAt: string;
 }
 
 export interface EchelonRowApi {
@@ -753,7 +750,7 @@ export const api = {
     request<AiAssistantAnswer>("/ai-assistant/ask", { method: "POST", body: JSON.stringify({ question }) }),
   saveReclassement: (cas: ReclassementCas, nom: string, prenom: string, parametres: unknown, resultat: unknown) =>
     request<ReclassementSauvegarde>("/reclassements", { method: "POST", body: JSON.stringify({ cas, nom, prenom, parametres, resultat }) }),
-  searchReclassements: (nom: string, prenom: string) =>
-    request<ReclassementSauvegardeResume[]>(`/reclassements?nom=${encodeURIComponent(nom)}&prenom=${encodeURIComponent(prenom)}`),
-  getReclassement: (id: string) => request<ReclassementSauvegarde>(`/reclassements/${id}`),
+  /** Au plus un résultat par (cas, nom, prénom) — voir ReclassementSauvegarde (schema.prisma). */
+  findReclassement: (cas: ReclassementCas, nom: string, prenom: string) =>
+    request<ReclassementSauvegarde | null>(`/reclassements?cas=${cas}&nom=${encodeURIComponent(nom)}&prenom=${encodeURIComponent(prenom)}`),
 };

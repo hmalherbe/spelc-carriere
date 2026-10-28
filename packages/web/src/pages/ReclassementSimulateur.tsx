@@ -9,7 +9,7 @@ import {
   type GrilleCode,
   type ServiceAnterieur,
 } from "@spelc/domain";
-import { api, type ReclassementCas, type ReclassementSauvegardeResume } from "../api.js";
+import { api, type ReclassementCas, type ReclassementSauvegarde } from "../api.js";
 
 /**
  * Remplace les 3 onglets de calcul de l'ancien simulateur HTML autonome (reclassement-
@@ -64,26 +64,28 @@ export function ReclassementSimulateur() {
 // ---------------------------------------------------------------------------
 
 function useReclassementGestion(cas: ReclassementCas) {
-  const [resultats, setResultats] = useState<ReclassementSauvegardeResume[]>([]);
   const [recherche, setRecherche] = useState(false);
   const [rechercheError, setRechercheError] = useState<string | null>(null);
   const [enregistrement, setEnregistrement] = useState(false);
   const [messageEnregistrement, setMessageEnregistrement] = useState<string | null>(null);
-  const [chargementId, setChargementId] = useState<string | null>(null);
-  const [chargementError, setChargementError] = useState<string | null>(null);
 
-  async function rechercher(nom: string, prenom: string) {
-    if (!nom.trim() && !prenom.trim()) {
-      setRechercheError("Saisir au moins un nom ou un prénom pour rechercher.");
-      return;
+  /** Au plus un résultat possible par (cas, nom, prénom) — voir ReclassementSauvegarde (schema.
+   * prisma) : enregistrer à nouveau pour le même enseignant remplace le précédent, donc il n'y a
+   * jamais plusieurs enregistrements à choisir entre. */
+  async function rechercher(nom: string, prenom: string): Promise<ReclassementSauvegarde | null> {
+    if (!nom.trim() || !prenom.trim()) {
+      setRechercheError("Nom et prénom requis pour recharger un reclassement enregistré.");
+      return null;
     }
     setRecherche(true);
     setRechercheError(null);
     try {
-      const tous = await api.searchReclassements(nom, prenom);
-      setResultats(tous.filter((r) => r.cas === cas));
+      const trouve = await api.findReclassement(cas, nom, prenom);
+      if (!trouve) setRechercheError(`Aucun reclassement enregistré pour ${nom} ${prenom}.`);
+      return trouve;
     } catch (e) {
       setRechercheError(String(e));
+      return null;
     } finally {
       setRecherche(false);
     }
@@ -102,62 +104,16 @@ function useReclassementGestion(cas: ReclassementCas) {
     }
   }
 
-  async function charger(id: string) {
-    setChargementId(id);
-    setChargementError(null);
-    try {
-      return await api.getReclassement(id);
-    } catch (e) {
-      setChargementError(String(e));
-      return null;
-    } finally {
-      setChargementId(null);
-    }
-  }
-
-  return { resultats, recherche, rechercheError, rechercher, enregistrement, messageEnregistrement, enregistrer, chargementId, chargementError, charger };
+  return { recherche, rechercheError, rechercher, enregistrement, messageEnregistrement, enregistrer };
 }
 
-function BlocRecherche({
-  resultats,
-  recherche,
-  rechercheError,
-  onRechercher,
-  onCharger,
-  chargementId,
-  chargementError,
-}: {
-  resultats: ReclassementSauvegardeResume[];
-  recherche: boolean;
-  rechercheError: string | null;
-  onRechercher: () => void;
-  onCharger: (id: string) => void;
-  chargementId: string | null;
-  chargementError: string | null;
-}) {
+function BoutonCharger({ recherche, rechercheError, onRechercher }: { recherche: boolean; rechercheError: string | null; onRechercher: () => void }) {
   return (
     <div className="toolbar">
       <button type="button" className="secondary" onClick={onRechercher} disabled={recherche}>
-        {recherche ? "Recherche en cours..." : "Rechercher un reclassement enregistré (nom/prénom ci-dessus)"}
+        {recherche ? "Recherche en cours..." : "Charger le dernier reclassement enregistré (nom/prénom ci-dessus)"}
       </button>
       {rechercheError && <span className="error-text">{rechercheError}</span>}
-      {chargementError && <span className="error-text">{chargementError}</span>}
-      {resultats.length > 0 && (
-        <select
-          value=""
-          onChange={(e) => {
-            if (e.target.value) onCharger(e.target.value);
-          }}
-          disabled={chargementId != null}
-        >
-          <option value="">{resultats.length} résultat(s) — choisir pour recharger</option>
-          {resultats.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.nom} {r.prenom} — enregistré le {new Date(r.savedAt).toLocaleDateString("fr-FR")}
-            </option>
-          ))}
-        </select>
-      )}
     </div>
   );
 }
@@ -231,8 +187,8 @@ function Cas1() {
     }
   }
 
-  async function charger(id: string) {
-    const saved = await gestion.charger(id);
+  async function charger() {
+    const saved = await gestion.rechercher(nom, prenom);
     if (!saved) return;
     const params = saved.parametres as Cas1Parametres;
     setNom(saved.nom);
@@ -268,15 +224,7 @@ function Cas1() {
         </label>
       </div>
 
-      <BlocRecherche
-        resultats={gestion.resultats}
-        recherche={gestion.recherche}
-        rechercheError={gestion.rechercheError}
-        onRechercher={() => gestion.rechercher(nom, prenom)}
-        onCharger={charger}
-        chargementId={gestion.chargementId}
-        chargementError={gestion.chargementError}
-      />
+      <BoutonCharger recherche={gestion.recherche} rechercheError={gestion.rechercheError} onRechercher={charger} />
 
       <table className="data-table">
         <thead>
@@ -455,8 +403,8 @@ function Cas2() {
     }
   }
 
-  async function charger(id: string) {
-    const saved = await gestion.charger(id);
+  async function charger() {
+    const saved = await gestion.rechercher(nom, prenom);
     if (!saved) return;
     const params = saved.parametres as Cas2Parametres;
     setNom(saved.nom);
@@ -520,15 +468,7 @@ function Cas2() {
         </label>
       </div>
 
-      <BlocRecherche
-        resultats={gestion.resultats}
-        recherche={gestion.recherche}
-        rechercheError={gestion.rechercheError}
-        onRechercher={() => gestion.rechercher(nom, prenom)}
-        onCharger={charger}
-        chargementId={gestion.chargementId}
-        chargementError={gestion.chargementError}
-      />
+      <BoutonCharger recherche={gestion.recherche} rechercheError={gestion.rechercheError} onRechercher={charger} />
 
       {(montreCn11 || montreHc6 || montreExc4) && (
         <div className="inline-form">
@@ -664,8 +604,8 @@ function Cas3() {
     }
   }
 
-  async function charger(id: string) {
-    const saved = await gestion.charger(id);
+  async function charger() {
+    const saved = await gestion.rechercher(nom, prenom);
     if (!saved) return;
     const params = saved.parametres as Cas3Parametres;
     setNom(saved.nom);
@@ -734,15 +674,7 @@ function Cas3() {
         </label>
       </div>
 
-      <BlocRecherche
-        resultats={gestion.resultats}
-        recherche={gestion.recherche}
-        rechercheError={gestion.rechercheError}
-        onRechercher={() => gestion.rechercher(nom, prenom)}
-        onCharger={charger}
-        chargementId={gestion.chargementId}
-        chargementError={gestion.chargementError}
-      />
+      <BoutonCharger recherche={gestion.recherche} rechercheError={gestion.rechercheError} onRechercher={charger} />
 
       <div className="toolbar">
         <button type="button" onClick={calculer}>
