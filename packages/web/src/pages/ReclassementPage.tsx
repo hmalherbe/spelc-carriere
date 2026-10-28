@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GrillesPage } from "./GrillesPage.js";
+import { ReclassementSimulateur } from "./ReclassementSimulateur.js";
 
 type ReclassementTab = "simulateur" | "donnees";
 
@@ -35,7 +36,7 @@ export function ReclassementPage() {
             un outil autonome, pas encore relié aux données des enseignants suivis dans l'application. Les règles de
             calcul détaillées sont dans son propre onglet "Règles de calcul".
           </p>
-          <iframe src="/reclassement-simulateur.html" title="Simulateur de reclassement" className="reclassement-frame" />
+          <ReclassementSimulateur />
         </>
       )}
 
