@@ -5,6 +5,7 @@ import {
   computeReclassementConcoursDepuisHcExc,
   computeReclassementHcExc,
   joursComptablesEntre,
+  seuilEntreeEchelon,
   SITUATIONS_AVANT_RECLASSEMENT,
   type GrilleCode,
   type ServiceAnterieur,
@@ -122,13 +123,24 @@ function BoutonCharger({ recherche, rechercheError, onRechercher }: { recherche:
 // Cas 1 — Reclt concours & reprise d'ancienneté
 // ---------------------------------------------------------------------------
 
+/** Les 3 méthodes de saisie d'une situation antérieure, mêmes libellés que l'ancien simulateur :
+ * 1. Échelon + reliquat (dans le corps d'origine), 2. Période (dates), 3. Jours directs. */
+type ModeSaisie = "echelon" | "periode" | "jours";
+
 interface ServiceRow {
   id: string;
   nature: string;
+  mode: ModeSaisie;
+  // Situation 1 (échelon + reliquat) :
+  echelonSituation1: string;
+  priseEnCompteAnc: boolean;
+  reliquatSituation1: string;
+  // Situation 2 (période) et situation 1's own "début/fin situation" (mêmes champs, réutilisés) :
   dateDebut: string;
   dateFin: string;
+  // Situation 3 (jours directs) :
   joursManuels: string;
-  modeManuel: boolean;
+  // Pondération, commune aux 3 situations :
   quotite: string;
   reliquat: string;
 }
@@ -137,20 +149,45 @@ function nouvelleServiceRow(initial?: Partial<ServiceRow>): ServiceRow {
   return {
     id: Math.random().toString(36).slice(2),
     nature: SITUATIONS_AVANT_RECLASSEMENT[0].nature,
+    mode: "periode",
+    echelonSituation1: "",
+    priseEnCompteAnc: true,
+    reliquatSituation1: "",
     dateDebut: "",
     dateFin: "",
     joursManuels: "",
-    modeManuel: false,
     quotite: "",
     reliquat: "",
     ...initial,
   };
 }
 
+/** Grille d'origine utilisée pour la base jours de la situation 1 — même correspondance que
+ * l'ancien simulateur : Instituteur et MA 1/2/3 ont leur propre grille, tout le reste utilise
+ * la grille "PROFS" (durées identiques à CERTIFIE/PEPS/PLP/Prof. des écoles). */
+function grilleOrigineSituation1(nature: string): "PROFS" | "INSTIT" | "MA_1" {
+  if (nature === "Instituteur") return "INSTIT";
+  if (nature.startsWith("MA ")) return "MA_1";
+  return "PROFS";
+}
+
 function joursBrutsDeLaLigne(r: ServiceRow): number {
-  if (r.modeManuel) return Number(r.joursManuels) || 0;
-  if (r.dateDebut && r.dateFin) return Math.max(0, joursComptablesEntre(r.dateDebut, r.dateFin));
-  return 0;
+  if (r.mode === "jours") return Number(r.joursManuels) || 0;
+  const periode = r.dateDebut && r.dateFin ? Math.max(0, joursComptablesEntre(r.dateDebut, r.dateFin)) : 0;
+  if (r.mode === "periode") return periode;
+  // mode === "echelon" (situation 1) : base jours de l'échelon (si "prise en compte anc.") + la
+  // période éventuelle + le reliquat propre à cette situation — même formule que l'ancien
+  // simulateur (baseJoursEchelon + rel + joursDansEchelon).
+  const echelon = Number(r.echelonSituation1) || 0;
+  let base = 0;
+  if (r.priseEnCompteAnc && echelon > 0) {
+    try {
+      base = seuilEntreeEchelon(grilleOrigineSituation1(r.nature), echelon);
+    } catch {
+      base = 0;
+    }
+  }
+  return base + periode + (Number(r.reliquatSituation1) || 0);
 }
 
 interface Cas1Parametres {
@@ -230,7 +267,8 @@ function Cas1() {
         <thead>
           <tr>
             <th>Nature du service</th>
-            <th>Période (ou jours directs)</th>
+            <th>Méthode de saisie</th>
+            <th>Détail de la situation</th>
             <th>Quotité</th>
             <th>Reliquat (jours)</th>
             <th>Jours bruts</th>
@@ -250,7 +288,14 @@ function Cas1() {
                 </select>
               </td>
               <td>
-                {r.modeManuel ? (
+                <select value={r.mode} onChange={(e) => updateRow(r.id, { mode: e.target.value as ModeSaisie })}>
+                  <option value="echelon">1. Par échelon et reliquat</option>
+                  <option value="periode">2. Par période (dates)</option>
+                  <option value="jours">3. Directement en jours</option>
+                </select>
+              </td>
+              <td>
+                {r.mode === "jours" && (
                   <input
                     type="number"
                     min={0}
@@ -258,16 +303,58 @@ function Cas1() {
                     value={r.joursManuels}
                     onChange={(e) => updateRow(r.id, { joursManuels: e.target.value })}
                   />
-                ) : (
+                )}
+                {r.mode === "periode" && (
                   <span style={{ display: "flex", gap: 6 }}>
                     <input type="date" min="1960-01-01" max="2099-12-31" value={r.dateDebut} onChange={(e) => updateRow(r.id, { dateDebut: e.target.value })} />
                     <input type="date" min="1960-01-01" max="2099-12-31" value={r.dateFin} onChange={(e) => updateRow(r.id, { dateFin: e.target.value })} />
                   </span>
                 )}
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={r.modeManuel} onChange={(e) => updateRow(r.id, { modeManuel: e.target.checked })} />
-                  Saisir les jours directement
-                </label>
+                {r.mode === "echelon" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ display: "flex", gap: 6 }}>
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Échelon"
+                        value={r.echelonSituation1}
+                        onChange={(e) => updateRow(r.id, { echelonSituation1: e.target.value })}
+                      />
+                      <select
+                        value={r.priseEnCompteAnc ? "Oui" : "Non"}
+                        onChange={(e) => updateRow(r.id, { priseEnCompteAnc: e.target.value === "Oui" })}
+                      >
+                        <option value="Oui">Prise en cpte anc. : Oui</option>
+                        <option value="Non">Prise en cpte anc. : Non</option>
+                      </select>
+                    </span>
+                    <span style={{ display: "flex", gap: 6 }}>
+                      <input
+                        type="date"
+                        min="1960-01-01"
+                        max="2099-12-31"
+                        placeholder="Début situation"
+                        value={r.dateDebut}
+                        onChange={(e) => updateRow(r.id, { dateDebut: e.target.value })}
+                      />
+                      <input
+                        type="date"
+                        min="1960-01-01"
+                        max="2099-12-31"
+                        placeholder="Fin situation"
+                        value={r.dateFin}
+                        onChange={(e) => updateRow(r.id, { dateFin: e.target.value })}
+                      />
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="Reliquat en jours"
+                      value={r.reliquatSituation1}
+                      onChange={(e) => updateRow(r.id, { reliquatSituation1: e.target.value })}
+                    />
+                  </div>
+                )}
               </td>
               <td>
                 <input type="number" min={0} max={1} step={0.1} placeholder="1" value={r.quotite} onChange={(e) => updateRow(r.id, { quotite: e.target.value })} />

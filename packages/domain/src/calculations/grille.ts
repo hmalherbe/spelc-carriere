@@ -173,3 +173,20 @@ export function classerParAncienneteJours(
   }
   return { echelon, reportJours: ancienneteJours - seuil };
 }
+
+/**
+ * Cumulative banking days needed to REACH a given numeric échelon in a grille — the "threshold"
+ * `classerParAncienneteJours` walks internally, exposed standalone for reclassement-after-concours
+ * calculations (reclassementConcours.ts) that need a specific échelon's own threshold rather than
+ * classing an ancienneté total (e.g. "Situation 1" of Reclt concours & reprise d'ancienneté: the
+ * base jours for a service already AT a known échelon in its own corps d'origine's grille).
+ */
+export function seuilEntreeEchelon(grille: GrilleCode, echelon: number, grilles: Record<GrilleCode, EchelonRow[]> = GRILLES): number {
+  let cumul = 0;
+  for (const row of grilles[grille]) {
+    if (row.echelon === echelon) return cumul;
+    if (row.duree === "MAX") break;
+    cumul += row.duree * 360;
+  }
+  throw new Error(`Échelon numérique ${echelon} introuvable dans la grille ${grille}`);
+}

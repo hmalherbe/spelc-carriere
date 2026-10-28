@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  classerParAncienneteJours,
   deriveEchelonActuelFromProjection,
   deriveNumericEchelonAliases,
   findEchelonRow,
   gainSalaireBrut,
   gainSalaireNet,
+  seuilEntreeEchelon,
   traitementBrutMensuel,
 } from "../src/calculations/grille.js";
 
@@ -120,5 +122,22 @@ describe("deriveEchelonActuelFromProjection", () => {
       ],
     };
     expect(deriveEchelonActuelFromProjection("AGR", "11", reversed as never)).toBe(10);
+  });
+});
+
+describe("seuilEntreeEchelon / classerParAncienneteJours (cumulative échelon thresholds, derived from each row's own duree)", () => {
+  it("returns 0 for the first échelon and the sum of prior échelons' durées (in banking days) for later ones", () => {
+    expect(seuilEntreeEchelon("AGR", 1)).toBe(0);
+    expect(seuilEntreeEchelon("AGR", 2)).toBe(360); // échelon 1's own 1-year duree
+    expect(seuilEntreeEchelon("AGR", 8)).toBe(5220); // 1+1+2+2+2.5+3+3 years * 360
+  });
+
+  it("throws for an échelon that doesn't exist (numerically) in the grille", () => {
+    expect(() => seuilEntreeEchelon("AGR", 99)).toThrow();
+  });
+
+  it("classerParAncienneteJours is the exact inverse: classing seuilEntreeEchelon(grille, N) lands back on échelon N with no report", () => {
+    const seuil = seuilEntreeEchelon("AGR", 7);
+    expect(classerParAncienneteJours("AGR", seuil)).toEqual({ echelon: 7, reportJours: 0 });
   });
 });

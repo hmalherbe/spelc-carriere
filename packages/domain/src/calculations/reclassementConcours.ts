@@ -1,4 +1,4 @@
-import { classerParAncienneteJours, findEchelonRow, gainSalaireBrut, gainSalaireNet } from "./grille.js";
+import { classerParAncienneteJours, findEchelonRow, gainSalaireBrut, gainSalaireNet, seuilEntreeEchelon } from "./grille.js";
 import { joursComptablesEntre } from "./anciennete.js";
 import { COEFFICIENT_CARACTERISTIQUE, SITUATIONS_AVANT_RECLASSEMENT } from "../data/refs.js";
 import { GRILLES, type EchelonRow, type GrilleCode } from "../data/grilles.js";
@@ -156,16 +156,6 @@ function baseTheoriqueJours(
     }
   }
   throw new Error(`Échelon ${processus} ${echelonActuel} non pris en charge par le reclassement concours HC/EXC`);
-}
-
-function seuilEntreeEchelon(grille: GrilleCode, echelon: number, grilles: Record<GrilleCode, EchelonRow[]> = GRILLES): number {
-  let cumul = 0;
-  for (const row of grilles[grille]) {
-    if (row.echelon === echelon) return cumul;
-    if (row.duree === "MAX") break;
-    cumul += row.duree * 360;
-  }
-  throw new Error(`Échelon numérique ${echelon} introuvable dans la grille ${grille}`);
 }
 
 /** Reclt concours HC et EXC — reconstitution virtuelle dans la classe normale, pour un agent
