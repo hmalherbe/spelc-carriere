@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { computeReclassementConcours, computeReclassementConcoursDepuisHcExc } from "../src/calculations/reclassementConcours.js";
+import { coefficientAppliqueFraction, computeReclassementConcours, computeReclassementConcoursDepuisHcExc } from "../src/calculations/reclassementConcours.js";
+
+describe("coefficientAppliqueFraction (coefficient de reclassement affiché sous forme irréductible)", () => {
+  it("reduces a 'coefficient' pondération to its irreducible fraction (115/175 -> 23/35)", () => {
+    expect(coefficientAppliqueFraction("AECE", "AGR")).toEqual({ numerateur: 23, denominateur: 35 });
+  });
+
+  it("returns a coefficient already reduced to 1/1 as 1/1, not simplified further", () => {
+    // MA 1 (135) vers PROFS (135) : coefficient identique, fraction 1/1.
+    expect(coefficientAppliqueFraction("MA 1", "PROFS")).toEqual({ numerateur: 1, denominateur: 1 });
+  });
+
+  it("returns a direct 'ponderation' fraction unchanged when already irreducible", () => {
+    expect(coefficientAppliqueFraction("Activités professionnelles", "AGR")).toEqual({ numerateur: 2, denominateur: 3 });
+  });
+
+  it("throws for an unknown nature de service", () => {
+    expect(() => coefficientAppliqueFraction("Pas une vraie nature", "AGR")).toThrow();
+  });
+});
 
 describe("computeReclassementConcours (Reclt concours & reprise d'ancienneté, ported from the union's 260824_Reclassements.xls)", () => {
   it("weights a single AECE service (coefficient 115) by the ratio to AGR's coefficient (175) and classes the result", () => {

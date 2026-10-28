@@ -1,5 +1,6 @@
 import { classerParAncienneteJours, findEchelonRow, gainSalaireBrut, gainSalaireNet, seuilEntreeEchelon } from "./grille.js";
 import { joursComptablesEntre } from "./anciennete.js";
+import { simplifierFraction } from "./fraction.js";
 import { COEFFICIENT_CARACTERISTIQUE, SITUATIONS_AVANT_RECLASSEMENT } from "../data/refs.js";
 import { GRILLES, type EchelonRow, type GrilleCode } from "../data/grilles.js";
 
@@ -46,26 +47,48 @@ export interface ReclassementConcoursResult {
   ancienneteReporteeJours: number;
 }
 
+/** Recherche la situation d'une nature de service dans SITUATIONS_AVANT_RECLASSEMENT (refs.ts) —
+ * lève si inconnue, mêmes conditions que computeReclassementConcours ci-dessous. */
+function trouverSituation(nature: string) {
+  const situation = SITUATIONS_AVANT_RECLASSEMENT.find((s) => s.nature === nature);
+  if (!situation) {
+    throw new Error(`Nature de service inconnue: ${JSON.stringify(nature)}`);
+  }
+  return situation;
+}
+
+/** Le "coefficient de reclassement" réellement appliqué à une nature de service pour un corps
+ * cible donné, sous forme de fraction irréductible — soit directement la pondération de la
+ * situation (ex. 2/3), soit coefficientOrigine/coefficientCible réduit (ex. 115/175 -> 23/35).
+ * Même source que le ratio utilisé par computeReclassementConcours, pour qu'affichage et calcul ne
+ * puissent jamais diverger. */
+export function coefficientAppliqueFraction(nature: string, grilleCible: "AGR" | "PROFS"): { numerateur: number; denominateur: number } {
+  const situation = trouverSituation(nature);
+  const coefficientCible = COEFFICIENT_CARACTERISTIQUE[grilleCible];
+  if (coefficientCible == null) {
+    throw new Error(`Pas de coefficient caractéristique connu pour la grille ${grilleCible}`);
+  }
+  return situation.ponderation.mode === "ponderation"
+    ? simplifierFraction(situation.ponderation.numerateur, situation.ponderation.denominateur)
+    : simplifierFraction(situation.ponderation.coefficient, coefficientCible);
+}
+
 /** Reclt concours & reprise d'ancienneté — classes a set of prior-service periods, weighted and
  * converted to the target grille's own coefficient caractéristique, into a landing échelon + report
  * d'ancienneté in `grilleCible`. */
 export function computeReclassementConcours(input: ReclassementConcoursInput): ReclassementConcoursResult {
-  const coefficientCible = COEFFICIENT_CARACTERISTIQUE[input.grilleCible];
-  if (coefficientCible == null) {
+  if (COEFFICIENT_CARACTERISTIQUE[input.grilleCible] == null) {
     throw new Error(`Pas de coefficient caractéristique connu pour la grille ${input.grilleCible}`);
   }
 
   let total = 0;
   for (const service of input.services) {
-    const situation = SITUATIONS_AVANT_RECLASSEMENT.find((s) => s.nature === service.nature);
-    if (!situation) {
-      throw new Error(`Nature de service inconnue: ${JSON.stringify(service.nature)}`);
-    }
+    trouverSituation(service.nature); // valide la nature avant de calculer quoi que ce soit
+    const { numerateur, denominateur } = coefficientAppliqueFraction(service.nature, input.grilleCible);
+    const ratio = numerateur / denominateur;
     const quotite = service.quotite ?? 1;
     // The spreadsheet's own clamp: temps partiel >= mi-temps compte comme temps complet.
     const multiplicateurQuotite = quotite >= 0.5 ? 1 : quotite;
-    const ratio =
-      situation.ponderation.mode === "ponderation" ? situation.ponderation.facteur : situation.ponderation.coefficient / coefficientCible;
     // "Contractuel alternant" gets a flat 2-month (60 banking-day) bonus — read directly from the
     // spreadsheet's own S column formula, not documented anywhere else we could find.
     const bonusAlternant = service.nature === "Contractuel alternant" ? 60 : 0;

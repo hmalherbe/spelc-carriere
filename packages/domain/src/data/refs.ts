@@ -176,16 +176,19 @@ export const RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE: ReclassementRow[] =
 
 /** One row of the "Situations_avant_reclassement" table (sheet "Données", $A$2:$C$22): how a given
  * prior-service nature is weighted when reclassing after a concours — either a direct weighting
- * factor ("Activités professionnelles" counts for 2/3 of its real duration), or a "coefficient
+ * fraction ("Activités professionnelles" counts for 2/3 of its real duration), or a "coefficient
  * caractéristique" to convert via the ratio coefficientOrigine/coefficientCible (most service
- * natures: AECE, ATER, MA 1/2/3, Instituteur, etc). */
+ * natures: AECE, ATER, MA 1/2/3, Instituteur, etc). Kept as an exact numerateur/denominateur (not a
+ * float) so the "coefficient de reclassement appliqué" can be displayed as an irreducible fraction
+ * (see coefficientAppliqueFraction in reclassementConcours.ts) without any rounding drift between
+ * what's computed and what's shown. */
 export interface SituationServiceAnterieur {
   nature: string;
-  ponderation: { mode: "ponderation"; facteur: number } | { mode: "coefficient"; coefficient: number };
+  ponderation: { mode: "ponderation"; numerateur: number; denominateur: number } | { mode: "coefficient"; coefficient: number };
 }
 
 export const SITUATIONS_AVANT_RECLASSEMENT: SituationServiceAnterieur[] = [
-  { nature: "Activités professionnelles", ponderation: { mode: "ponderation", facteur: 2 / 3 } },
+  { nature: "Activités professionnelles", ponderation: { mode: "ponderation", numerateur: 2, denominateur: 3 } },
   { nature: "AECE", ponderation: { mode: "coefficient", coefficient: 115 } },
   { nature: "AED - MI_SE - AESH", ponderation: { mode: "coefficient", coefficient: 100 } },
   { nature: "ATER", ponderation: { mode: "coefficient", coefficient: 135 } },
@@ -193,7 +196,7 @@ export const SITUATIONS_AVANT_RECLASSEMENT: SituationServiceAnterieur[] = [
   { nature: "CERTIFIE, PE , PEPS, PLP -- CN", ponderation: { mode: "coefficient", coefficient: 135 } },
   { nature: "CERTIFIE, PEPS, PLP -- BI-ADMISSIBLE", ponderation: { mode: "coefficient", coefficient: 145 } },
   { nature: "Contractuel alternant", ponderation: { mode: "coefficient", coefficient: 135 } },
-  { nature: "Enseignement hors-contrat", ponderation: { mode: "ponderation", facteur: 2 / 3 } },
+  { nature: "Enseignement hors-contrat", ponderation: { mode: "ponderation", numerateur: 2, denominateur: 3 } },
   { nature: "Enseignement public ou validé", ponderation: { mode: "coefficient", coefficient: 135 } },
   { nature: "Instituteur", ponderation: { mode: "coefficient", coefficient: 100 } },
   { nature: "MA 1", ponderation: { mode: "coefficient", coefficient: 135 } },
@@ -202,7 +205,7 @@ export const SITUATIONS_AVANT_RECLASSEMENT: SituationServiceAnterieur[] = [
   { nature: "MD 1", ponderation: { mode: "coefficient", coefficient: 135 } },
   { nature: "MD 2", ponderation: { mode: "coefficient", coefficient: 135 } },
   { nature: "PEGC", ponderation: { mode: "coefficient", coefficient: 115 } },
-  { nature: "Service national non pris en compte", ponderation: { mode: "ponderation", facteur: 1 } },
+  { nature: "Service national non pris en compte", ponderation: { mode: "ponderation", numerateur: 1, denominateur: 1 } },
   { nature: "Suppléant 1°D", ponderation: { mode: "coefficient", coefficient: 135 } },
   { nature: "Vacations dans le public", ponderation: { mode: "coefficient", coefficient: 135 } },
 ];

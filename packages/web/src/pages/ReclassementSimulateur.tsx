@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   bankingDaysToYMD,
+  coefficientAppliqueFraction,
   computeReclassementConcours,
   computeReclassementConcoursDepuisHcExc,
   computeReclassementHcExc,
@@ -39,6 +40,17 @@ const TABS: { id: SimTab; label: string }[] = [
 function formatJours(jours: number): string {
   const { annees, mois, jours: j } = bankingDaysToYMD(jours);
   return `${annees} année(s), ${mois} mois et ${j} jour(s)`;
+}
+
+/** "Coefficient de reclassement" appliqué à un service, sous forme de fraction irréductible
+ * (ex. "23/35"), ou "—" si la nature de service n'est pas (encore) reconnue. */
+function coefficientLabel(nature: string, grilleCible: "AGR" | "PROFS"): string {
+  try {
+    const { numerateur, denominateur } = coefficientAppliqueFraction(nature, grilleCible);
+    return `${numerateur}/${denominateur}`;
+  } catch {
+    return "—";
+  }
 }
 
 export function ReclassementSimulateur() {
@@ -268,6 +280,7 @@ function Cas1() {
         <thead>
           <tr>
             <th>Nature du service</th>
+            <th>Coefficient de reclassement</th>
             <th>Méthode de saisie</th>
             <th>Détail de la situation</th>
             <th>Quotité</th>
@@ -287,6 +300,7 @@ function Cas1() {
                   ))}
                 </select>
               </td>
+              <td>{coefficientLabel(r.nature, grilleCible)}</td>
               <td>
                 <select value={r.mode} onChange={(e) => updateRow(r.id, { mode: e.target.value as ModeSaisie })}>
                   <option value="echelon">1. Par échelon et reliquat</option>

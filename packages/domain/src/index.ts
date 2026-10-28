@@ -7,5 +7,6 @@ export * from "./calculations/promotion.js";
 export * from "./calculations/hcExc.js";
 export * from "./calculations/hcExcReclassement.js";
 export * from "./calculations/reclassementConcours.js";
+export * from "./calculations/fraction.js";
 export * from "./calculations/eligibility.js";
 export * from "./calculations/textFormat.js";
