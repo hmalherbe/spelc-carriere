@@ -88,6 +88,8 @@ function joursBrutsDeLaLigne(r: ServiceRow): number {
 }
 
 function Cas1() {
+  const [nom, setNom] = useState("");
+  const [prenom, setPrenom] = useState("");
   const [grilleCible, setGrilleCible] = useState<"AGR" | "PROFS">("AGR");
   const [rows, setRows] = useState<ServiceRow[]>([nouvelleServiceRow()]);
   const [result, setResult] = useState<ReturnType<typeof computeReclassementConcours> | null>(null);
@@ -121,6 +123,14 @@ function Cas1() {
         total retenu.
       </p>
       <div className="inline-form">
+        <label>
+          Nom
+          <input type="text" value={nom} onChange={(e) => setNom(e.target.value)} />
+        </label>
+        <label>
+          Prénom
+          <input type="text" value={prenom} onChange={(e) => setPrenom(e.target.value)} />
+        </label>
         <label>
           Corps cible
           <select value={grilleCible} onChange={(e) => setGrilleCible(e.target.value as "AGR" | "PROFS")}>
@@ -164,8 +174,8 @@ function Cas1() {
                   />
                 ) : (
                   <span style={{ display: "flex", gap: 6 }}>
-                    <input type="date" value={r.dateDebut} onChange={(e) => updateRow(r.id, { dateDebut: e.target.value })} />
-                    <input type="date" value={r.dateFin} onChange={(e) => updateRow(r.id, { dateFin: e.target.value })} />
+                    <input type="date" min="1960-01-01" max="2099-12-31" value={r.dateDebut} onChange={(e) => updateRow(r.id, { dateDebut: e.target.value })} />
+                    <input type="date" min="1960-01-01" max="2099-12-31" value={r.dateFin} onChange={(e) => updateRow(r.id, { dateFin: e.target.value })} />
                   </span>
                 )}
                 <label className="checkbox-label">
@@ -202,6 +212,11 @@ function Cas1() {
       {error && <p className="error-text">{error}</p>}
       {result && (
         <div className="card">
+          {(nom || prenom) && (
+            <p>
+              <strong>Agent :</strong> {nom} {prenom}
+            </p>
+          )}
           <p>
             Total de l'ancienneté retenue : <strong>{result.totalJoursRetenus} jours</strong>
           </p>
@@ -293,11 +308,11 @@ function Cas2() {
         </label>
         <label>
           Date d'effet de l'échelon actuel
-          <input type="date" value={dateEchelon} onChange={(e) => setDateEchelon(e.target.value)} />
+          <input type="date" min="1960-01-01" max="2099-12-31" value={dateEchelon} onChange={(e) => setDateEchelon(e.target.value)} />
         </label>
         <label>
           Date du reclassement
-          <input type="date" value={dateReclassement} onChange={(e) => setDateReclassement(e.target.value)} />
+          <input type="date" min="1960-01-01" max="2099-12-31" value={dateReclassement} onChange={(e) => setDateReclassement(e.target.value)} />
         </label>
         <label>
           Corps cible
@@ -446,11 +461,11 @@ function Cas3() {
         </label>
         <label>
           Date d'entrée dans cet échelon
-          <input type="date" value={dateDernierChangement} onChange={(e) => setDateDernierChangement(e.target.value)} />
+          <input type="date" min="1960-01-01" max="2099-12-31" value={dateDernierChangement} onChange={(e) => setDateDernierChangement(e.target.value)} />
         </label>
         <label>
           Date de référence de la campagne (rentrée)
-          <input type="date" value={dateReference} onChange={(e) => setDateReference(e.target.value)} />
+          <input type="date" min="1960-01-01" max="2099-12-31" value={dateReference} onChange={(e) => setDateReference(e.target.value)} />
         </label>
       </div>
 
