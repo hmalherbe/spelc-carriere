@@ -738,3 +738,23 @@ model MatchingConfig {
   updatedAt              DateTime @updatedAt
   updatedById            String? // free-text: User.id at time of edit, kept even if the user is later deleted
 }
+
+// A saved run of the Reclassement simulator (packages/web/src/pages/ReclassementSimulateur.tsx) —
+// one of the 3 cas ("CAS1" Reclt concours & reprise anc., "CAS2" Reclt concours HC/EXC, "CAS3"
+// Reclassement HC/EXC). `parametres` mirrors that case's own React form state EXACTLY (so reloading
+// it repopulates every field, not just a summary), and `resultat` freezes what the calculator
+// returned at save time — read back as-is on reload rather than recomputed, so a saved reclassement
+// never silently changes if the underlying rules are corrected later (the whole point of saving an
+// official decision). Both are free-form Json since the 3 cas have different shapes.
+model ReclassementSauvegarde {
+  id          String   @id @default(cuid())
+  cas         String // "CAS1" | "CAS2" | "CAS3"
+  nom         String
+  prenom      String
+  parametres  Json
+  resultat    Json
+  savedAt     DateTime @default(now())
+  savedById   String // free-text: User.id at save time, kept even if the user is later deleted
+
+  @@index([nom, prenom])
+}

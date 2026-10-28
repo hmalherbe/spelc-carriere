@@ -516,6 +516,21 @@ export interface MailingLogEntry {
   events: MailingLogEvent[];
 }
 
+export type ReclassementCas = "CAS1" | "CAS2" | "CAS3";
+
+export interface ReclassementSauvegardeResume {
+  id: string;
+  cas: ReclassementCas;
+  nom: string;
+  prenom: string;
+  savedAt: string;
+}
+
+export interface ReclassementSauvegarde extends ReclassementSauvegardeResume {
+  parametres: unknown;
+  resultat: unknown;
+}
+
 export interface EchelonRowApi {
   id: string;
   grilleCode: string;
@@ -736,4 +751,9 @@ export const api = {
   aiAssistantSuggestions: () => request<{ questions: string[] }>("/ai-assistant/suggestions"),
   askAiAssistant: (question: string) =>
     request<AiAssistantAnswer>("/ai-assistant/ask", { method: "POST", body: JSON.stringify({ question }) }),
+  saveReclassement: (cas: ReclassementCas, nom: string, prenom: string, parametres: unknown, resultat: unknown) =>
+    request<ReclassementSauvegarde>("/reclassements", { method: "POST", body: JSON.stringify({ cas, nom, prenom, parametres, resultat }) }),
+  searchReclassements: (nom: string, prenom: string) =>
+    request<ReclassementSauvegardeResume[]>(`/reclassements?nom=${encodeURIComponent(nom)}&prenom=${encodeURIComponent(prenom)}`),
+  getReclassement: (id: string) => request<ReclassementSauvegarde>(`/reclassements/${id}`),
 };

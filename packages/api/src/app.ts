@@ -17,6 +17,7 @@ import { elusRouter } from "./routes/elus.js";
 import { aiAssistantRouter } from "./routes/aiAssistant.js";
 import { hcExcRouter } from "./routes/hcExc.js";
 import { reliquatsRouter } from "./routes/reliquats.js";
+import { reclassementsRouter } from "./routes/reclassements.js";
 
 export function createApp() {
   const app = express();
@@ -47,6 +48,7 @@ export function createApp() {
   app.use("/ai-assistant", aiAssistantRouter);
   app.use("/hc-exc", hcExcRouter);
   app.use("/reliquats", reliquatsRouter);
+  app.use("/reclassements", reclassementsRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: `Route inconnue: ${req.method} ${req.path}` });

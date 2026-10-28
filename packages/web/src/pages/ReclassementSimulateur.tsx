@@ -9,15 +9,21 @@ import {
   type GrilleCode,
   type ServiceAnterieur,
 } from "@spelc/domain";
+import { api, type ReclassementCas, type ReclassementSauvegardeResume } from "../api.js";
 
 /**
  * Remplace les 3 onglets de calcul de l'ancien simulateur HTML autonome (reclassement-
  * simulateur.html, retiré) par de vrais formulaires React branchés sur packages/domain —
- * toujours purement local au navigateur (aucune donnée envoyée ni enregistrée), mais maintenant
- * testé (packages/domain/test/reclassementConcours.test.ts, hcExcReclassement.test.ts) et sans les
- * écarts identifiés dans l'ancien outil face aux vraies règles du classeur Excel du Spelc (bonus
- * "Contractuel alternant", plancher d'indice, arrondi floor/round, table de reclassement HC/EXC
- * approximative).
+ * toujours purement local au navigateur pour le CALCUL (aucune donnée envoyée ni enregistrée tant
+ * qu'on ne clique pas "Enregistrer"), mais maintenant testé (packages/domain/test/
+ * reclassementConcours.test.ts, hcExcReclassement.test.ts) et sans les écarts identifiés dans
+ * l'ancien outil face aux vraies règles du classeur Excel du Spelc (bonus "Contractuel alternant",
+ * plancher d'indice, arrondi floor/round, table de reclassement HC/EXC approximative).
+ *
+ * Un reclassement calculé peut être enregistré (nom/prénom + tous les paramètres saisis + le
+ * résultat obtenu), et rechargé plus tard par nom/prénom — voir ReclassementSauvegarde (schema.
+ * prisma) : le résultat rechargé est celui FIGÉ au moment de l'enregistrement, jamais recalculé,
+ * pour qu'une décision déjà prise ne bouge pas silencieusement si les règles sont corrigées ensuite.
  */
 
 type SimTab = "cas1" | "cas2" | "cas3" | "regles";
@@ -54,6 +60,109 @@ export function ReclassementSimulateur() {
 }
 
 // ---------------------------------------------------------------------------
+// Enregistrement / rechargement — partagé par les 3 cas de calcul
+// ---------------------------------------------------------------------------
+
+function useReclassementGestion(cas: ReclassementCas) {
+  const [resultats, setResultats] = useState<ReclassementSauvegardeResume[]>([]);
+  const [recherche, setRecherche] = useState(false);
+  const [rechercheError, setRechercheError] = useState<string | null>(null);
+  const [enregistrement, setEnregistrement] = useState(false);
+  const [messageEnregistrement, setMessageEnregistrement] = useState<string | null>(null);
+  const [chargementId, setChargementId] = useState<string | null>(null);
+  const [chargementError, setChargementError] = useState<string | null>(null);
+
+  async function rechercher(nom: string, prenom: string) {
+    if (!nom.trim() && !prenom.trim()) {
+      setRechercheError("Saisir au moins un nom ou un prénom pour rechercher.");
+      return;
+    }
+    setRecherche(true);
+    setRechercheError(null);
+    try {
+      const tous = await api.searchReclassements(nom, prenom);
+      setResultats(tous.filter((r) => r.cas === cas));
+    } catch (e) {
+      setRechercheError(String(e));
+    } finally {
+      setRecherche(false);
+    }
+  }
+
+  async function enregistrer(nom: string, prenom: string, parametres: unknown, resultat: unknown) {
+    setEnregistrement(true);
+    setMessageEnregistrement(null);
+    try {
+      await api.saveReclassement(cas, nom, prenom, parametres, resultat);
+      setMessageEnregistrement("Reclassement enregistré.");
+    } catch (e) {
+      setMessageEnregistrement(`Échec de l'enregistrement : ${String(e)}`);
+    } finally {
+      setEnregistrement(false);
+    }
+  }
+
+  async function charger(id: string) {
+    setChargementId(id);
+    setChargementError(null);
+    try {
+      return await api.getReclassement(id);
+    } catch (e) {
+      setChargementError(String(e));
+      return null;
+    } finally {
+      setChargementId(null);
+    }
+  }
+
+  return { resultats, recherche, rechercheError, rechercher, enregistrement, messageEnregistrement, enregistrer, chargementId, chargementError, charger };
+}
+
+function BlocRecherche({
+  resultats,
+  recherche,
+  rechercheError,
+  onRechercher,
+  onCharger,
+  chargementId,
+  chargementError,
+}: {
+  resultats: ReclassementSauvegardeResume[];
+  recherche: boolean;
+  rechercheError: string | null;
+  onRechercher: () => void;
+  onCharger: (id: string) => void;
+  chargementId: string | null;
+  chargementError: string | null;
+}) {
+  return (
+    <div className="toolbar">
+      <button type="button" className="secondary" onClick={onRechercher} disabled={recherche}>
+        {recherche ? "Recherche en cours..." : "Rechercher un reclassement enregistré (nom/prénom ci-dessus)"}
+      </button>
+      {rechercheError && <span className="error-text">{rechercheError}</span>}
+      {chargementError && <span className="error-text">{chargementError}</span>}
+      {resultats.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onCharger(e.target.value);
+          }}
+          disabled={chargementId != null}
+        >
+          <option value="">{resultats.length} résultat(s) — choisir pour recharger</option>
+          {resultats.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.nom} {r.prenom} — enregistré le {new Date(r.savedAt).toLocaleDateString("fr-FR")}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Cas 1 — Reclt concours & reprise d'ancienneté
 // ---------------------------------------------------------------------------
 
@@ -68,7 +177,7 @@ interface ServiceRow {
   reliquat: string;
 }
 
-function nouvelleServiceRow(): ServiceRow {
+function nouvelleServiceRow(initial?: Partial<ServiceRow>): ServiceRow {
   return {
     id: Math.random().toString(36).slice(2),
     nature: SITUATIONS_AVANT_RECLASSEMENT[0].nature,
@@ -78,6 +187,7 @@ function nouvelleServiceRow(): ServiceRow {
     modeManuel: false,
     quotite: "",
     reliquat: "",
+    ...initial,
   };
 }
 
@@ -87,6 +197,11 @@ function joursBrutsDeLaLigne(r: ServiceRow): number {
   return 0;
 }
 
+interface Cas1Parametres {
+  grilleCible: "AGR" | "PROFS";
+  rows: Omit<ServiceRow, "id">[];
+}
+
 function Cas1() {
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
@@ -94,6 +209,7 @@ function Cas1() {
   const [rows, setRows] = useState<ServiceRow[]>([nouvelleServiceRow()]);
   const [result, setResult] = useState<ReturnType<typeof computeReclassementConcours> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const gestion = useReclassementGestion("CAS1");
 
   function updateRow(id: string, patch: Partial<ServiceRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -113,6 +229,18 @@ function Cas1() {
       setError(String(e));
       setResult(null);
     }
+  }
+
+  async function charger(id: string) {
+    const saved = await gestion.charger(id);
+    if (!saved) return;
+    const params = saved.parametres as Cas1Parametres;
+    setNom(saved.nom);
+    setPrenom(saved.prenom);
+    setGrilleCible(params.grilleCible);
+    setRows(params.rows.map((r) => nouvelleServiceRow(r)));
+    setResult(saved.resultat as ReturnType<typeof computeReclassementConcours>);
+    setError(null);
   }
 
   return (
@@ -139,6 +267,16 @@ function Cas1() {
           </select>
         </label>
       </div>
+
+      <BlocRecherche
+        resultats={gestion.resultats}
+        recherche={gestion.recherche}
+        rechercheError={gestion.rechercheError}
+        onRechercher={() => gestion.rechercher(nom, prenom)}
+        onCharger={charger}
+        chargementId={gestion.chargementId}
+        chargementError={gestion.chargementError}
+      />
 
       <table className="data-table">
         <thead>
@@ -224,6 +362,25 @@ function Cas1() {
           <p>
             Report d'ancienneté : <strong>{result.ancienneteReporteeJours} jours</strong> ({formatJours(result.ancienneteReporteeJours)})
           </p>
+          <div className="toolbar">
+            <button
+              type="button"
+              className="secondary"
+              disabled={gestion.enregistrement || !nom.trim() || !prenom.trim()}
+              onClick={() =>
+                gestion.enregistrer(
+                  nom,
+                  prenom,
+                  { grilleCible, rows: rows.map(({ id: _id, ...rest }) => rest) } satisfies Cas1Parametres,
+                  result,
+                )
+              }
+            >
+              {gestion.enregistrement ? "Enregistrement..." : "Enregistrer ce reclassement"}
+            </button>
+            {!nom.trim() || !prenom.trim() ? <span className="hint">Nom et prénom requis pour enregistrer.</span> : null}
+            {gestion.messageEnregistrement && <span className="hint">{gestion.messageEnregistrement}</span>}
+          </div>
         </div>
       )}
     </div>
@@ -243,7 +400,20 @@ const GRILLES_ORIGINE_CAS2: { code: GrilleCode; label: string }[] = [
   { code: "EXC_PEGC", label: "PEGC — Classe exceptionnelle" },
 ];
 
+interface Cas2Parametres {
+  grilleOrigine: GrilleCode;
+  echelonActuel: string;
+  dateEchelon: string;
+  dateReclassement: string;
+  grilleCible: "AGR" | "PROFS";
+  majCn11: string;
+  majHc6: string;
+  majExc4: string;
+}
+
 function Cas2() {
+  const [nom, setNom] = useState("");
+  const [prenom, setPrenom] = useState("");
   const [grilleOrigine, setGrilleOrigine] = useState<GrilleCode>("HC_PROFS");
   const [echelonActuel, setEchelonActuel] = useState("1");
   const [dateEchelon, setDateEchelon] = useState("");
@@ -254,6 +424,7 @@ function Cas2() {
   const [majExc4, setMajExc4] = useState("");
   const [result, setResult] = useState<ReturnType<typeof computeReclassementConcoursDepuisHcExc> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const gestion = useReclassementGestion("CAS2");
 
   const processus: "HC" | "EXC" = grilleOrigine.startsWith("HC_") ? "HC" : "EXC";
   const ech = Number(echelonActuel) || 0;
@@ -284,6 +455,24 @@ function Cas2() {
     }
   }
 
+  async function charger(id: string) {
+    const saved = await gestion.charger(id);
+    if (!saved) return;
+    const params = saved.parametres as Cas2Parametres;
+    setNom(saved.nom);
+    setPrenom(saved.prenom);
+    setGrilleOrigine(params.grilleOrigine);
+    setEchelonActuel(params.echelonActuel);
+    setDateEchelon(params.dateEchelon);
+    setDateReclassement(params.dateReclassement);
+    setGrilleCible(params.grilleCible);
+    setMajCn11(params.majCn11);
+    setMajHc6(params.majHc6);
+    setMajExc4(params.majExc4);
+    setResult(saved.resultat as ReturnType<typeof computeReclassementConcoursDepuisHcExc>);
+    setError(null);
+  }
+
   return (
     <div>
       <p className="hint">
@@ -292,6 +481,14 @@ function Cas2() {
         l'échelon de départ, majorée le cas échéant (décret 2022-708), puis convertie au coefficient du corps cible.
       </p>
       <div className="inline-form">
+        <label>
+          Nom
+          <input type="text" value={nom} onChange={(e) => setNom(e.target.value)} />
+        </label>
+        <label>
+          Prénom
+          <input type="text" value={prenom} onChange={(e) => setPrenom(e.target.value)} />
+        </label>
         <label>
           Grade et échelon d'origine
           <select value={grilleOrigine} onChange={(e) => setGrilleOrigine(e.target.value as GrilleCode)}>
@@ -322,6 +519,16 @@ function Cas2() {
           </select>
         </label>
       </div>
+
+      <BlocRecherche
+        resultats={gestion.resultats}
+        recherche={gestion.recherche}
+        rechercheError={gestion.rechercheError}
+        onRechercher={() => gestion.rechercher(nom, prenom)}
+        onCharger={charger}
+        chargementId={gestion.chargementId}
+        chargementError={gestion.chargementError}
+      />
 
       {(montreCn11 || montreHc6 || montreExc4) && (
         <div className="inline-form">
@@ -355,6 +562,11 @@ function Cas2() {
       {error && <p className="error-text">{error}</p>}
       {result && (
         <div className="card">
+          {(nom || prenom) && (
+            <p>
+              <strong>Agent :</strong> {nom} {prenom}
+            </p>
+          )}
           <p>Base théorique d'équivalence : {result.baseTheoriqueJours} jours</p>
           <p>Ancienneté dans l'échelon : {result.joursAcquisDansEchelon} jours</p>
           <p>Total converti (coefficient du corps cible) : {result.totalReconstitueJours} jours</p>
@@ -371,6 +583,25 @@ function Cas2() {
           <p>
             Gain : {result.gainSalaireBrut} € brut / {result.gainSalaireNet} € net par mois
           </p>
+          <div className="toolbar">
+            <button
+              type="button"
+              className="secondary"
+              disabled={gestion.enregistrement || !nom.trim() || !prenom.trim()}
+              onClick={() =>
+                gestion.enregistrer(
+                  nom,
+                  prenom,
+                  { grilleOrigine, echelonActuel, dateEchelon, dateReclassement, grilleCible, majCn11, majHc6, majExc4 } satisfies Cas2Parametres,
+                  result,
+                )
+              }
+            >
+              {gestion.enregistrement ? "Enregistrement..." : "Enregistrer ce reclassement"}
+            </button>
+            {!nom.trim() || !prenom.trim() ? <span className="hint">Nom et prénom requis pour enregistrer.</span> : null}
+            {gestion.messageEnregistrement && <span className="hint">{gestion.messageEnregistrement}</span>}
+          </div>
         </div>
       )}
     </div>
@@ -381,7 +612,17 @@ function Cas2() {
 // Cas 3 — Reclassement HC et EXC (réutilise computeReclassementHcExc, déjà validé)
 // ---------------------------------------------------------------------------
 
+interface Cas3Parametres {
+  processus: "HC" | "EXC";
+  grilleActuelle: "PROFS" | "AGR" | "HC_PROFS" | "HC_AGR";
+  echelonActuel: string;
+  dateDernierChangement: string;
+  dateReference: string;
+}
+
 function Cas3() {
+  const [nom, setNom] = useState("");
+  const [prenom, setPrenom] = useState("");
   const [processus, setProcessus] = useState<"HC" | "EXC">("HC");
   const [grilleActuelle, setGrilleActuelle] = useState<"PROFS" | "AGR" | "HC_PROFS" | "HC_AGR">("PROFS");
   const [echelonActuel, setEchelonActuel] = useState("9");
@@ -389,6 +630,7 @@ function Cas3() {
   const [dateReference, setDateReference] = useState("");
   const [result, setResult] = useState<ReturnType<typeof computeReclassementHcExc> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const gestion = useReclassementGestion("CAS3");
 
   const optionsGrille = useMemo(
     () =>
@@ -422,6 +664,21 @@ function Cas3() {
     }
   }
 
+  async function charger(id: string) {
+    const saved = await gestion.charger(id);
+    if (!saved) return;
+    const params = saved.parametres as Cas3Parametres;
+    setNom(saved.nom);
+    setPrenom(saved.prenom);
+    setProcessus(params.processus);
+    setGrilleActuelle(params.grilleActuelle);
+    setEchelonActuel(params.echelonActuel);
+    setDateDernierChangement(params.dateDernierChangement);
+    setDateReference(params.dateReference);
+    setResult(saved.resultat as ReturnType<typeof computeReclassementHcExc>);
+    setError(null);
+  }
+
   return (
     <div>
       <p className="hint">
@@ -431,6 +688,14 @@ function Cas3() {
         départ de l'échelon 9).
       </p>
       <div className="inline-form">
+        <label>
+          Nom
+          <input type="text" value={nom} onChange={(e) => setNom(e.target.value)} />
+        </label>
+        <label>
+          Prénom
+          <input type="text" value={prenom} onChange={(e) => setPrenom(e.target.value)} />
+        </label>
         <label>
           Type de passage
           <select
@@ -469,6 +734,16 @@ function Cas3() {
         </label>
       </div>
 
+      <BlocRecherche
+        resultats={gestion.resultats}
+        recherche={gestion.recherche}
+        rechercheError={gestion.rechercheError}
+        onRechercher={() => gestion.rechercher(nom, prenom)}
+        onCharger={charger}
+        chargementId={gestion.chargementId}
+        chargementError={gestion.chargementError}
+      />
+
       <div className="toolbar">
         <button type="button" onClick={calculer}>
           Calculer le reclassement
@@ -478,6 +753,11 @@ function Cas3() {
       {error && <p className="error-text">{error}</p>}
       {result && (
         <div className="card">
+          {(nom || prenom) && (
+            <p>
+              <strong>Agent :</strong> {nom} {prenom}
+            </p>
+          )}
           <p className="gain-positive">
             Nouvelle grille : {result.nouvelleGrille} — échelon {result.nouvelEchelon}
           </p>
@@ -491,6 +771,25 @@ function Cas3() {
             Gain : {result.gainSalaireBrut} € brut / {result.gainSalaireNet} € net par mois
           </p>
           <p>Prochaine promotion : {result.dateProchainePromotion ?? "déjà au sommet de la grille"}</p>
+          <div className="toolbar">
+            <button
+              type="button"
+              className="secondary"
+              disabled={gestion.enregistrement || !nom.trim() || !prenom.trim()}
+              onClick={() =>
+                gestion.enregistrer(
+                  nom,
+                  prenom,
+                  { processus, grilleActuelle, echelonActuel, dateDernierChangement, dateReference } satisfies Cas3Parametres,
+                  result,
+                )
+              }
+            >
+              {gestion.enregistrement ? "Enregistrement..." : "Enregistrer ce reclassement"}
+            </button>
+            {!nom.trim() || !prenom.trim() ? <span className="hint">Nom et prénom requis pour enregistrer.</span> : null}
+            {gestion.messageEnregistrement && <span className="hint">{gestion.messageEnregistrement}</span>}
+          </div>
         </div>
       )}
     </div>
