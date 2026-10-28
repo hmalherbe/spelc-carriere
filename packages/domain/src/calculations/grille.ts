@@ -143,3 +143,33 @@ export function gainSalaireBrut(indiceActuel: number, futurIndice: number, valeu
 export function gainSalaireNet(indiceActuel: number, futurIndice: number, valeurDuPoint: number = VALEUR_DU_POINT): number {
   return Math.round(((futurIndice - indiceActuel) * valeurDuPoint * 0.77) / 12);
 }
+
+/**
+ * Classes a total ancienneté (in banking days) into the échelon it lands on within a grille's own
+ * NUMERIC échelons, plus the report (remaining days past that échelon's own threshold) — used by
+ * reclassement-after-concours calculations (reclassementConcours.ts) to turn a reconstructed
+ * ancienneté total into a landing échelon, the same way the central spreadsheet's own
+ * `Duree_cumulee_echelons_<grille>` cumulative-threshold tables do (derived here from each row's
+ * own `duree`, in years, rather than hand-maintained as a separate table).
+ * Stops at the grille's own numeric ceiling (its highest numeric échelon) — never returns a
+ * lettered échelon (hors-classe/classe-exceptionnelle grilles only reclassent into a classe-normale
+ * grille's numeric range via this path).
+ */
+export function classerParAncienneteJours(
+  grille: GrilleCode,
+  ancienneteJours: number,
+  grilles: Record<GrilleCode, EchelonRow[]> = GRILLES,
+): { echelon: number; reportJours: number } {
+  const rows = grilles[grille].filter((r): r is EchelonRow & { echelon: number } => typeof r.echelon === "number");
+  let echelon = rows[0]?.echelon ?? 1;
+  let seuil = 0;
+  let cumul = 0;
+  for (const row of rows) {
+    if (cumul > ancienneteJours) break;
+    echelon = row.echelon;
+    seuil = cumul;
+    if (row.duree === "MAX") break;
+    cumul += row.duree * 360;
+  }
+  return { echelon, reportJours: ancienneteJours - seuil };
+}

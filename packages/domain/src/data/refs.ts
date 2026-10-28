@@ -166,3 +166,63 @@ export const RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE: ReclassementRow[] =
   { cle: 430, echelonReclassement: "A3", conservationAnciennete: true },
   { cle: 431, echelonReclassement: "B2", conservationAnciennete: false },
 ];
+
+// ---------------------------------------------------------------------------
+// Reclassement après concours (packages/domain/src/calculations/reclassementConcours.ts) —
+// AUTO-EXTRACTED from the union's "260824_Reclassements.xls" (VBA/formula decompilation of its
+// "Reclt concours & Reprise anc." and "Reclt concours HC et EXC" sheets, via oletools + a patched
+// xlrd formula decompiler — same method as the reclassement HC/EXC tables above).
+// ---------------------------------------------------------------------------
+
+/** One row of the "Situations_avant_reclassement" table (sheet "Données", $A$2:$C$22): how a given
+ * prior-service nature is weighted when reclassing after a concours — either a direct weighting
+ * factor ("Activités professionnelles" counts for 2/3 of its real duration), or a "coefficient
+ * caractéristique" to convert via the ratio coefficientOrigine/coefficientCible (most service
+ * natures: AECE, ATER, MA 1/2/3, Instituteur, etc). */
+export interface SituationServiceAnterieur {
+  nature: string;
+  ponderation: { mode: "ponderation"; facteur: number } | { mode: "coefficient"; coefficient: number };
+}
+
+export const SITUATIONS_AVANT_RECLASSEMENT: SituationServiceAnterieur[] = [
+  { nature: "Activités professionnelles", ponderation: { mode: "ponderation", facteur: 2 / 3 } },
+  { nature: "AECE", ponderation: { mode: "coefficient", coefficient: 115 } },
+  { nature: "AED - MI_SE - AESH", ponderation: { mode: "coefficient", coefficient: 100 } },
+  { nature: "ATER", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "CE d'EPS", ponderation: { mode: "coefficient", coefficient: 115 } },
+  { nature: "CERTIFIE, PE , PEPS, PLP -- CN", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "CERTIFIE, PEPS, PLP -- BI-ADMISSIBLE", ponderation: { mode: "coefficient", coefficient: 145 } },
+  { nature: "Contractuel alternant", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "Enseignement hors-contrat", ponderation: { mode: "ponderation", facteur: 2 / 3 } },
+  { nature: "Enseignement public ou validé", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "Instituteur", ponderation: { mode: "coefficient", coefficient: 100 } },
+  { nature: "MA 1", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "MA 2", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "MA 3", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "MD 1", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "MD 2", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "PEGC", ponderation: { mode: "coefficient", coefficient: 115 } },
+  { nature: "Service national non pris en compte", ponderation: { mode: "ponderation", facteur: 1 } },
+  { nature: "Suppléant 1°D", ponderation: { mode: "coefficient", coefficient: 135 } },
+  { nature: "Vacations dans le public", ponderation: { mode: "coefficient", coefficient: 135 } },
+];
+
+/** "Coefficient caractéristique" per grille (sheet "Données", "Grades_echelles" table, last
+ * column) — the historical ratio used ONLY by reclassement-after-concours conversions
+ * (reclassementConcours.ts), never by salary/indice calculations elsewhere in this package. */
+export const COEFFICIENT_CARACTERISTIQUE: Partial<Record<GrilleCode, number>> = {
+  AGR: 175,
+  AECE: 115,
+  PROFS: 135,
+  HC_PROFS: 135,
+  EXC_PROFS: 135,
+  BI_ADM: 145,
+  PEGC: 115,
+  HC_PEGC: 115,
+  EXC_PEGC: 115,
+  INSTIT: 100,
+  MA_1: 135,
+  MA_2: 115,
+  HC_AGR: 175,
+  EXC_AGR: 175,
+};

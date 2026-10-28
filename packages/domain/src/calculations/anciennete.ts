@@ -38,6 +38,19 @@ export function bankingDaysToYMD(totalDays: number): AncienneteYMD {
 }
 
 /**
+ * Days between two ISO dates on the 360-day banking calendar (12 months of 30 days each) — this is
+ * NOT real calendar days. Used by reclassement-after-concours calculations (reclassementConcours.ts)
+ * to turn a prior-service period's start/end dates into a day count on the same basis as
+ * `ancienneteToBankingDays`.
+ * Mirrors: (YEAR(dateFin)-YEAR(dateDebut))*360 + (MONTH(dateFin)-MONTH(dateDebut))*30 + (DAY(dateFin)-DAY(dateDebut))
+ */
+export function joursComptablesEntre(dateDebut: string, dateFin: string): number {
+  const [y1, m1, d1] = dateDebut.split("-").map(Number);
+  const [y2, m2, d2] = dateFin.split("-").map(Number);
+  return (y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1);
+}
+
+/**
  * Adds a Y/M/D offset to an ISO date using REAL calendar arithmetic (not the 360-day banking
  * calendar) — this matches Excel's DATE(year+dy, month+dm, day+dd), which normalizes overflowing
  * months/days the same way the JS Date constructor does.
