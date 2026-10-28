@@ -140,9 +140,8 @@ interface ServiceRow {
   dateFin: string;
   // Situation 3 (jours directs) :
   joursManuels: string;
-  // Pondération, commune aux 3 situations :
+  // Quotité, commune aux 3 situations :
   quotite: string;
-  reliquat: string;
 }
 
 function nouvelleServiceRow(initial?: Partial<ServiceRow>): ServiceRow {
@@ -157,7 +156,6 @@ function nouvelleServiceRow(initial?: Partial<ServiceRow>): ServiceRow {
     dateFin: "",
     joursManuels: "",
     quotite: "",
-    reliquat: "",
     ...initial,
   };
 }
@@ -171,13 +169,16 @@ function grilleOrigineSituation1(nature: string): "PROFS" | "INSTIT" | "MA_1" {
   return "PROFS";
 }
 
+/** Jours bruts de la ligne AVANT pondération (quotité/coefficient) — le reliquat de la situation 1
+ * n'en fait PAS partie : comme dans la formule réelle du classeur (colonne S = ROUND(ROUND(jours
+ * pondérés,0)*ratio,0) + reliquat + bonus), le reliquat s'ajoute tel quel APRÈS la pondération, pas
+ * dedans — voir calculer() plus bas, qui le passe à `reliquatJours`. */
 function joursBrutsDeLaLigne(r: ServiceRow): number {
   if (r.mode === "jours") return Number(r.joursManuels) || 0;
   const periode = r.dateDebut && r.dateFin ? Math.max(0, joursComptablesEntre(r.dateDebut, r.dateFin)) : 0;
   if (r.mode === "periode") return periode;
   // mode === "echelon" (situation 1) : base jours de l'échelon (si "prise en compte anc.") + la
-  // période éventuelle + le reliquat propre à cette situation — même formule que l'ancien
-  // simulateur (baseJoursEchelon + rel + joursDansEchelon).
+  // période éventuelle.
   const echelon = Number(r.echelonSituation1) || 0;
   let base = 0;
   if (r.priseEnCompteAnc && echelon > 0) {
@@ -187,7 +188,7 @@ function joursBrutsDeLaLigne(r: ServiceRow): number {
       base = 0;
     }
   }
-  return base + periode + (Number(r.reliquatSituation1) || 0);
+  return base + periode;
 }
 
 interface Cas1Parametres {
@@ -214,7 +215,7 @@ function Cas1() {
         nature: r.nature,
         joursBruts: joursBrutsDeLaLigne(r),
         quotite: r.quotite ? Number(r.quotite) : undefined,
-        reliquatJours: r.reliquat ? Number(r.reliquat) : undefined,
+        reliquatJours: r.mode === "echelon" && r.reliquatSituation1 ? Number(r.reliquatSituation1) : undefined,
       }));
       setResult(computeReclassementConcours({ grilleCible, services }));
       setError(null);
@@ -270,7 +271,6 @@ function Cas1() {
             <th>Méthode de saisie</th>
             <th>Détail de la situation</th>
             <th>Quotité</th>
-            <th>Reliquat (jours)</th>
             <th>Jours bruts</th>
             <th></th>
           </tr>
@@ -358,9 +358,6 @@ function Cas1() {
               </td>
               <td>
                 <input type="number" min={0} max={1} step={0.1} placeholder="1" value={r.quotite} onChange={(e) => updateRow(r.id, { quotite: e.target.value })} />
-              </td>
-              <td>
-                <input type="number" min={0} placeholder="0" value={r.reliquat} onChange={(e) => updateRow(r.id, { reliquat: e.target.value })} />
               </td>
               <td>{joursBrutsDeLaLigne(r)} j</td>
               <td>
