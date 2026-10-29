@@ -502,7 +502,8 @@ function Cas2() {
   const [echelonActuel, setEchelonActuel] = useState("1");
   const [dateEchelon, setDateEchelon] = useState("");
   const [dateReclassement, setDateReclassement] = useState("");
-  const [grilleCible, setGrilleCible] = useState<"AGR" | "PROFS">("AGR");
+  // Corps cible unique dans ce cas (contrairement au cas 1) : toujours Agrégé.
+  const grilleCible = "AGR" as const;
   // Majorations d'ancienneté (décret 2022-708) — calculées à partir de ces dates d'accès, plutôt
   // que saisies directement en jours (voir Calculs!B47 du classeur).
   const [biAdmissible, setBiAdmissible] = useState(true);
@@ -557,7 +558,6 @@ function Cas2() {
     setEchelonActuel(params.echelonActuel);
     setDateEchelon(params.dateEchelon);
     setDateReclassement(params.dateReclassement);
-    setGrilleCible(params.grilleCible);
     setBiAdmissible(params.biAdmissible ?? true);
     setDateAccesEchelon11CN(params.dateAccesEchelon11CN ?? "");
     setDateAccesHorsClasse(params.dateAccesHorsClasse ?? "");
@@ -606,13 +606,6 @@ function Cas2() {
         <label>
           Date d'effet du reclassement
           <input type="date" min="1960-01-01" max="2099-12-31" value={dateReclassement} onChange={(e) => setDateReclassement(e.target.value)} />
-        </label>
-        <label>
-          Corps cible
-          <select value={grilleCible} onChange={(e) => setGrilleCible(e.target.value as "AGR" | "PROFS")}>
-            <option value="AGR">Agrégé</option>
-            <option value="PROFS">Certifié / PE / PEPS / PLP / MD1 / MD2</option>
-          </select>
         </label>
       </div>
 
