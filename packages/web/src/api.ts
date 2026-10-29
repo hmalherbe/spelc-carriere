@@ -146,7 +146,13 @@ export interface TeacherListItem {
   computedState: ComputedState | null;
   matching:
     | { status: "AUTO_CONFIRMED" | "PENDING_REVIEW" | "CONFIRMED" | "REJECTED"; adherentNom: string; adherentPrenom: string }
-    | { status: "NON_ADHERENT" };
+    | {
+        status: "NON_ADHERENT";
+        /** Override manuel (Teacher.isAdherentCorrige) forçant l'affichage "Adhérent" malgré
+         * l'absence de rapprochement réel — seul moyen pour une fiche "Saisie manuelle" d'être
+         * marquée adhérente ici, puisqu'elle n'a par construction aucun MatchCandidate. */
+        isAdherentCorrige?: boolean;
+      };
   /** L'échelon de départ (6 ou 8) que la règle BA décrit — la même valeur que dans echelonActuel
    * ci-dessus quand le candidat n'est pas encore confirmé, fournie ici explicitement pour la
    * colonne BA. null = non applicable. */

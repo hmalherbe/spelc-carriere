@@ -179,7 +179,13 @@ export async function computeTeacherList(campagneId?: string) {
             adherentNom: snap.teacher.matchCandidate.adherent.nom,
             adherentPrenom: snap.teacher.matchCandidate.adherent.prenom,
           }
-        : { status: "NON_ADHERENT" as const },
+        // isAdherentCorrige (Teacher.isAdherentCorrige's own doc comment) n'a jamais pu changer
+        // l'adresse d'envoi ni le vrai rapprochement — mais une fiche sans aucun MatchCandidate
+        // (toute "Saisie manuelle", voir isManual plus bas) n'a structurellement aucun autre moyen
+        // d'être affichée "Adhérent" ici ; routes/mailing.ts applique déjà le même override pour
+        // le courrier (`isAdherent = teacher.isAdherentCorrige ?? isAdherentReel`), cette colonne
+        // ne faisait que l'ignorer.
+        : { status: "NON_ADHERENT" as const, isAdherentCorrige: snap.teacher.isAdherentCorrige ?? undefined },
       // The rendez-vous de carrière échelon the BA rule actually describes (6 or 8) — same value
       // as `echelonActuel` above once corrected for an unconfirmed candidate, surfaced explicitly
       // here for the "Éligibilité BA" column.
@@ -222,6 +228,13 @@ const MATCHING_LABEL: Record<string, string> = {
   REJECTED: "Non lié",
   NON_ADHERENT: "Non adhérent",
 };
+
+/** Même libellé que DashboardPage.tsx's matchingLabel() — voir le commentaire sur `matching` dans
+ * computeTeacherList pour pourquoi isAdherentCorrige doit gagner ici. */
+function matchingLabel(t: Pick<TeacherListRow, "matching">): string {
+  if (t.matching.status === "NON_ADHERENT" && t.matching.isAdherentCorrige) return "Adhérent (forcé)";
+  return MATCHING_LABEL[t.matching.status];
+}
 
 function formatDateFr(d: Date | string | null): string {
   if (!d) return "";
@@ -287,7 +300,7 @@ teachersRouter.get("/export.xlsx", async (req, res) => {
       t.ancienneteAReporter ?? "",
       formatDateFr(t.computedState?.dateProchainePromotion ?? null),
       t.computedState ? t.computedState.gainSalaireNet : "",
-      MATCHING_LABEL[t.matching.status],
+      matchingLabel(t),
       baLabel(t),
     ]);
   }

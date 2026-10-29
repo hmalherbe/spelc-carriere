@@ -12,6 +12,15 @@ const MATCHING_LABEL: Record<string, string> = {
   NON_ADHERENT: "Non adhérent",
 };
 
+/** isAdherentCorrige (Teacher.isAdherentCorrige's own doc comment) force l'affichage "Adhérent"
+ * même sans aucun rapprochement réel — seul moyen pour une fiche "Saisie manuelle" (aucun
+ * MatchCandidate possible) d'apparaître adhérente ici ; voir routes/teachers.ts's
+ * computeTeacherList pour le même override côté API. */
+function matchingLabel(t: TeacherListItem): string {
+  if (t.matching.status === "NON_ADHERENT" && t.matching.isAdherentCorrige) return "Adhérent (forcé)";
+  return MATCHING_LABEL[t.matching.status];
+}
+
 function euros(n: number): string {
   return `${n >= 0 ? "+" : ""}${n} €`;
 }
@@ -28,6 +37,7 @@ function formatAnciennete(annees: number | null): string {
 
 /** Has SOME link to an adhérent record, confirmed or not — used by the adhérent/non-adhérent filter. */
 function isLinkedToAdherent(t: TeacherListItem): boolean {
+  if (t.matching.status === "NON_ADHERENT") return t.matching.isAdherentCorrige === true;
   return t.matching.status === "AUTO_CONFIRMED" || t.matching.status === "CONFIRMED" || t.matching.status === "PENDING_REVIEW";
 }
 
@@ -447,7 +457,11 @@ export function DashboardPage() {
                     {t.computedState ? euros(t.computedState.gainSalaireNet) : "—"}
                   </td>
                   <td>
-                    <span className={`badge badge-${t.matching.status.toLowerCase()}`}>{MATCHING_LABEL[t.matching.status]}</span>
+                    <span
+                      className={`badge ${t.matching.status === "NON_ADHERENT" && t.matching.isAdherentCorrige ? "badge-auto_confirmed" : `badge-${t.matching.status.toLowerCase()}`}`}
+                    >
+                      {matchingLabel(t)}
+                    </span>
                   </td>
                   <td>{ba.className ? <span className={ba.className}>{ba.label}</span> : ba.label}</td>
                 </tr>
