@@ -16,6 +16,7 @@ const AVANCEMENT_PATHS = [
   "/mailing",
   "/elus",
   "/reliquats",
+  "/saisies-manuelles",
   "/regles",
   "/grilles",
   "/statistiques",
@@ -270,6 +271,7 @@ export function Layout() {
           <NavLink to="/mailing">Mailing</NavLink>
           <NavLink to="/elus">Élus CCMA/CCMI</NavLink>
           <NavLink to="/reliquats">Reliquats</NavLink>
+          <NavLink to="/saisies-manuelles">Saisies manuelles</NavLink>
           <NavLink to="/regles">Règles de gestion</NavLink>
           <NavLink to="/grilles">Grilles indiciaires</NavLink>
           <NavLink to="/statistiques">Statistiques</NavLink>

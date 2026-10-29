@@ -422,7 +422,15 @@ export function DashboardPage() {
               const ba = baCell(t);
               return (
                 <tr key={t.teacherId}>
-                  <td>{t.nom}</td>
+                  <td>
+                    {t.nom}
+                    {t.isManual && (
+                      <span className="badge" title="Fiche créée depuis l'onglet Saisies manuelles">
+                        {" "}
+                        Saisie manuelle
+                      </span>
+                    )}
+                  </td>
                   <td>{formatPrenom(t.prenom)}</td>
                   <td>{t.grade}</td>
                   {departements.length > 0 && <td>{t.departement ?? "—"}</td>}

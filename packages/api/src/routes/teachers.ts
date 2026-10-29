@@ -48,7 +48,7 @@ export type TeacherListRow = Awaited<ReturnType<typeof computeTeacherList>>[numb
  * for DashboardPage) and GET /export.xlsx (the "Export Excel" button on that same page), so the
  * two can never drift apart on what a teacher's row actually contains.
  */
-async function computeTeacherList(campagneId?: string) {
+export async function computeTeacherList(campagneId?: string) {
   const snapshots = await prisma.teacherSnapshot.findMany({
     where: campagneId ? { campagneId } : undefined,
     include: {
@@ -58,6 +58,10 @@ async function computeTeacherList(campagneId?: string) {
           matchCandidate: { include: { adherent: true } },
         },
       },
+      // Seul moyen de repérer une fiche créée par la "Saisie manuelle" (routes/saisiesManuelles.ts) :
+      // aucun marqueur dédié sur TeacherSnapshot/Teacher, juste le fileName de son RectoratImport
+      // synthétique — voir `isManual` ci-dessous.
+      import: { select: { fileName: true } },
     },
     orderBy: [{ nomUsage: "asc" }, { prenom: "asc" }],
   });
@@ -192,6 +196,9 @@ async function computeTeacherList(campagneId?: string) {
       // Figure brute du rectorat (voir rectoratReportAncienneteRaw) — affichée à titre informatif à
       // côté de la correction manuelle ci-dessus, jamais utilisée comme valeur de repli.
       ancienneteAReporterRectorat: rectoratReportAncienneteRaw(snap.typePromotion, snap.dureeRestante),
+      // Voir le commentaire sur `import` ci-dessus — pilote le badge "Saisie manuelle" affiché par
+      // DashboardPage.tsx et le filtre de SaisiesManuellesPage.tsx (routes/saisiesManuelles.ts).
+      isManual: snap.import.fileName === "Saisie manuelle",
     };
   });
 

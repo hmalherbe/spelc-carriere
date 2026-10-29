@@ -17,6 +17,7 @@ import { SettingsPage } from "./pages/SettingsPage.js";
 import { StatsPage } from "./pages/StatsPage.js";
 import { ElusPage } from "./pages/ElusPage.js";
 import { ReliquatsPage } from "./pages/ReliquatsPage.js";
+import { SaisiesManuellesPage } from "./pages/SaisiesManuellesPage.js";
 import { AiAssistantPage } from "./pages/AiAssistantPage.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
@@ -50,6 +51,7 @@ export function App() {
         <Route path="statistiques" element={<StatsPage />} />
         <Route path="elus" element={<ElusPage />} />
         <Route path="reliquats" element={<ReliquatsPage />} />
+        <Route path="saisies-manuelles" element={<SaisiesManuellesPage />} />
         <Route path="hors-classe-exceptionnelle" element={<HorsClasseExceptionnellePage />} />
         <Route path="reclassement" element={<ReclassementPage />} />
         <Route path="mouvement" element={<MouvementPage />} />

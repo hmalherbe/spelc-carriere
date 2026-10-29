@@ -177,6 +177,30 @@ export interface TeacherListItem {
    * ancienneteAReporter (la correction manuelle ci-dessus) est vide ; même encodage "AAaMMmJJj" que
    * la correction manuelle (pas de texte lisible), ou null si le rectorat n'en indique aucune. */
   ancienneteAReporterRectorat: string | null;
+  /** true pour une fiche créée depuis l'onglet "Saisies manuelles" (enseignant promouvable oublié
+   * par le rectorat) plutôt qu'importée d'un fichier rectorat. */
+  isManual: boolean;
+}
+
+export interface SaisieManuelleInput {
+  campagneId: string;
+  nom: string;
+  prenom: string;
+  grade: string;
+  echelonActuel: string;
+  isAdherent: boolean;
+  dateAccesEchelon: string;
+  ancienneteADeduire?: string | null;
+  ancienneteAReporter?: string | null;
+}
+
+export interface SaisieManuelleResult {
+  teacherId: string;
+  warning: string | null;
+  baEligible: boolean | null;
+  baEchelonDepart: 6 | 8 | null;
+  dateProchainePromotion: string | null;
+  gainSalaireNet: number | null;
 }
 
 export interface MatchCandidate {
@@ -609,6 +633,9 @@ export const api = {
    * warn the admin before calling this; nothing here asks for confirmation again. */
   deleteCampagne: (id: string) => request<void>(`/campagnes/${id}`, { method: "DELETE" }),
   teachers: (campagneId: string) => request<TeacherListItem[]>(`/teachers?campagneId=${campagneId}`),
+  creerSaisieManuelle: (input: SaisieManuelleInput) =>
+    request<SaisieManuelleResult>("/saisies-manuelles", { method: "POST", body: JSON.stringify(input) }),
+  saisiesManuelles: (campagneId: string) => request<TeacherListItem[]>(`/saisies-manuelles?campagneId=${campagneId}`),
   updateAncienneteADeduire: (teacherId: string, ancienneteADeduire: string | null, ancienneteADeduireNote: string | null) =>
     request<{ ancienneteADeduire: string | null; ancienneteADeduireNote: string | null; warnings: string[] }>(
       `/teachers/${teacherId}/anciennete-a-deduire`,
