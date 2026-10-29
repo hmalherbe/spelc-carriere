@@ -682,6 +682,9 @@ function Cas2() {
           <p>Ancienneté dans l'échelon : {result.joursAcquisDansEchelon} jours</p>
           <p>Majorations d'ancienneté calculées : {result.majorationsJours} jours</p>
           <p>
+            Total avant coefficient : <strong>{result.totalAvantCoefficientJours} jours</strong>
+          </p>
+          <p>
             Coefficient de reclassement appliqué : {result.coefficientFraction.numerateur}/{result.coefficientFraction.denominateur}
           </p>
           <p>Total converti (coefficient du corps cible) : {result.totalReconstitueJours} jours</p>

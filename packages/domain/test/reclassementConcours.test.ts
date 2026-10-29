@@ -149,6 +149,8 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
     // base théorique (échelon 8 AGR) = 5220j ; +360j acquis dans l'échelon ; *135/175 -> 4304j
     expect(result.baseTheoriqueJours).toBe(5220);
     expect(result.joursAcquisDansEchelon).toBe(360);
+    expect(result.majorationsJours).toBe(0);
+    expect(result.totalAvantCoefficientJours).toBe(5580); // 5220 + 360 + 0
     expect(result.totalReconstitueJours).toBe(4304);
     expect(result.nouvelleGrille).toBe("AGR");
     expect(result.nouvelEchelon).toBe(7);

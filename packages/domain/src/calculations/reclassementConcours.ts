@@ -154,6 +154,9 @@ export interface ReclassementConcoursDepuisHcExcResult {
   /** Somme des majorations CN11/HC6/EXC4 réellement appliquées (Calculs!B47, hors la composante
    * C47 déjà intégrée à `baseTheoriqueJours`) — 0 si aucune n'est applicable à l'échelon de départ. */
   majorationsJours: number;
+  /** baseTheoriqueJours + joursAcquisDansEchelon + majorationsJours — le total AVANT application
+   * du coefficient de reclassement (`totalVirtuelCN` du classeur). */
+  totalAvantCoefficientJours: number;
   totalReconstitueJours: number;
   nouvelleGrille: "AGR" | "PROFS";
   nouvelEchelon: number;
@@ -281,6 +284,7 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
     baseTheoriqueJours: base,
     joursAcquisDansEchelon,
     majorationsJours: majCN11 + majHC6 + majEXC4,
+    totalAvantCoefficientJours: totalVirtuelCN,
     totalReconstitueJours,
     nouvelleGrille: grilleCible,
     nouvelEchelon,
