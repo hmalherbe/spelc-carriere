@@ -191,7 +191,8 @@ function joursBrutsDeLaLigne(r: ServiceRow): number {
   const periode = r.dateDebut && r.dateFin ? Math.max(0, joursComptablesEntre(r.dateDebut, r.dateFin)) : 0;
   if (r.mode === "periode") return periode;
   // mode === "echelon" (situation 1) : base jours de l'échelon (si "prise en compte anc.") + la
-  // période éventuelle.
+  // période éventuelle + le reliquat propre à cette situation — le reliquat est pondéré comme le
+  // reste des jours bruts (coefficient, quotité), pas ajouté à part après coup.
   const echelon = Number(r.echelonSituation1) || 0;
   let base = 0;
   if (r.priseEnCompteAnc && echelon > 0) {
@@ -201,7 +202,7 @@ function joursBrutsDeLaLigne(r: ServiceRow): number {
       base = 0;
     }
   }
-  return base + periode;
+  return base + periode + (Number(r.reliquatSituation1) || 0);
 }
 
 /** Même construction qu'utilisée pour l'appel réel à computeReclassementConcours — partagée avec
@@ -211,7 +212,6 @@ function construireServiceAnterieur(r: ServiceRow): ServiceAnterieur {
     nature: r.nature,
     joursBruts: joursBrutsDeLaLigne(r),
     quotite: r.quotite ? Number(r.quotite) : undefined,
-    reliquatJours: r.mode === "echelon" && r.reliquatSituation1 ? Number(r.reliquatSituation1) : undefined,
   };
 }
 

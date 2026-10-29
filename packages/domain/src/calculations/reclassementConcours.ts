@@ -17,7 +17,10 @@ import { GRILLES, type EchelonRow, type GrilleCode } from "../data/grilles.js";
 /**
  * One prior-service period already resolved to a day count — the 3 ways the union's own tool lets
  * someone enter a period (échelon+reliquat, start/end dates, or a raw day count) are a UI-input
- * concern, not a domain one: whichever was used, the caller passes the resulting day count here.
+ * concern, not a domain one: whichever was used, the caller passes the resulting day count here,
+ * reliquat (situation 1) already folded in — it's weighted by quotité/coefficient exactly like the
+ * rest of `joursBruts`, confirmed against the union's own real-world use of the tool (a separate
+ * unweighted "reliquat" treatment was tried first and found wrong).
  */
 export interface ServiceAnterieur {
   /** Must match a `nature` in SITUATIONS_AVANT_RECLASSEMENT (refs.ts) — thrown if not. */
@@ -30,9 +33,6 @@ export interface ServiceAnterieur {
    * Defaults to 1 (temps complet).
    */
   quotite?: number;
-  /** "Reliquat" (ancienneté à report déjà connue for this service) added back UNWEIGHTED — no
-   * quotité clamp, no coefficient ratio. Defaults to 0. */
-  reliquatJours?: number;
 }
 
 export interface ReclassementConcoursInput {
@@ -73,11 +73,11 @@ export function coefficientAppliqueFraction(nature: string, grilleCible: "AGR" |
     : simplifierFraction(situation.ponderation.coefficient, coefficientCible);
 }
 
-/** Jours réellement retenus pour UN service (après clamp de quotité, coefficient/pondération,
- * reliquat et bonus "Contractuel alternant") — exporté pour que l'interface puisse afficher la
- * contribution exacte de chaque ligne au total, pas seulement ses jours bruts avant pondération.
- * Seule source pour ce calcul : computeReclassementConcours ci-dessous additionne exactement cette
- * valeur, jamais une réimplémentation séparée. */
+/** Jours réellement retenus pour UN service (après clamp de quotité, coefficient/pondération et
+ * bonus "Contractuel alternant") — exporté pour que l'interface puisse afficher la contribution
+ * exacte de chaque ligne au total, pas seulement ses jours bruts avant pondération. Seule source
+ * pour ce calcul : computeReclassementConcours ci-dessous additionne exactement cette valeur,
+ * jamais une réimplémentation séparée. */
 export function joursRetenusPourService(service: ServiceAnterieur, grilleCible: "AGR" | "PROFS"): number {
   trouverSituation(service.nature); // valide la nature avant de calculer quoi que ce soit
   const { numerateur, denominateur } = coefficientAppliqueFraction(service.nature, grilleCible);
@@ -88,7 +88,7 @@ export function joursRetenusPourService(service: ServiceAnterieur, grilleCible: 
   // "Contractuel alternant" gets a flat 2-month (60 banking-day) bonus — read directly from the
   // spreadsheet's own S column formula, not documented anywhere else we could find.
   const bonusAlternant = service.nature === "Contractuel alternant" ? 60 : 0;
-  return Math.round(Math.round(service.joursBruts * multiplicateurQuotite) * ratio) + (service.reliquatJours ?? 0) + bonusAlternant;
+  return Math.round(Math.round(service.joursBruts * multiplicateurQuotite) * ratio) + bonusAlternant;
 }
 
 /** Reclt concours & reprise d'ancienneté — classes a set of prior-service periods, weighted and

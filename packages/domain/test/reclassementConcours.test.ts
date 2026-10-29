@@ -91,15 +91,24 @@ describe("computeReclassementConcours (Reclt concours & reprise d'ancienneté, p
     expect(result.totalJoursRetenus).toBe(571);
   });
 
-  it("adds the reliquat unweighted and the 60-day 'Contractuel alternant' bonus on top of the weighted days", () => {
-    // ratio 135/175 ; round(round(500*1)*ratio) = round(385.71...) = 386 ; + reliquat 50 + bonus 60 = 496
+  it("adds the 60-day 'Contractuel alternant' bonus on top of the weighted days", () => {
+    // ratio 135/175 ; round(round(500*1)*ratio) = round(385.71...) = 386 ; + bonus 60 = 446
     const result = computeReclassementConcours({
       grilleCible: "AGR",
-      services: [{ nature: "Contractuel alternant", joursBruts: 500, reliquatJours: 50 }],
+      services: [{ nature: "Contractuel alternant", joursBruts: 500 }],
     });
-    expect(result.totalJoursRetenus).toBe(496);
-    expect(result.echelon).toBe(2);
-    expect(result.ancienneteReporteeJours).toBe(136);
+    expect(result.totalJoursRetenus).toBe(446);
+  });
+
+  it("weights a reliquat (situation 1) that's already folded into joursBruts, same as any other day — not added separately post-coefficient", () => {
+    // Reliquat is a UI-level concern (folded into joursBruts before calling this function) — this
+    // was tried the other way (added unweighted, post-coefficient) and found wrong against real use.
+    // ratio 135/175 ; round(round(550*1)*ratio) = round(424.28...) = 424 ; + bonus 60 = 484
+    const avecReliquatFondu = computeReclassementConcours({
+      grilleCible: "AGR",
+      services: [{ nature: "Contractuel alternant", joursBruts: 500 + 50 }],
+    });
+    expect(avecReliquatFondu.totalJoursRetenus).toBe(484);
   });
 
   it("sums several services before classing the total", () => {
