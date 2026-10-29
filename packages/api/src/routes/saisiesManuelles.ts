@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { asyncHandler } from "../asyncHandler.js";
-import { GRADE_MAPPINGS, parseAncienneteText, joursComptablesEntre } from "@spelc/domain";
+import { GRADE_MAPPINGS, parseAncienneteText, joursComptablesEntre, computeEchelonPromotion, addCalendarYMD, type GrilleCode } from "@spelc/domain";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { computeBaStatus } from "../baStatus.js";
 import { recomputeAndStorePromotionState } from "../promotionState.js";
@@ -46,6 +46,13 @@ const createSchema = z.object({
   dateAccesEchelon: z.string().min(1),
   ancienneteADeduire: z.string().optional().nullable(),
   ancienneteAReporter: z.string().optional().nullable(),
+  // Décision du gestionnaire sur la BA (bonification d'ancienneté) pour une fiche saisie
+  // manuellement — voir le long commentaire plus bas sur pourquoi ceci doit exister : sans fichier
+  // rectorat, rien ne peut jamais renseigner proTypePromotion/proConfirmee (TeacherSnapshot) tout
+  // seul, et sans eux baStatus (baStatus.ts) reste null pour toujours, même quand baEligible dit
+  // oui — c'est exactement ce que le syndicat a signalé (Éligibilité BA vide dans Enseignants et
+  // Mailing malgré "éligible" dans Saisies manuelles). N'a de sens que pour un échelon 6 ou 8.
+  baDecision: z.enum(["promu", "non_promu"]).optional().nullable(),
 });
 
 saisiesManuellesRouter.post(
@@ -56,7 +63,8 @@ saisiesManuellesRouter.post(
     if (!parsed.success) {
       return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
     }
-    const { campagneId, nom, prenom, grade, echelonActuel, isAdherent, dateAccesEchelon, ancienneteADeduire, ancienneteAReporter } = parsed.data;
+    const { campagneId, nom, prenom, grade, echelonActuel, isAdherent, dateAccesEchelon, ancienneteADeduire, ancienneteAReporter, baDecision } =
+      parsed.data;
 
     const gradeMapping = GRADE_MAPPINGS.find((g) => g.grade === grade);
     if (!gradeMapping) return res.status(400).json({ error: `Grade "${grade}" non reconnu` });
@@ -80,6 +88,53 @@ saisiesManuellesRouter.post(
     // (baEligible, voir baStatus.ts), jamais à un calcul de date de promotion.
     const ancienneteEchelon = joursComptablesEntre(dateAcces.toISOString().slice(0, 10), new Date().toISOString().slice(0, 10)) / 360;
 
+    const { baEligible, baEchelonDepart } = computeBaStatus({
+      echelonActuel,
+      grade,
+      proTypePromotion: null,
+      proConfirmee: false,
+      ancienneteEchelon,
+    });
+
+    if (baDecision && baEchelonDepart === null) {
+      return res.status(400).json({ error: "La décision BA ne s'applique qu'à un échelon 6 ou 8" });
+    }
+
+    const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
+
+    // Sans fichier rectorat, rien ne peut jamais renseigner proTypePromotion/proConfirmee tout
+    // seul — et sans eux, computeBaStatus laisse baStatus à null pour toujours (voir ce champ's
+    // doc comment), même quand baEligible dit oui : la colonne "Éligibilité BA" de l'onglet
+    // Enseignants/Mailing (qui se fie à baStatus, jamais à baEligible, exprès) resterait donc
+    // vide. `baDecision` ci-dessus est la réponse du gestionnaire à la question que le fichier
+    // rectorat pose normalement lui-même ("BA." = candidat, "Pro BA." = promu) — on la traduit
+    // directement dans les mêmes champs.
+    //
+    // dateProchainePromotionRectorat doit aussi être renseignée pour obtenir la bonne date malgré
+    // resolveDateProchainePromotion (promotionState.ts) qui n'utilise JAMAIS le recalcul grille pour
+    // un candidat BA : on calcule donc nous-même la date normale (non accélérée) une première fois
+    // ici pour en déduire l'ancre que cette fonction attend (la date hypothétique accélérée, un an
+    // avant la date normale — exactement la définition de "bonification d'un an").
+    let proTypePromotion: string | null = null;
+    let proConfirmee = false;
+    let dateProchainePromotionRectorat: Date | null = null;
+    if (baDecision) {
+      proTypePromotion = "BA";
+      proConfirmee = baDecision === "promu";
+      const normalPromotion = computeEchelonPromotion({
+        grille: gradeMapping.grille as GrilleCode,
+        echelonDepart: echelonActuel,
+        dateDernierChangementEchelon: dateAcces.toISOString().slice(0, 10),
+        ancienneteADeduire: parseAncienneteText(deduire.value) ?? undefined,
+        ancienneteAReporter: parseAncienneteText(reporter.value) ?? undefined,
+        grilles: liveGrilles,
+        valeurDuPoint: liveValeurDuPoint,
+      });
+      if (normalPromotion.dateProchainePromotion) {
+        dateProchainePromotionRectorat = new Date(addCalendarYMD(normalPromotion.dateProchainePromotion, { annees: -1, mois: 0, jours: 0 }));
+      }
+    }
+
     const rectoratImport = await prisma.rectoratImport.create({
       data: { campagneId, grade, fileName: FILENAME_SAISIE_MANUELLE, importedBy: req.auth!.userId, rowCount: 1 },
     });
@@ -99,21 +154,11 @@ saisiesManuellesRouter.post(
         ancienneteEchelon,
         typePromotion: null,
         dureeRestante: null,
-        proTypePromotion: null,
-        proConfirmee: false,
-        dateProchainePromotionRectorat: null,
+        proTypePromotion,
+        proConfirmee,
+        dateProchainePromotionRectorat,
         rowIndex: 0,
       },
-    });
-
-    const [liveGrilles, liveValeurDuPoint] = await Promise.all([loadLiveGrilles(), loadCurrentValeurDuPoint()]);
-
-    const { baEligible, baEchelonDepart } = computeBaStatus({
-      echelonActuel,
-      grade,
-      proTypePromotion: null,
-      proConfirmee: false,
-      ancienneteEchelon,
     });
 
     const { warning } = await recomputeAndStorePromotionState({
@@ -126,9 +171,9 @@ saisiesManuellesRouter.post(
       dureeRestante: null,
       ancienneteADeduireRaw: deduire.value,
       ancienneteAReporterManualRaw: reporter.value,
-      proTypePromotion: null,
-      proConfirmee: false,
-      dateProchainePromotionRectorat: null,
+      proTypePromotion,
+      proConfirmee,
+      dateProchainePromotionRectorat,
       ancienneteEchelon,
       liveGrilles,
       liveValeurDuPoint: liveValeurDuPoint,
@@ -143,6 +188,7 @@ saisiesManuellesRouter.post(
       warning: warning ?? null,
       baEligible,
       baEchelonDepart,
+      baStatus: state?.baStatus ?? null,
       dateProchainePromotion: state?.dateProchainePromotion ?? null,
       gainSalaireNet: state?.gainSalaireNet ?? null,
     });

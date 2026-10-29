@@ -14,7 +14,7 @@ import {
 } from "@spelc/domain";
 import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
 import { computeBaStatus } from "../baStatus.js";
-import { recomputeAndStorePromotionState } from "../promotionState.js";
+import { recomputeAndStorePromotionState, resolveDateProchainePromotion } from "../promotionState.js";
 import { deriveAncienneteAReporter } from "../ancienneteReportee.js";
 
 export const teachersRouter = Router();
@@ -138,12 +138,17 @@ export async function computeTeacherList(campagneId?: string) {
           futurIndice: promotion.futurIndice,
           gainSalaireBrut: promotion.gainSalaireBrut,
           gainSalaireNet: promotion.gainSalaireNet,
-          // The rectorat's own file always wins over our own date math when it states one
-          // (dateProchainePromotionRectorat, from the "Pro AN./CL./RE./BA.<date>" marker) — per
-          // explicit product decision (2026-10-10, see promotionState.ts's own doc comment for the
-          // real case that forced it), systematically, for every track, not just BA. Falls back to
-          // computeEchelonPromotion's own projection only when the rectorat hasn't confirmed one yet.
-          dateProchainePromotion: snap.dateProchainePromotionRectorat ?? (promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null),
+          // Pour tout autre track (AN/CL/RE), le marqueur du rectorat gagne toujours directement
+          // quand il existe — mais un candidat BA non confirmé a besoin de la règle "+1 an"
+          // propre à la BA (voir resolveDateProchainePromotion, promotionState.ts) : sans elle, un
+          // "non_promu" affichait ici la date accélérée hypothétique au lieu de sa vraie date (1
+          // an trop tôt) — bug trouvé en testant une saisie manuelle "non promu(e) à la BA", mais
+          // qui touchait tout autant une fiche rectorat réelle non confirmée.
+          dateProchainePromotion: resolveDateProchainePromotion(
+            baStatus,
+            snap.dateProchainePromotionRectorat,
+            promotion.dateProchainePromotion ? new Date(promotion.dateProchainePromotion) : null,
+          ),
         };
       } catch {
         // Échelon introuvable dans la grille (donnée aberrante) — on garde l'affichage d'origine

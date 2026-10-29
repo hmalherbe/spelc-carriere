@@ -192,6 +192,10 @@ export interface SaisieManuelleInput {
   dateAccesEchelon: string;
   ancienneteADeduire?: string | null;
   ancienneteAReporter?: string | null;
+  /** Décision du gestionnaire sur la BA — seul moyen de renseigner un vrai baStatus ("promu"/
+   * "non_promu") pour une fiche sans aucune donnée rectorat ; voir routes/saisiesManuelles.ts. Ne
+   * doit être envoyé que pour un échelon 6 ou 8. */
+  baDecision?: "promu" | "non_promu" | null;
 }
 
 export interface SaisieManuelleResult {
@@ -199,6 +203,7 @@ export interface SaisieManuelleResult {
   warning: string | null;
   baEligible: boolean | null;
   baEchelonDepart: 6 | 8 | null;
+  baStatus: "promu" | "non_promu" | null;
   dateProchainePromotion: string | null;
   gainSalaireNet: number | null;
 }

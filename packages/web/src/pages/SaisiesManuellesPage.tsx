@@ -1,8 +1,20 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { GRADE_MAPPINGS, GRILLES, type GrilleCode } from "@spelc/domain";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { GRADE_MAPPINGS, GRILLES, joursComptablesEntre, isEligibleBonificationAnciennete, type GrilleCode } from "@spelc/domain";
 import { api, ApiError, type SaisieManuelleInput, type SaisieManuelleResult, type TeacherListItem } from "../api.js";
 import { useCampagneSelection, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom, formatEchelonLabel } from "../format.js";
+
+/** Aperçu client de l'éligibilité BA, pour savoir s'il faut poser la question "promu/non promu"
+ * AVANT de soumettre le formulaire — même calcul que le serveur (routes/saisiesManuelles.ts :
+ * ancienneté dans l'échelon approximée depuis la date d'accès jusqu'à aujourd'hui, calendrier
+ * bancaire 360 jours), juste évalué ici pour piloter l'affichage. */
+function previewBaEligibilite(echelonActuel: string, dateAccesEchelon: string): { baEchelonDepart: 6 | 8 | null; baEligible: boolean } {
+  const n = Number(echelonActuel);
+  const baEchelonDepart: 6 | 8 | null = n === 6 ? 6 : n === 8 ? 8 : null;
+  if (baEchelonDepart === null || !dateAccesEchelon) return { baEchelonDepart, baEligible: false };
+  const ancienneteEchelon = joursComptablesEntre(dateAccesEchelon, new Date().toISOString().slice(0, 10)) / 360;
+  return { baEchelonDepart, baEligible: isEligibleBonificationAnciennete(baEchelonDepart, ancienneteEchelon) };
+}
 
 /** Échelon options pour un grade donné — zero-paddées à 2 chiffres pour les échelons numériques,
  * même convention que partout ailleurs (routes/imports.ts, DashboardPage.tsx), inchangées pour les
@@ -23,6 +35,7 @@ const EMPTY_FORM = {
   dateAccesEchelon: "",
   ancienneteADeduire: "",
   ancienneteAReporter: "",
+  baDecision: "" as "" | "promu" | "non_promu",
 };
 
 function euros(n: number): string {
@@ -64,6 +77,15 @@ export function SaisiesManuellesPage() {
   }, [campagneId]);
 
   const options = echelonOptions(form.grade);
+  const baPreview = useMemo(() => previewBaEligibilite(form.echelonActuel, form.dateAccesEchelon), [form.echelonActuel, form.dateAccesEchelon]);
+
+  // Le champ "Promu(e) à la BA ?" disparaît dès que l'aperçu dit non-éligible (échelon/date
+  // changés après coup) — sans ce reset, un choix fait pendant une fenêtre d'éligibilité
+  // resterait soumis en silence même une fois le champ masqué.
+  useEffect(() => {
+    if (!baPreview.baEligible && form.baDecision !== "") setForm((f) => ({ ...f, baDecision: "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baPreview.baEligible]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -73,6 +95,10 @@ export function SaisiesManuellesPage() {
 
     if (!form.nom.trim() || !form.prenom.trim() || !form.echelonActuel || form.isAdherent === "" || !form.dateAccesEchelon) {
       setError("Nom, prénom, échelon, adhérent/non-adhérent et date de l'échelon actuel sont obligatoires.");
+      return;
+    }
+    if (baPreview.baEligible && form.baDecision === "") {
+      setError("Cet enseignant est éligible à la BA : merci d'indiquer s'il/elle est promu(e) ou non promu(e).");
       return;
     }
 
@@ -86,6 +112,7 @@ export function SaisiesManuellesPage() {
       dateAccesEchelon: form.dateAccesEchelon,
       ancienneteADeduire: form.ancienneteADeduire.trim() || null,
       ancienneteAReporter: form.ancienneteAReporter.trim() || null,
+      baDecision: form.baDecision || null,
     };
 
     setSubmitting(true);
@@ -184,6 +211,28 @@ export function SaisiesManuellesPage() {
         </label>
         <p className="hint">Format "AAaMMmJJj" (années/mois/jours), ex. "01a06m00j" pour 1 an et 6 mois.</p>
 
+        {baPreview.baEligible && (
+          <label>
+            Promu(e) à la BA ? *
+            <select
+              required
+              value={form.baDecision}
+              onChange={(e) => setForm((f) => ({ ...f, baDecision: e.target.value as "promu" | "non_promu" }))}
+            >
+              <option value="" disabled>
+                —
+              </option>
+              <option value="promu">Promu(e) à la BA</option>
+              <option value="non_promu">Non promu(e) à la BA</option>
+            </select>
+            <span className="hint">
+              Éligible à la BA (échelon {baPreview.baEchelonDepart}, dans la fenêtre d'ancienneté) : sans cette réponse,
+              l'éligibilité BA resterait vide dans les onglets Enseignants et Mailing, exactement comme pour un enseignant
+              sans marqueur "BA." dans le fichier rectorat.
+            </span>
+          </label>
+        )}
+
         <button type="submit" disabled={submitting || !campagneId}>
           {submitting ? "Calcul..." : "Calculer et enregistrer"}
         </button>
@@ -200,9 +249,13 @@ export function SaisiesManuellesPage() {
             Éligibilité à la BA :{" "}
             {result.baEchelonDepart == null
               ? "non applicable (échelon hors fenêtre BA — 6 ou 8 uniquement)"
-              : result.baEligible
-                ? `éligible (échelon de départ ${result.baEchelonDepart})`
-                : `non éligible en l'état (hors fenêtre d'ancienneté pour l'échelon ${result.baEchelonDepart})`}
+              : result.baStatus === "promu"
+                ? `promu(e) à la BA (échelon de départ ${result.baEchelonDepart})`
+                : result.baStatus === "non_promu"
+                  ? `non promu(e) à la BA (échelon de départ ${result.baEchelonDepart})`
+                  : result.baEligible
+                    ? `éligible (échelon de départ ${result.baEchelonDepart})`
+                    : `non éligible en l'état (hors fenêtre d'ancienneté pour l'échelon ${result.baEchelonDepart})`}
           </p>
         </div>
       )}
@@ -233,7 +286,17 @@ export function SaisiesManuellesPage() {
                 <td>{formatEchelonLabel(t.echelonActuel)}</td>
                 <td>{formatDate(t.computedState?.dateProchainePromotion ?? null)}</td>
                 <td>{t.computedState ? euros(t.computedState.gainSalaireNet) : "—"}</td>
-                <td>{t.baEchelonDepart == null ? "—" : t.baEligible ? "Éligible" : "Non éligible"}</td>
+                <td>
+                  {t.baEchelonDepart == null
+                    ? "—"
+                    : t.baStatus === "promu"
+                      ? "Promu BA"
+                      : t.baStatus === "non_promu"
+                        ? "Non promu BA"
+                        : t.baEligible
+                          ? "Éligible (décision non saisie)"
+                          : "Non éligible"}
+                </td>
               </tr>
             ))}
           </tbody>
