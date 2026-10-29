@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { coefficientAppliqueFraction, computeReclassementConcours, computeReclassementConcoursDepuisHcExc } from "../src/calculations/reclassementConcours.js";
+import {
+  coefficientAppliqueFraction,
+  computeReclassementConcours,
+  computeReclassementConcoursDepuisHcExc,
+  joursRetenusPourService,
+} from "../src/calculations/reclassementConcours.js";
 
 describe("coefficientAppliqueFraction (coefficient de reclassement affiché sous forme irréductible)", () => {
   it("reduces a 'coefficient' pondération to its irreducible fraction (115/175 -> 23/35)", () => {
@@ -17,6 +22,29 @@ describe("coefficientAppliqueFraction (coefficient de reclassement affiché sous
 
   it("throws for an unknown nature de service", () => {
     expect(() => coefficientAppliqueFraction("Pas une vraie nature", "AGR")).toThrow();
+  });
+});
+
+describe("joursRetenusPourService (le détail par ligne que computeReclassementConcours additionne)", () => {
+  it("applies the quotité clamp and reflects it in the jours retenus for a quotité below mi-temps", () => {
+    // ratio 100/175 ; quotité 0.3 (< 0.5, donc PAS clampée à 1) : round(round(1000*0.3)*100/175) = round(171.4...) = 171
+    const avecQuotitePartielle = joursRetenusPourService({ nature: "Instituteur", joursBruts: 1000, quotite: 0.3 }, "AGR");
+    expect(avecQuotitePartielle).toBe(171);
+
+    // Sans quotité (défaut 1) : round(round(1000*1)*100/175) = round(571.43) = 571 — bien différent de 171.
+    const sansQuotite = joursRetenusPourService({ nature: "Instituteur", joursBruts: 1000 }, "AGR");
+    expect(sansQuotite).toBe(571);
+    expect(avecQuotitePartielle).not.toBe(sansQuotite);
+  });
+
+  it("sums to exactly the same total computeReclassementConcours reports (single source of truth)", () => {
+    const services = [
+      { nature: "AECE", joursBruts: 1000, quotite: 0.4 },
+      { nature: "Activités professionnelles", joursBruts: 900 },
+    ];
+    const sommeManuelle = services.reduce((acc, s) => acc + joursRetenusPourService(s, "AGR"), 0);
+    const result = computeReclassementConcours({ grilleCible: "AGR", services });
+    expect(Math.floor(sommeManuelle)).toBe(result.totalJoursRetenus);
   });
 });
 
@@ -120,6 +148,8 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
     expect(result.nouvelIndice).toBe(664);
     expect(result.gainSalaireBrut).toBeGreaterThan(0);
     expect(result.gainSalaireNet).toBeGreaterThan(0);
+    // coefficient 135 (HC_PROFS) / 175 (AGR) réduit -> 27/35.
+    expect(result.coefficientFraction).toEqual({ numerateur: 27, denominateur: 35 });
   });
 
   it("never lands on a lower indice than the one already held ('conservation de l'indice avant reclassement' — missing from the previous standalone simulator)", () => {

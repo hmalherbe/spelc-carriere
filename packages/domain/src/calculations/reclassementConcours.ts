@@ -73,6 +73,24 @@ export function coefficientAppliqueFraction(nature: string, grilleCible: "AGR" |
     : simplifierFraction(situation.ponderation.coefficient, coefficientCible);
 }
 
+/** Jours réellement retenus pour UN service (après clamp de quotité, coefficient/pondération,
+ * reliquat et bonus "Contractuel alternant") — exporté pour que l'interface puisse afficher la
+ * contribution exacte de chaque ligne au total, pas seulement ses jours bruts avant pondération.
+ * Seule source pour ce calcul : computeReclassementConcours ci-dessous additionne exactement cette
+ * valeur, jamais une réimplémentation séparée. */
+export function joursRetenusPourService(service: ServiceAnterieur, grilleCible: "AGR" | "PROFS"): number {
+  trouverSituation(service.nature); // valide la nature avant de calculer quoi que ce soit
+  const { numerateur, denominateur } = coefficientAppliqueFraction(service.nature, grilleCible);
+  const ratio = numerateur / denominateur;
+  const quotite = service.quotite ?? 1;
+  // The spreadsheet's own clamp: temps partiel >= mi-temps compte comme temps complet.
+  const multiplicateurQuotite = quotite >= 0.5 ? 1 : quotite;
+  // "Contractuel alternant" gets a flat 2-month (60 banking-day) bonus — read directly from the
+  // spreadsheet's own S column formula, not documented anywhere else we could find.
+  const bonusAlternant = service.nature === "Contractuel alternant" ? 60 : 0;
+  return Math.round(Math.round(service.joursBruts * multiplicateurQuotite) * ratio) + (service.reliquatJours ?? 0) + bonusAlternant;
+}
+
 /** Reclt concours & reprise d'ancienneté — classes a set of prior-service periods, weighted and
  * converted to the target grille's own coefficient caractéristique, into a landing échelon + report
  * d'ancienneté in `grilleCible`. */
@@ -83,17 +101,7 @@ export function computeReclassementConcours(input: ReclassementConcoursInput): R
 
   let total = 0;
   for (const service of input.services) {
-    trouverSituation(service.nature); // valide la nature avant de calculer quoi que ce soit
-    const { numerateur, denominateur } = coefficientAppliqueFraction(service.nature, input.grilleCible);
-    const ratio = numerateur / denominateur;
-    const quotite = service.quotite ?? 1;
-    // The spreadsheet's own clamp: temps partiel >= mi-temps compte comme temps complet.
-    const multiplicateurQuotite = quotite >= 0.5 ? 1 : quotite;
-    // "Contractuel alternant" gets a flat 2-month (60 banking-day) bonus — read directly from the
-    // spreadsheet's own S column formula, not documented anywhere else we could find.
-    const bonusAlternant = service.nature === "Contractuel alternant" ? 60 : 0;
-    const retenu = Math.round(Math.round(service.joursBruts * multiplicateurQuotite) * ratio) + (service.reliquatJours ?? 0) + bonusAlternant;
-    total += retenu;
+    total += joursRetenusPourService(service, input.grilleCible);
   }
 
   const totalJoursRetenus = Math.floor(total);
@@ -131,6 +139,9 @@ export interface ReclassementConcoursDepuisHcExcResult {
   nouvelIndice: number;
   gainSalaireBrut: number;
   gainSalaireNet: number;
+  /** coefficientOrigine/coefficientCible réduit à sa forme irréductible (ex. 135/175 -> 27/35) —
+   * le "coefficient de reclassement" appliqué pour convertir `totalVirtuelCN` en `totalReconstitueJours`. */
+  coefficientFraction: { numerateur: number; denominateur: number };
 }
 
 /**
@@ -222,5 +233,6 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
     nouvelIndice,
     gainSalaireBrut: gainSalaireBrut(ancienIndice, nouvelIndice, input.valeurDuPoint),
     gainSalaireNet: gainSalaireNet(ancienIndice, nouvelIndice, input.valeurDuPoint),
+    coefficientFraction: simplifierFraction(coefficientOrigine, coefficientCible),
   };
 }

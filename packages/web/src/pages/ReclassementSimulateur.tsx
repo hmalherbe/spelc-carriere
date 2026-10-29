@@ -6,6 +6,7 @@ import {
   computeReclassementConcoursDepuisHcExc,
   computeReclassementHcExc,
   joursComptablesEntre,
+  joursRetenusPourService,
   seuilEntreeEchelon,
   SITUATIONS_AVANT_RECLASSEMENT,
   type GrilleCode,
@@ -203,6 +204,27 @@ function joursBrutsDeLaLigne(r: ServiceRow): number {
   return base + periode;
 }
 
+/** Même construction qu'utilisée pour l'appel réel à computeReclassementConcours — partagée avec
+ * l'affichage "Jours retenus" par ligne pour que les deux ne puissent jamais diverger. */
+function construireServiceAnterieur(r: ServiceRow): ServiceAnterieur {
+  return {
+    nature: r.nature,
+    joursBruts: joursBrutsDeLaLigne(r),
+    quotite: r.quotite ? Number(r.quotite) : undefined,
+    reliquatJours: r.mode === "echelon" && r.reliquatSituation1 ? Number(r.reliquatSituation1) : undefined,
+  };
+}
+
+/** Jours réellement retenus pour cette ligne (après quotité, coefficient, reliquat et bonus
+ * éventuel) — "—" si la nature de service n'est pas (encore) reconnue. */
+function joursRetenusLabel(r: ServiceRow, grilleCible: "AGR" | "PROFS"): string {
+  try {
+    return `${joursRetenusPourService(construireServiceAnterieur(r), grilleCible)} j`;
+  } catch {
+    return "—";
+  }
+}
+
 interface Cas1Parametres {
   grilleCible: "AGR" | "PROFS";
   rows: Omit<ServiceRow, "id">[];
@@ -223,12 +245,7 @@ function Cas1() {
 
   function calculer() {
     try {
-      const services: ServiceAnterieur[] = rows.map((r) => ({
-        nature: r.nature,
-        joursBruts: joursBrutsDeLaLigne(r),
-        quotite: r.quotite ? Number(r.quotite) : undefined,
-        reliquatJours: r.mode === "echelon" && r.reliquatSituation1 ? Number(r.reliquatSituation1) : undefined,
-      }));
+      const services: ServiceAnterieur[] = rows.map(construireServiceAnterieur);
       setResult(computeReclassementConcours({ grilleCible, services }));
       setError(null);
     } catch (e) {
@@ -254,7 +271,10 @@ function Cas1() {
       <p className="hint">
         Chaque service antérieur est pondéré soit par un facteur direct, soit par le ratio entre le coefficient
         caractéristique de son corps d'origine et celui du corps cible, puis classé dans la grille cible selon le
-        total retenu.
+        total retenu. La colonne "Jours bruts" est la durée saisie, avant pondération ; "Jours retenus" est ce qui
+        est effectivement ajouté au total, après coefficient et quotité — la quotité n'a d'effet que si elle est
+        strictement inférieure à un mi-temps (0,5), un temps partiel égal ou supérieur comptant comme un temps
+        complet pour l'ancienneté.
       </p>
       <div className="inline-form">
         <label>
@@ -285,6 +305,7 @@ function Cas1() {
             <th>Détail de la situation</th>
             <th>Quotité</th>
             <th>Jours bruts</th>
+            <th>Jours retenus</th>
             <th></th>
           </tr>
         </thead>
@@ -374,6 +395,7 @@ function Cas1() {
                 <input type="number" min={0} max={1} step={0.1} placeholder="1" value={r.quotite} onChange={(e) => updateRow(r.id, { quotite: e.target.value })} />
               </td>
               <td>{joursBrutsDeLaLigne(r)} j</td>
+              <td>{joursRetenusLabel(r, grilleCible)}</td>
               <td>
                 <button type="button" className="secondary" onClick={() => setRows((prev) => prev.filter((x) => x.id !== r.id))} disabled={rows.length === 1}>
                   Retirer
@@ -607,6 +629,9 @@ function Cas2() {
           )}
           <p>Base théorique d'équivalence : {result.baseTheoriqueJours} jours</p>
           <p>Ancienneté dans l'échelon : {result.joursAcquisDansEchelon} jours</p>
+          <p>
+            Coefficient de reclassement appliqué : {result.coefficientFraction.numerateur}/{result.coefficientFraction.denominateur}
+          </p>
           <p>Total converti (coefficient du corps cible) : {result.totalReconstitueJours} jours</p>
           <p className="gain-positive">
             Nouveau grade : {result.nouvelleGrille === "AGR" ? "Agrégé" : "Certifié / PE / PEPS / PLP"} — échelon {result.nouvelEchelon}
