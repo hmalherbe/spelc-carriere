@@ -477,7 +477,6 @@ const GRILLES_ORIGINE_CAS2: { code: GrilleCode; label: string }[] = [
   { code: "HC_AGR", label: "Agrégé — Hors Classe" },
   { code: "HC_PROFS", label: "Certifié / PEPS / PLP / Prof. des écoles — Hors Classe" },
   { code: "HC_PEGC", label: "PEGC — Hors Classe" },
-  { code: "EXC_AGR", label: "Agrégé — Classe exceptionnelle" },
   { code: "EXC_PROFS", label: "Certifié / PEPS / PLP / Prof. des écoles — Classe exceptionnelle" },
   { code: "EXC_PEGC", label: "PEGC — Classe exceptionnelle" },
 ];
