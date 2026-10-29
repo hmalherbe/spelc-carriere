@@ -227,6 +227,7 @@ function joursRetenusLabel(r: ServiceRow, grilleCible: "AGR" | "PROFS"): string 
 
 interface Cas1Parametres {
   grilleCible: "AGR" | "PROFS";
+  dateEffet: string;
   rows: Omit<ServiceRow, "id">[];
 }
 
@@ -234,6 +235,9 @@ function Cas1() {
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
   const [grilleCible, setGrilleCible] = useState<"AGR" | "PROFS">("AGR");
+  // Date d'effet du reclassement — purement informative (ne modifie aucun calcul, comme dans
+  // l'outil d'origine) : la date à laquelle le reclassement décidé ici prend effet.
+  const [dateEffet, setDateEffet] = useState("");
   const [rows, setRows] = useState<ServiceRow[]>([nouvelleServiceRow()]);
   const [result, setResult] = useState<ReturnType<typeof computeReclassementConcours> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +265,7 @@ function Cas1() {
     setNom(saved.nom);
     setPrenom(saved.prenom);
     setGrilleCible(params.grilleCible);
+    setDateEffet(params.dateEffet ?? "");
     setRows(params.rows.map((r) => nouvelleServiceRow(r)));
     setResult(saved.resultat as ReturnType<typeof computeReclassementConcours>);
     setError(null);
@@ -291,6 +296,10 @@ function Cas1() {
             <option value="AGR">Agrégé (coefficient 175)</option>
             <option value="PROFS">Certifié / PE / PEPS / PLP / MD1 / MD2 (coefficient 135)</option>
           </select>
+        </label>
+        <label>
+          Date d'effet du reclassement
+          <input type="date" min="1960-01-01" max="2099-12-31" value={dateEffet} onChange={(e) => setDateEffet(e.target.value)} />
         </label>
       </div>
 
@@ -423,6 +432,11 @@ function Cas1() {
               <strong>Agent :</strong> {nom} {prenom}
             </p>
           )}
+          {dateEffet && (
+            <p>
+              Date d'effet du reclassement : <strong>{new Date(dateEffet).toLocaleDateString("fr-FR")}</strong>
+            </p>
+          )}
           <p>
             Total de l'ancienneté retenue : <strong>{result.totalJoursRetenus} jours</strong>
           </p>
@@ -439,7 +453,7 @@ function Cas1() {
                 gestion.enregistrer(
                   nom,
                   prenom,
-                  { grilleCible, rows: rows.map(({ id: _id, ...rest }) => rest) } satisfies Cas1Parametres,
+                  { grilleCible, dateEffet, rows: rows.map(({ id: _id, ...rest }) => rest) } satisfies Cas1Parametres,
                   result,
                 )
               }
@@ -576,7 +590,7 @@ function Cas2() {
           <input type="date" min="1960-01-01" max="2099-12-31" value={dateEchelon} onChange={(e) => setDateEchelon(e.target.value)} />
         </label>
         <label>
-          Date du reclassement
+          Date d'effet du reclassement
           <input type="date" min="1960-01-01" max="2099-12-31" value={dateReclassement} onChange={(e) => setDateReclassement(e.target.value)} />
         </label>
         <label>
@@ -625,6 +639,11 @@ function Cas2() {
           {(nom || prenom) && (
             <p>
               <strong>Agent :</strong> {nom} {prenom}
+            </p>
+          )}
+          {dateReclassement && (
+            <p>
+              Date d'effet du reclassement : <strong>{new Date(dateReclassement).toLocaleDateString("fr-FR")}</strong>
             </p>
           )}
           <p>Base théorique d'équivalence : {result.baseTheoriqueJours} jours</p>
@@ -792,7 +811,7 @@ function Cas3() {
           <input type="date" min="1960-01-01" max="2099-12-31" value={dateDernierChangement} onChange={(e) => setDateDernierChangement(e.target.value)} />
         </label>
         <label>
-          Date de référence de la campagne (rentrée)
+          Date d'effet du reclassement (rentrée de la campagne)
           <input type="date" min="1960-01-01" max="2099-12-31" value={dateReference} onChange={(e) => setDateReference(e.target.value)} />
         </label>
       </div>
@@ -811,6 +830,11 @@ function Cas3() {
           {(nom || prenom) && (
             <p>
               <strong>Agent :</strong> {nom} {prenom}
+            </p>
+          )}
+          {dateReference && (
+            <p>
+              Date d'effet du reclassement : <strong>{new Date(dateReference).toLocaleDateString("fr-FR")}</strong>
             </p>
           )}
           <p className="gain-positive">
