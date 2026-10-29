@@ -179,22 +179,22 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
     expect(result.gainSalaireNet).toBe(0);
   });
 
-  it("only adds a majoration when it's actually applicable to the (processus, échelon) pair, ignoring one that isn't", () => {
-    // Échelon 1 HC never qualifies for any majoration (all require échelon >= 5/7) — passing one
-    // anyway must have no effect, rather than being silently applied where it's not legally due.
+  it("only adds a majoration when it's actually applicable to the (processus, échelon) pair, ignoring dates that aren't", () => {
+    // Échelon 1 HC never qualifies for any majoration (all require échelon >= 5/7) — the CN11 dates
+    // below would otherwise produce a large majoration, but must have no effect here.
     const withIrrelevantMajoration = computeReclassementConcoursDepuisHcExc({
       grilleOrigine: "HC_PROFS",
       echelonActuel: 1,
       dateEchelon: "2024-09-01",
       dateReclassement: "2025-09-01",
-      majorations: { cn11Jours: 999, hc6Jours: 999 },
+      majorations: { dateAccesEchelon11ClasseNormale: "2020-09-01", dateAccesHorsClasse: "2024-09-01" },
     });
     expect(withIrrelevantMajoration.totalReconstitueJours).toBe(4304);
   });
 
-  it("applies the cn11 majoration once the échelon actually qualifies for it", () => {
+  it("computes the cn11 majoration from the two access dates once the échelon qualifies for it, with no minoration when bi-admissible (the default)", () => {
     // base théorique (échelon 11 AGR, HC échelon 5) = 9360 + 900 = 10260j, 0j acquis dans l'échelon
-    // (mêmes dates) -> floor(10260*135/175) = 7914 sans majoration, floor(10360*135/175) = 7992 avec.
+    // (mêmes dates) -> floor(10260*135/175) = 7914 sans majoration.
     const base = computeReclassementConcoursDepuisHcExc({
       grilleOrigine: "HC_PROFS",
       echelonActuel: 5,
@@ -202,14 +202,74 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
       dateReclassement: "2026-09-01",
     });
     expect(base.totalReconstitueJours).toBe(7914);
+    // Durée CN11 (2026-01-01 -> 2026-04-11) = 100j comptables ; pas bi-admissible précisé -> défaut
+    // "bi-admissible" (pas de minoration) -> +100j -> floor(10360*135/175) = 7992.
     const withMajoration = computeReclassementConcoursDepuisHcExc({
       grilleOrigine: "HC_PROFS",
       echelonActuel: 5,
       dateEchelon: "2026-09-01",
       dateReclassement: "2026-09-01",
-      majorations: { cn11Jours: 100 },
+      majorations: { dateAccesEchelon11ClasseNormale: "2026-01-01", dateAccesHorsClasse: "2026-04-11" },
     });
     expect(withMajoration.totalReconstitueJours).toBe(7992);
+  });
+
+  it("reduces (minore) the cn11 majoration by up to 900j when the agent is explicitly not bi-admissible à l'agrégation", () => {
+    // Même durée CN11 que le test précédent (100j), mais en-deçà du plafond de minoration de 900j
+    // -> la minoration (min(900,100)=100) annule entièrement la majoration : +0j -> floor(10260*135/175) = 7914, comme sans majoration.
+    const nonBiAdmissible = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 5,
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+      majorations: { dateAccesEchelon11ClasseNormale: "2026-01-01", dateAccesHorsClasse: "2026-04-11", biAdmissibleAgregation: false },
+    });
+    expect(nonBiAdmissible.totalReconstitueJours).toBe(7914);
+
+    // Durée CN11 (2023-09-01 -> 2026-06-11) = 1000j (> plafond 900j) : minoration plafonnée à 900j
+    // -> reste 100j, même résultat que le cas bi-admissible avec 100j ci-dessus.
+    const dureeLongueNonBiAdmissible = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 5,
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+      majorations: { dateAccesEchelon11ClasseNormale: "2023-09-01", dateAccesHorsClasse: "2026-06-11", biAdmissibleAgregation: false },
+    });
+    expect(dureeLongueNonBiAdmissible.totalReconstitueJours).toBe(7992);
+  });
+
+  it("computes the hc6 majoration (HC only, minus 3 years) and the exc4 majoration (minus 3 years, floored at 0) from their own access dates", () => {
+    // HC6 : échelon 7 HC, durée 2023-09-01 -> 2026-09-01 = 1080j (3 ans) ; moins 3 ans (processus HC) = 0j -> aucun effet.
+    const hc6SansEffet = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 7,
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+      majorations: { dateAccesEchelon6HorsClasse: "2023-09-01", dateAccesEchelon7HorsClasse: "2026-09-01" },
+    });
+    const hc6BaseSansMajoration = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 7,
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+    });
+    expect(hc6SansEffet.totalReconstitueJours).toBe(hc6BaseSansMajoration.totalReconstitueJours);
+
+    // EXC4 : échelon 5 EXC, durée accès-échelon4 -> date de reclassement = 1180j ; moins 1080j (3 ans) = 100j.
+    const exc4 = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "EXC_PROFS",
+      echelonActuel: 5,
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+      majorations: { dateAccesEchelon4ClasseExceptionnelle: "2023-05-25" },
+    });
+    const exc4Base = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "EXC_PROFS",
+      echelonActuel: 5,
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+    });
+    expect(exc4.totalReconstitueJours).toBeGreaterThan(exc4Base.totalReconstitueJours);
   });
 
   it("throws for an échelon outside the union's own supported range (1-7 HC, 1-5 EXC)", () => {

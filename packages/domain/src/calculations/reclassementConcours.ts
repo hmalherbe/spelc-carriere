@@ -117,11 +117,31 @@ export interface ReclassementConcoursDepuisHcExcInput {
   dateEchelon: string;
   /** ISO — date du reclassement (jour de la nomination issue du concours). */
   dateReclassement: string;
-  /** Majorations d'ancienneté (décret 2022-708), in banking days — only the ones applicable to
-   * `grilleOrigine`/`echelonActuel` are added; see the spreadsheet's own conditional display for
-   * which combination needs which. Passing an inapplicable one is harmless (it's simply not added
-   * — see the loop below). */
-  majorations?: { cn11Jours?: number; hc6Jours?: number; exc4Jours?: number };
+  /**
+   * Majorations d'ancienneté (décret 2022-708) — CALCULÉES à partir des dates d'accès réelles, pas
+   * saisies à la main (porté depuis Calculs!B47=SUM(C47:G47) du classeur : la formule C47 n'est pas
+   * reproduite ici, son équivalent est déjà dans `baseTheoriqueJours` ci-dessous ; seules les 3
+   * composantes qui dépendent de dates propres à l'agent — D47+E47 pour le 11e échelon CN, F47 pour
+   * le 6e échelon HC, G47 pour le 4e échelon classe exceptionnelle — le sont ici). Seules celles
+   * applicables à `grilleOrigine`/`echelonActuel` comptent, une date non fournie vaut 0 — fournir
+   * une date non applicable est sans effet.
+   */
+  majorations?: {
+    /** 11e échelon classe normale — durée entre `dateAccesEchelon11ClasseNormale` et
+     * `dateAccesHorsClasse`, réduite (minorée) d'au plus 900 jours (2a 6m) si l'agent n'est PAS
+     * bi-admissible à l'agrégation (`biAdmissibleAgregation === false`) — défaut `true` (pas de
+     * minoration) tant que la question n'a pas été répondue explicitement. */
+    dateAccesEchelon11ClasseNormale?: string;
+    dateAccesHorsClasse?: string;
+    biAdmissibleAgregation?: boolean;
+    /** 6e échelon hors classe — durée entre les deux dates, moins 3 ans (1080j) UNIQUEMENT pour un
+     * `processus` HC (pas pour EXC, fidèle à la formule F47). */
+    dateAccesEchelon6HorsClasse?: string;
+    dateAccesEchelon7HorsClasse?: string;
+    /** 4e échelon classe exceptionnelle — durée entre la date d'accès et `dateReclassement`, moins
+     * 3 ans (1080j), plancher à 0. */
+    dateAccesEchelon4ClasseExceptionnelle?: string;
+  };
   /** Defaults to "AGR" — the only target the union's own tool currently reclasses into from HC/EXC via concours. */
   grilleCible?: "AGR" | "PROFS";
   grilles?: Record<GrilleCode, EchelonRow[]>;
@@ -131,6 +151,9 @@ export interface ReclassementConcoursDepuisHcExcInput {
 export interface ReclassementConcoursDepuisHcExcResult {
   baseTheoriqueJours: number;
   joursAcquisDansEchelon: number;
+  /** Somme des majorations CN11/HC6/EXC4 réellement appliquées (Calculs!B47, hors la composante
+   * C47 déjà intégrée à `baseTheoriqueJours`) — 0 si aucune n'est applicable à l'échelon de départ. */
+  majorationsJours: number;
   totalReconstitueJours: number;
   nouvelleGrille: "AGR" | "PROFS";
   nouvelEchelon: number;
@@ -192,6 +215,35 @@ function baseTheoriqueJours(
   throw new Error(`Échelon ${processus} ${echelonActuel} non pris en charge par le reclassement concours HC/EXC`);
 }
 
+/** Majoration 11e échelon classe normale (Calculs!D47+E47) : durée entre les deux dates d'accès,
+ * minorée d'au plus 900 jours (2a 6m) si l'agent n'est pas bi-admissible à l'agrégation. 0 si une
+ * des deux dates manque. */
+function majorationCN11(majorations: ReclassementConcoursDepuisHcExcInput["majorations"]): number {
+  const { dateAccesEchelon11ClasseNormale, dateAccesHorsClasse, biAdmissibleAgregation = true } = majorations ?? {};
+  if (!dateAccesEchelon11ClasseNormale || !dateAccesHorsClasse) return 0;
+  const duree = Math.max(0, joursComptablesEntre(dateAccesEchelon11ClasseNormale, dateAccesHorsClasse));
+  const minoration = biAdmissibleAgregation ? 0 : Math.min(900, duree);
+  return duree - minoration;
+}
+
+/** Majoration 6e échelon hors classe (Calculs!F47) : durée entre les deux dates d'accès, moins 3
+ * ans (1080j) uniquement pour un `processus` HC (jamais pour EXC — fidèle à F47). 0 si la date
+ * d'accès au 7e échelon manque. */
+function majorationHC6(majorations: ReclassementConcoursDepuisHcExcInput["majorations"], processus: "HC" | "EXC"): number {
+  const { dateAccesEchelon6HorsClasse, dateAccesEchelon7HorsClasse } = majorations ?? {};
+  if (!dateAccesEchelon7HorsClasse || !dateAccesEchelon6HorsClasse) return 0;
+  const duree = joursComptablesEntre(dateAccesEchelon6HorsClasse, dateAccesEchelon7HorsClasse);
+  return duree - (processus === "HC" ? 1080 : 0);
+}
+
+/** Majoration 4e échelon classe exceptionnelle (Calculs!G47) : durée entre la date d'accès et la
+ * date du reclassement, moins 3 ans (1080j), plancher à 0. 0 si la date d'accès manque. */
+function majorationEXC4(majorations: ReclassementConcoursDepuisHcExcInput["majorations"], dateReclassement: string): number {
+  const { dateAccesEchelon4ClasseExceptionnelle } = majorations ?? {};
+  if (!dateAccesEchelon4ClasseExceptionnelle) return 0;
+  return Math.max(0, joursComptablesEntre(dateAccesEchelon4ClasseExceptionnelle, dateReclassement) - 1080);
+}
+
 /** Reclt concours HC et EXC — reconstitution virtuelle dans la classe normale, pour un agent
  * hors-classe/classe-exceptionnelle reçu à un concours d'un corps supérieur. */
 export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcoursDepuisHcExcInput): ReclassementConcoursDepuisHcExcResult {
@@ -206,9 +258,12 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
   const base = baseTheoriqueJours(processus, input.echelonActuel, grilleCible, input.grilles);
   const joursAcquisDansEchelon = joursComptablesEntre(input.dateEchelon, input.dateReclassement);
 
-  const majCN11 = (processus === "HC" && input.echelonActuel >= 5) || (processus === "EXC" && input.echelonActuel >= 3) ? input.majorations?.cn11Jours ?? 0 : 0;
-  const majHC6 = (processus === "HC" && input.echelonActuel >= 7) || (processus === "EXC" && input.echelonActuel >= 4) ? input.majorations?.hc6Jours ?? 0 : 0;
-  const majEXC4 = processus === "EXC" && input.echelonActuel >= 5 ? input.majorations?.exc4Jours ?? 0 : 0;
+  const majCN11 = (processus === "HC" && input.echelonActuel >= 5) || (processus === "EXC" && input.echelonActuel >= 3) ? majorationCN11(input.majorations) : 0;
+  const majHC6 =
+    (processus === "HC" && input.echelonActuel >= 7) || (processus === "EXC" && input.echelonActuel >= 4)
+      ? majorationHC6(input.majorations, processus)
+      : 0;
+  const majEXC4 = processus === "EXC" && input.echelonActuel >= 5 ? majorationEXC4(input.majorations, input.dateReclassement) : 0;
 
   const totalVirtuelCN = base + joursAcquisDansEchelon + majCN11 + majHC6 + majEXC4;
   const totalReconstitueJours = Math.floor(totalVirtuelCN * (coefficientOrigine / coefficientCible));
@@ -225,6 +280,7 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
   return {
     baseTheoriqueJours: base,
     joursAcquisDansEchelon,
+    majorationsJours: majCN11 + majHC6 + majEXC4,
     totalReconstitueJours,
     nouvelleGrille: grilleCible,
     nouvelEchelon,

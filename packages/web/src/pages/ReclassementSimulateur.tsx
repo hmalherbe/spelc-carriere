@@ -488,9 +488,12 @@ interface Cas2Parametres {
   dateEchelon: string;
   dateReclassement: string;
   grilleCible: "AGR" | "PROFS";
-  majCn11: string;
-  majHc6: string;
-  majExc4: string;
+  biAdmissible: boolean;
+  dateAccesEchelon11CN: string;
+  dateAccesHorsClasse: string;
+  dateAccesEchelon6HC: string;
+  dateAccesEchelon7HC: string;
+  dateAccesEchelon4EXC: string;
 }
 
 function Cas2() {
@@ -501,9 +504,14 @@ function Cas2() {
   const [dateEchelon, setDateEchelon] = useState("");
   const [dateReclassement, setDateReclassement] = useState("");
   const [grilleCible, setGrilleCible] = useState<"AGR" | "PROFS">("AGR");
-  const [majCn11, setMajCn11] = useState("");
-  const [majHc6, setMajHc6] = useState("");
-  const [majExc4, setMajExc4] = useState("");
+  // Majorations d'ancienneté (décret 2022-708) — calculées à partir de ces dates d'accès, plutôt
+  // que saisies directement en jours (voir Calculs!B47 du classeur).
+  const [biAdmissible, setBiAdmissible] = useState(true);
+  const [dateAccesEchelon11CN, setDateAccesEchelon11CN] = useState("");
+  const [dateAccesHorsClasse, setDateAccesHorsClasse] = useState("");
+  const [dateAccesEchelon6HC, setDateAccesEchelon6HC] = useState("");
+  const [dateAccesEchelon7HC, setDateAccesEchelon7HC] = useState("");
+  const [dateAccesEchelon4EXC, setDateAccesEchelon4EXC] = useState("");
   const [result, setResult] = useState<ReturnType<typeof computeReclassementConcoursDepuisHcExc> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const gestion = useReclassementGestion("CAS2");
@@ -524,9 +532,12 @@ function Cas2() {
           dateReclassement,
           grilleCible,
           majorations: {
-            cn11Jours: montreCn11 ? Number(majCn11) || 0 : 0,
-            hc6Jours: montreHc6 ? Number(majHc6) || 0 : 0,
-            exc4Jours: montreExc4 ? Number(majExc4) || 0 : 0,
+            biAdmissibleAgregation: biAdmissible,
+            dateAccesEchelon11ClasseNormale: montreCn11 ? dateAccesEchelon11CN : undefined,
+            dateAccesHorsClasse: montreCn11 ? dateAccesHorsClasse : undefined,
+            dateAccesEchelon6HorsClasse: montreHc6 ? dateAccesEchelon6HC : undefined,
+            dateAccesEchelon7HorsClasse: montreHc6 ? dateAccesEchelon7HC : undefined,
+            dateAccesEchelon4ClasseExceptionnelle: montreExc4 ? dateAccesEchelon4EXC : undefined,
           },
         }),
       );
@@ -548,9 +559,12 @@ function Cas2() {
     setDateEchelon(params.dateEchelon);
     setDateReclassement(params.dateReclassement);
     setGrilleCible(params.grilleCible);
-    setMajCn11(params.majCn11);
-    setMajHc6(params.majHc6);
-    setMajExc4(params.majExc4);
+    setBiAdmissible(params.biAdmissible ?? true);
+    setDateAccesEchelon11CN(params.dateAccesEchelon11CN ?? "");
+    setDateAccesHorsClasse(params.dateAccesHorsClasse ?? "");
+    setDateAccesEchelon6HC(params.dateAccesEchelon6HC ?? "");
+    setDateAccesEchelon7HC(params.dateAccesEchelon7HC ?? "");
+    setDateAccesEchelon4EXC(params.dateAccesEchelon4EXC ?? "");
     setResult(saved.resultat as ReturnType<typeof computeReclassementConcoursDepuisHcExc>);
     setError(null);
   }
@@ -560,7 +574,8 @@ function Cas2() {
       <p className="hint">
         Pour un agent hors-classe ou classe exceptionnelle reçu à un concours d'un corps supérieur : reconstitution
         virtuelle dans la classe normale du corps cible, à partir d'une base théorique d'équivalence propre à
-        l'échelon de départ, majorée le cas échéant (décret 2022-708), puis convertie au coefficient du corps cible.
+        l'échelon de départ, majorée le cas échéant (décret 2022-708) — calculée à partir des dates d'accès
+        saisies ci-dessous, pas saisie directement en jours — puis convertie au coefficient du corps cible.
       </p>
       <div className="inline-form">
         <label>
@@ -604,26 +619,43 @@ function Cas2() {
 
       <BoutonCharger recherche={gestion.recherche} rechercheError={gestion.rechercheError} onRechercher={charger} />
 
-      {(montreCn11 || montreHc6 || montreExc4) && (
+      {montreCn11 && (
         <div className="inline-form">
-          {montreCn11 && (
-            <label>
-              Majoration 11ᵉ échelon CN au-delà de 2a 6m (jours)
-              <input type="number" min={0} value={majCn11} onChange={(e) => setMajCn11(e.target.value)} />
-            </label>
-          )}
-          {montreHc6 && (
-            <label>
-              Majoration 6ᵉ échelon HC au-delà de 3 ans (jours)
-              <input type="number" min={0} value={majHc6} onChange={(e) => setMajHc6(e.target.value)} />
-            </label>
-          )}
-          {montreExc4 && (
-            <label>
-              Majoration 4ᵉ échelon EXC au-delà de 3 ans (jours)
-              <input type="number" min={0} value={majExc4} onChange={(e) => setMajExc4(e.target.value)} />
-            </label>
-          )}
+          <label>
+            Bi-admissibilité à l'agrégation ?
+            <select value={biAdmissible ? "Oui" : "Non"} onChange={(e) => setBiAdmissible(e.target.value === "Oui")}>
+              <option value="Oui">Oui</option>
+              <option value="Non">Non</option>
+            </select>
+          </label>
+          <label>
+            Date d'accès au 11ᵉ échelon de la classe normale
+            <input type="date" min="1960-01-01" max="2099-12-31" value={dateAccesEchelon11CN} onChange={(e) => setDateAccesEchelon11CN(e.target.value)} />
+          </label>
+          <label>
+            Date d'accès à la hors classe
+            <input type="date" min="1960-01-01" max="2099-12-31" value={dateAccesHorsClasse} onChange={(e) => setDateAccesHorsClasse(e.target.value)} />
+          </label>
+        </div>
+      )}
+      {montreHc6 && (
+        <div className="inline-form">
+          <label>
+            Date d'accès au 6ᵉ échelon de la hors classe
+            <input type="date" min="1960-01-01" max="2099-12-31" value={dateAccesEchelon6HC} onChange={(e) => setDateAccesEchelon6HC(e.target.value)} />
+          </label>
+          <label>
+            Date d'accès au 7ᵉ échelon de la hors classe
+            <input type="date" min="1960-01-01" max="2099-12-31" value={dateAccesEchelon7HC} onChange={(e) => setDateAccesEchelon7HC(e.target.value)} />
+          </label>
+        </div>
+      )}
+      {montreExc4 && (
+        <div className="inline-form">
+          <label>
+            Date d'accès à l'échelon 4 de la classe exceptionnelle
+            <input type="date" min="1960-01-01" max="2099-12-31" value={dateAccesEchelon4EXC} onChange={(e) => setDateAccesEchelon4EXC(e.target.value)} />
+          </label>
         </div>
       )}
 
@@ -648,6 +680,7 @@ function Cas2() {
           )}
           <p>Base théorique d'équivalence : {result.baseTheoriqueJours} jours</p>
           <p>Ancienneté dans l'échelon : {result.joursAcquisDansEchelon} jours</p>
+          <p>Majorations d'ancienneté calculées : {result.majorationsJours} jours</p>
           <p>
             Coefficient de reclassement appliqué : {result.coefficientFraction.numerateur}/{result.coefficientFraction.denominateur}
           </p>
@@ -674,7 +707,19 @@ function Cas2() {
                 gestion.enregistrer(
                   nom,
                   prenom,
-                  { grilleOrigine, echelonActuel, dateEchelon, dateReclassement, grilleCible, majCn11, majHc6, majExc4 } satisfies Cas2Parametres,
+                  {
+                    grilleOrigine,
+                    echelonActuel,
+                    dateEchelon,
+                    dateReclassement,
+                    grilleCible,
+                    biAdmissible,
+                    dateAccesEchelon11CN,
+                    dateAccesHorsClasse,
+                    dateAccesEchelon6HC,
+                    dateAccesEchelon7HC,
+                    dateAccesEchelon4EXC,
+                  } satisfies Cas2Parametres,
                   result,
                 )
               }
