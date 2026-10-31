@@ -6,6 +6,7 @@ import {
   findEchelonRow,
   gainSalaireBrut,
   gainSalaireNet,
+  rangEchelon,
   seuilEntreeEchelon,
   seuilFinEchelon,
   traitementBrutMensuel,
@@ -161,5 +162,29 @@ describe("seuilFinEchelon (cumulative days THROUGH an échelon, not the threshol
 
   it("throws for an échelon that doesn't exist (numerically) in the grille", () => {
     expect(() => seuilFinEchelon("AGR", 99)).toThrow();
+  });
+});
+
+describe("rangEchelon (1-based position in a grille's own échelon sequence, letter-coded or not)", () => {
+  it("returns a plain 1-based position for an all-numeric grille", () => {
+    expect(rangEchelon("HC_PROFS", 1)).toBe(1);
+    expect(rangEchelon("HC_PROFS", 7)).toBe(7);
+  });
+
+  it("keeps counting through a grille's lettered échelons (EXC_PROFS: 1..5 then 'A2'/'A3')", () => {
+    expect(rangEchelon("EXC_PROFS", 5)).toBe(5);
+    expect(rangEchelon("EXC_PROFS", "A2")).toBe(6);
+    expect(rangEchelon("EXC_PROFS", "A3")).toBe(7);
+  });
+
+  it("keeps counting through HC_AGR's lettered échelons ('A1'/'A2'/'A3' after the numeric 1-3)", () => {
+    expect(rangEchelon("HC_AGR", 3)).toBe(3);
+    expect(rangEchelon("HC_AGR", "A1")).toBe(4);
+    expect(rangEchelon("HC_AGR", "A3")).toBe(6);
+  });
+
+  it("throws for an échelon that doesn't exist in the grille", () => {
+    expect(() => rangEchelon("EXC_PROFS", "A4")).toThrow();
+    expect(() => rangEchelon("HC_PROFS", 14)).toThrow();
   });
 });

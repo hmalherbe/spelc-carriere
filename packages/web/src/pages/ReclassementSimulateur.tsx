@@ -5,10 +5,13 @@ import {
   computeReclassementConcours,
   computeReclassementConcoursDepuisHcExc,
   computeReclassementHcExc,
+  GRILLES,
   joursComptablesEntre,
   joursRetenusPourService,
+  rangEchelon,
   seuilEntreeEchelon,
   SITUATIONS_AVANT_RECLASSEMENT,
+  type EchelonCode,
   type GrilleCode,
   type ServiceAnterieur,
 } from "@spelc/domain";
@@ -481,6 +484,25 @@ const GRILLES_ORIGINE_CAS2: { code: GrilleCode; label: string }[] = [
   { code: "EXC_PEGC", label: "PEGC — Classe exceptionnelle" },
 ];
 
+/** Les échelons possibles dépendent entièrement de la grille d'origine (ex. HC_PROFS : 1 à 7 ;
+ * EXC_PROFS : 1 à 4 puis "HEA1"/"HEA2"/"HEA3" — les 3 derniers échelons de classe exceptionnelle,
+ * calculatoirement identiques entre eux, voir rangEchelon/baseTheoriqueJours côté domaine) — un
+ * simple champ numérique libre (ancien <input type="number">) laissait saisir n'importe quelle
+ * valeur, y compris des échelons qui n'existent pas du tout dans la grille choisie. La valeur
+ * stockée reste le code brut de GRILLES (ex. "A2") ; seul le libellé affiché est francisé en
+ * "HEA2" pour coller à la terminologie du syndicat. */
+function echelonOptionsCas2(grilleOrigine: GrilleCode): { value: string; label: string }[] {
+  const rows = GRILLES[grilleOrigine] ?? [];
+  return rows.map((r, i) => {
+    const code = String(r.echelon);
+    const label =
+      grilleOrigine === "EXC_PROFS" && i >= 4
+        ? `HEA${i - 3}` // 5e ligne ("5") -> HEA1, 6e ("A2") -> HEA2, 7e ("A3") -> HEA3
+        : code;
+    return { value: code, label };
+  });
+}
+
 interface Cas2Parametres {
   grilleOrigine: GrilleCode;
   echelonActuel: string;
@@ -499,7 +521,8 @@ function Cas2() {
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
   const [grilleOrigine, setGrilleOrigine] = useState<GrilleCode>("HC_PROFS");
-  const [echelonActuel, setEchelonActuel] = useState("1");
+  const [echelonActuel, setEchelonActuel] = useState<string>("1");
+  const options = echelonOptionsCas2(grilleOrigine);
   const [dateEchelon, setDateEchelon] = useState("");
   const [dateReclassement, setDateReclassement] = useState("");
   // Corps cible unique dans ce cas (contrairement au cas 1) : toujours Agrégé.
@@ -517,17 +540,25 @@ function Cas2() {
   const gestion = useReclassementGestion("CAS2");
 
   const processus: "HC" | "EXC" = grilleOrigine.startsWith("HC_") ? "HC" : "EXC";
-  const ech = Number(echelonActuel) || 0;
-  const montreCn11 = (processus === "HC" && ech >= 5) || (processus === "EXC" && ech >= 3);
-  const montreHc6 = (processus === "HC" && ech >= 7) || (processus === "EXC" && ech >= 4);
-  const montreExc4 = processus === "EXC" && ech >= 5;
+  // Position de l'échelon dans sa grille d'origine (1er échelon -> 1, etc.) — PAS le code brut, qui
+  // n'est pas toujours numérique (ex. EXC_PROFS: "A2"/"A3"). 0 par défaut le temps que l'effet
+  // ci-dessous resynchronise `echelonActuel` après un changement de grille d'origine.
+  let rang = 0;
+  try {
+    rang = rangEchelon(grilleOrigine, echelonActuel as EchelonCode);
+  } catch {
+    // échelon transitoire invalide pour la nouvelle grille — resynchronisé par l'effet ci-dessous
+  }
+  const montreCn11 = (processus === "HC" && rang >= 5) || (processus === "EXC" && rang >= 3);
+  const montreHc6 = (processus === "HC" && rang >= 7) || (processus === "EXC" && rang >= 4);
+  const montreExc4 = processus === "EXC" && rang >= 5;
 
   function calculer() {
     try {
       setResult(
         computeReclassementConcoursDepuisHcExc({
           grilleOrigine,
-          echelonActuel: ech,
+          echelonActuel,
           dateEchelon,
           dateReclassement,
           grilleCible,
@@ -587,7 +618,14 @@ function Cas2() {
         </label>
         <label>
           Grade et échelon d'origine
-          <select value={grilleOrigine} onChange={(e) => setGrilleOrigine(e.target.value as GrilleCode)}>
+          <select
+            value={grilleOrigine}
+            onChange={(e) => {
+              const nouvelleGrille = e.target.value as GrilleCode;
+              setGrilleOrigine(nouvelleGrille);
+              setEchelonActuel(echelonOptionsCas2(nouvelleGrille)[0]?.value ?? "1");
+            }}
+          >
             {GRILLES_ORIGINE_CAS2.map((g) => (
               <option key={g.code} value={g.code}>
                 {g.label}
@@ -597,7 +635,13 @@ function Cas2() {
         </label>
         <label>
           Échelon actuel
-          <input type="number" min={1} value={echelonActuel} onChange={(e) => setEchelonActuel(e.target.value)} />
+          <select value={echelonActuel} onChange={(e) => setEchelonActuel(e.target.value)}>
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Date d'effet de l'échelon actuel

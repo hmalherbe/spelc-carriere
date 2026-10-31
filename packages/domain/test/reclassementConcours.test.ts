@@ -355,4 +355,44 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
       }),
     ).toThrow();
   });
+
+  it("supports EXC_PROFS's lettered échelons ('A2'/'A3', the union's 'HEA2'/'HEA3') — unreachable before rangEchelon, since GRILLES.EXC_PROFS has no numeric échelon beyond 5", () => {
+    // Données!O176:R182 traite les rangs 5 ("5"/HEA1), 6 ("A2"/HEA2) et 7 ("A3"/HEA3) de façon
+    // identique (échelon-cible 11, majoration 3060) — même base théorique attendue pour les trois.
+    const rang5 = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "EXC_PROFS",
+      echelonActuel: 5,
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+    });
+    const rangA2 = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "EXC_PROFS",
+      echelonActuel: "A2",
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+    });
+    const rangA3 = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "EXC_PROFS",
+      echelonActuel: "A3",
+      dateEchelon: "2026-09-01",
+      dateReclassement: "2026-09-01",
+    });
+    expect(rangA2.baseTheoriqueJours).toBe(rang5.baseTheoriqueJours);
+    expect(rangA3.baseTheoriqueJours).toBe(rang5.baseTheoriqueJours);
+    // ancienIndice doit en revanche venir du VRAI échelon d'origine (895/930/977), pas être partagé.
+    expect(rang5.ancienIndice).toBe(895);
+    expect(rangA2.ancienIndice).toBe(930);
+    expect(rangA3.ancienIndice).toBe(977);
+  });
+
+  it("throws for an échelon code that doesn't exist in the origin grille at all (no more silently-accepted-but-meaningless échelon numbers)", () => {
+    expect(() =>
+      computeReclassementConcoursDepuisHcExc({
+        grilleOrigine: "EXC_PROFS",
+        echelonActuel: 14,
+        dateEchelon: "2026-09-01",
+        dateReclassement: "2026-09-01",
+      }),
+    ).toThrow();
+  });
 });

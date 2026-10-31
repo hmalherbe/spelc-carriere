@@ -33,6 +33,22 @@ export function findEchelonRow(
 }
 
 /**
+ * 1-based position of `echelon` in `grille`'s own échelon sequence (1er échelon -> 1, 2e -> 2, peu
+ * importe que la grille code ses derniers échelons en lettres — ex. EXC_PROFS: "1".."5" puis "A2",
+ * "A3" -> rangs 6, 7 ; HC_AGR: "1".."3" puis "A1".."A3" -> rangs 4, 5, 6). Permet aux calculs de
+ * reclassement (reclassementConcours.ts) de raisonner sur une position plutôt que sur le code brut
+ * de l'échelon, qui n'est pas toujours numérique. Throws si l'échelon n'existe pas dans la grille —
+ * même logique que `findEchelonRow`.
+ */
+export function rangEchelon(grille: GrilleCode, echelon: EchelonCode, grilles: Record<GrilleCode, EchelonRow[]> = GRILLES): number {
+  const idx = grilles[grille].findIndex((r) => normalizeEchelonKey(r.echelon) === normalizeEchelonKey(echelon));
+  if (idx < 0) {
+    throw new Error(`Échelon ${echelon} introuvable dans la grille ${grille}`);
+  }
+  return idx + 1;
+}
+
+/**
  * For agrégés hors-classe and classe-exceptionnelle grilles (HC_AGR, EXC_AGR, EXC_PROFS), the
  * grille's own labels switch from plain numbers to letter codes ("A1"/"A2"/"A3"/"B1"/"B2"/"B3" —
  * the union's own naming, used e.g. by isEligibleClasseExceptionnelle) once the numeric échelons

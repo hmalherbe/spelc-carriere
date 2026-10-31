@@ -1,8 +1,8 @@
-import { classerParAncienneteJours, findEchelonRow, gainSalaireBrut, gainSalaireNet, seuilFinEchelon } from "./grille.js";
+import { classerParAncienneteJours, findEchelonRow, gainSalaireBrut, gainSalaireNet, rangEchelon, seuilFinEchelon } from "./grille.js";
 import { joursComptablesEntre } from "./anciennete.js";
 import { simplifierFraction } from "./fraction.js";
 import { COEFFICIENT_CARACTERISTIQUE, SITUATIONS_AVANT_RECLASSEMENT } from "../data/refs.js";
-import { GRILLES, type EchelonRow, type GrilleCode } from "../data/grilles.js";
+import { GRILLES, type EchelonCode, type EchelonRow, type GrilleCode } from "../data/grilles.js";
 
 /**
  * Reclassement après concours (Reclt concours & reprise d'ancienneté) and reclassement après
@@ -112,7 +112,11 @@ export function computeReclassementConcours(input: ReclassementConcoursInput): R
 export interface ReclassementConcoursDepuisHcExcInput {
   /** The hors-classe/classe-exceptionnelle grille the teacher is reclassing FROM. */
   grilleOrigine: GrilleCode;
-  echelonActuel: number;
+  /** Code de `grilleOrigine` tel qu'il apparaît dans ses propres données de grille (GRILLES) —
+   * numérique pour la plupart, lettré pour les derniers échelons de HC_AGR ("A1"/"A2"/"A3") et
+   * d'EXC_PROFS ("A2"/"A3") — PAS un rang 1..7 : `rangEchelon` (grille.ts) en déduit la position
+   * utilisée par `baseTheoriqueJours`/les seuils de majoration ci-dessous. */
+  echelonActuel: EchelonCode;
   /** ISO — date d'effet de `echelonActuel`. */
   dateEchelon: string;
   /** ISO — date du reclassement (jour de la nomination issue du concours). */
@@ -182,18 +186,22 @@ export interface ReclassementConcoursDepuisHcExcResult {
  * `VLOOKUP(échelon, AGR, 5, TRUE)` stores 6480 at the échelon-8 row (cumulative through échelon 8),
  * not 5220 (seuilEntreeEchelon's threshold to enter it) — a real mismatch reported 2026-10-31
  * (Certifié HC échelon 1, "Base théorique d'équivalence" should be 6480j, this computed 5220j).
- * Throws for an échelon outside the known mapping (1-7 for HC, 1-5 for EXC) — matches the union's
- * own tool, which doesn't support others.
+ * Prend `rang` — la position 1-based de l'échelon dans sa grille d'origine (`rangEchelon`), PAS le
+ * code brut de l'échelon — puisque EXC_PROFS code ses 3 derniers échelons en lettres ("5"/"A2"/"A3",
+ * la terminologie du syndicat pour ces trois-là étant "HEA1"/"HEA2"/"HEA3") : rangs 5, 6, 7, tous
+ * identiques dans Données!O176:R182 (échelon-cible 11, majoration 3060 pour les trois) — d'où le
+ * fallthrough ci-dessous plutôt que 3 cases répétées. Throws pour un rang hors mapping connu (1-7
+ * pour HC, 1-7 pour EXC) — matches the union's own tool, which doesn't support others.
  */
 function baseTheoriqueJours(
   processus: "HC" | "EXC",
-  echelonActuel: number,
+  rang: number,
   grilleCible: "AGR" | "PROFS",
   grilles: Record<GrilleCode, EchelonRow[]> = GRILLES,
 ): number {
   const seuil = (echelon: number) => seuilFinEchelon(grilleCible, echelon, grilles);
   if (processus === "HC") {
-    switch (echelonActuel) {
+    switch (rang) {
       case 1:
         return seuil(8);
       case 2:
@@ -210,7 +218,7 @@ function baseTheoriqueJours(
         return seuil(11) + 3060;
     }
   } else {
-    switch (echelonActuel) {
+    switch (rang) {
       case 1:
         return seuil(10);
       case 2:
@@ -220,10 +228,12 @@ function baseTheoriqueJours(
       case 4:
         return seuil(11) + 1980;
       case 5:
+      case 6:
+      case 7:
         return seuil(11) + 3060;
     }
   }
-  throw new Error(`Échelon ${processus} ${echelonActuel} non pris en charge par le reclassement concours HC/EXC`);
+  throw new Error(`Échelon ${processus} de rang ${rang} non pris en charge par le reclassement concours HC/EXC`);
 }
 
 /** Majoration 11e échelon classe normale (Calculs!D47+E47) : durée entre les deux dates d'accès,
@@ -286,15 +296,14 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
     throw new Error(`Coefficient caractéristique inconnu pour ${input.grilleOrigine} ou ${grilleCible}`);
   }
 
-  const base = baseTheoriqueJours(processus, input.echelonActuel, grilleCible, input.grilles);
+  const rang = rangEchelon(input.grilleOrigine, input.echelonActuel, input.grilles);
+  const base = baseTheoriqueJours(processus, rang, grilleCible, input.grilles);
   const joursAcquisDansEchelon = joursComptablesEntre(input.dateEchelon, input.dateReclassement);
 
-  const majCN11 = (processus === "HC" && input.echelonActuel >= 5) || (processus === "EXC" && input.echelonActuel >= 3) ? majorationCN11(input.majorations) : 0;
+  const majCN11 = (processus === "HC" && rang >= 5) || (processus === "EXC" && rang >= 3) ? majorationCN11(input.majorations) : 0;
   const majHC6 =
-    (processus === "HC" && input.echelonActuel >= 7) || (processus === "EXC" && input.echelonActuel >= 4)
-      ? majorationHC6(input.majorations, processus, input.dateEchelon)
-      : 0;
-  const majEXC4 = processus === "EXC" && input.echelonActuel >= 5 ? majorationEXC4(input.majorations, input.dateReclassement) : 0;
+    (processus === "HC" && rang >= 7) || (processus === "EXC" && rang >= 4) ? majorationHC6(input.majorations, processus, input.dateEchelon) : 0;
+  const majEXC4 = processus === "EXC" && rang >= 5 ? majorationEXC4(input.majorations, input.dateReclassement) : 0;
 
   const totalVirtuelCN = base + joursAcquisDansEchelon + majCN11 + majHC6 + majEXC4;
   const totalReconstitueJours = Math.floor(totalVirtuelCN * (coefficientOrigine / coefficientCible));
