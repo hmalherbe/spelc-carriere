@@ -146,21 +146,34 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
       dateEchelon: "2024-09-01",
       dateReclassement: "2025-09-01",
     });
-    // base théorique (échelon 8 AGR) = 5220j ; +360j acquis dans l'échelon ; *135/175 -> 4304j
-    expect(result.baseTheoriqueJours).toBe(5220);
+    // base théorique (cumul jusqu'à la fin de l'échelon 8 AGR, cf. Données!A45:E55 du classeur) =
+    // 6480j ; +360j acquis dans l'échelon ; *135/175 -> 5276j
+    expect(result.baseTheoriqueJours).toBe(6480);
     expect(result.joursAcquisDansEchelon).toBe(360);
     expect(result.majorationsJours).toBe(0);
-    expect(result.totalAvantCoefficientJours).toBe(5580); // 5220 + 360 + 0
-    expect(result.totalReconstitueJours).toBe(4304);
+    expect(result.totalAvantCoefficientJours).toBe(6840); // 6480 + 360 + 0
+    expect(result.totalReconstitueJours).toBe(5276);
     expect(result.nouvelleGrille).toBe("AGR");
-    expect(result.nouvelEchelon).toBe(7);
-    expect(result.ancienneteReporteeJours).toBe(164);
+    expect(result.nouvelEchelon).toBe(8);
+    expect(result.ancienneteReporteeJours).toBe(56);
     expect(result.ancienIndice).toBe(595);
-    expect(result.nouvelIndice).toBe(664);
+    expect(result.nouvelIndice).toBe(715);
     expect(result.gainSalaireBrut).toBeGreaterThan(0);
     expect(result.gainSalaireNet).toBeGreaterThan(0);
     // coefficient 135 (HC_PROFS) / 175 (AGR) réduit -> 27/35.
     expect(result.coefficientFraction).toEqual({ numerateur: 27, denominateur: 35 });
+  });
+
+  it("real case reported 2026-10-31: Certifié HC échelon 1 au 01/09/2024, reclassement au 01/09/2026 — base théorique 6480j, pas 5220j", () => {
+    const result = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 1,
+      dateEchelon: "2024-09-01",
+      dateReclassement: "2026-09-01",
+    });
+    expect(result.baseTheoriqueJours).toBe(6480);
+    expect(result.joursAcquisDansEchelon).toBe(720);
+    expect(result.totalAvantCoefficientJours).toBe(7200);
   });
 
   it("never lands on a lower indice than the one already held ('conservation de l'indice avant reclassement' — missing from the previous standalone simulator)", () => {
@@ -191,7 +204,7 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
       dateReclassement: "2025-09-01",
       majorations: { dateAccesEchelon11ClasseNormale: "2020-09-01", dateAccesHorsClasse: "2024-09-01" },
     });
-    expect(withIrrelevantMajoration.totalReconstitueJours).toBe(4304);
+    expect(withIrrelevantMajoration.totalReconstitueJours).toBe(5276);
   });
 
   it("computes the cn11 majoration from the two access dates once the échelon qualifies for it, with no minoration when bi-admissible (the default)", () => {

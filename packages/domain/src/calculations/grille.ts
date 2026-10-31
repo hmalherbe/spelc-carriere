@@ -190,3 +190,27 @@ export function seuilEntreeEchelon(grille: GrilleCode, echelon: number, grilles:
   }
   throw new Error(`Échelon numérique ${echelon} introuvable dans la grille ${grille}`);
 }
+
+/**
+ * Cumulative banking days accrued THROUGH the end of a given numeric échelon (i.e. the threshold
+ * to enter the NEXT échelon) — the complement of `seuilEntreeEchelon` above, which gives the
+ * threshold to enter `echelon` itself. For the grille's ceiling échelon (duree "MAX"), equals
+ * `seuilEntreeEchelon(echelon)` itself since there's no further échelon to accrue into.
+ *
+ * This is what the union's own classeur's "AGR"/"PROFS" tables (Données!A45:E55 etc., column E,
+ * read via `VLOOKUP(échelon, AGR, 5, TRUE)`) actually store — confirmed by reading the real cell
+ * values directly from the source .xls (not just the formula text): row "échelon 8" holds 6480
+ * (18 years, cumulative THROUGH échelon 8), not 5220 (14.5 years, the threshold to ENTER échelon
+ * 8 that `seuilEntreeEchelon(grille, 8)` returns). `baseTheoriqueJours` in reclassementConcours.ts
+ * (Cas "Reclt concours HC et EXC") needs this exact convention, confirmed by a real-case mismatch
+ * (2026-10-31): Certifié HC échelon 1 → the classeur's "Base théorique d'équivalence" is 6480j,
+ * not 5220j, exactly `seuilFinEchelon("AGR", 8)`.
+ */
+export function seuilFinEchelon(grille: GrilleCode, echelon: number, grilles: Record<GrilleCode, EchelonRow[]> = GRILLES): number {
+  let cumul = 0;
+  for (const row of grilles[grille]) {
+    cumul += row.duree === "MAX" ? 0 : row.duree * 360;
+    if (row.echelon === echelon) return cumul;
+  }
+  throw new Error(`Échelon numérique ${echelon} introuvable dans la grille ${grille}`);
+}

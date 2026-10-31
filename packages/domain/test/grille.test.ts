@@ -7,6 +7,7 @@ import {
   gainSalaireBrut,
   gainSalaireNet,
   seuilEntreeEchelon,
+  seuilFinEchelon,
   traitementBrutMensuel,
 } from "../src/calculations/grille.js";
 
@@ -139,5 +140,26 @@ describe("seuilEntreeEchelon / classerParAncienneteJours (cumulative échelon th
   it("classerParAncienneteJours is the exact inverse: classing seuilEntreeEchelon(grille, N) lands back on échelon N with no report", () => {
     const seuil = seuilEntreeEchelon("AGR", 7);
     expect(classerParAncienneteJours("AGR", seuil)).toEqual({ echelon: 7, reportJours: 0 });
+  });
+});
+
+describe("seuilFinEchelon (cumulative days THROUGH an échelon, not the threshold to enter it)", () => {
+  // Valeurs lues directement dans le classeur source (Données!A45:E55, colonne E — celle que
+  // VLOOKUP(échelon, AGR, 5, TRUE) utilise réellement) : 360 pour l'échelon 1 (sa propre durée
+  // d'1 an), 6480 pour l'échelon 8 (cumul 1+1+2+2+2.5+3+3+3.5 ans) — confirmé par le mismatch
+  // réel du 2026-10-31 (Certifié HC échelon 1 : base théorique attendue 6480j, pas 5220j).
+  it("equals seuilEntreeEchelon(grille, echelon) + that échelon's own duree, in banking days", () => {
+    expect(seuilFinEchelon("AGR", 1)).toBe(360);
+    expect(seuilFinEchelon("AGR", 8)).toBe(6480);
+    expect(seuilFinEchelon("AGR", 8)).toBe(seuilEntreeEchelon("AGR", 8) + 3.5 * 360);
+  });
+
+  it("equals seuilEntreeEchelon for the grille's ceiling échelon (duree 'MAX' contributes nothing further)", () => {
+    expect(seuilFinEchelon("AGR", 11)).toBe(seuilEntreeEchelon("AGR", 11));
+    expect(seuilFinEchelon("AGR", 11)).toBe(9360);
+  });
+
+  it("throws for an échelon that doesn't exist (numerically) in the grille", () => {
+    expect(() => seuilFinEchelon("AGR", 99)).toThrow();
   });
 });

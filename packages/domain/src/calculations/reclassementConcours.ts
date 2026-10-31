@@ -1,4 +1,4 @@
-import { classerParAncienneteJours, findEchelonRow, gainSalaireBrut, gainSalaireNet, seuilEntreeEchelon } from "./grille.js";
+import { classerParAncienneteJours, findEchelonRow, gainSalaireBrut, gainSalaireNet, seuilFinEchelon } from "./grille.js";
 import { joursComptablesEntre } from "./anciennete.js";
 import { simplifierFraction } from "./fraction.js";
 import { COEFFICIENT_CARACTERISTIQUE, SITUATIONS_AVANT_RECLASSEMENT } from "../data/refs.js";
@@ -172,10 +172,18 @@ export interface ReclassementConcoursDepuisHcExcResult {
 
 /**
  * "Base théorique d'équivalence" in the target classe-normale grille for a given hors-classe/
- * classe-exceptionnelle (processus, échelon) pair — ported as-is from the spreadsheet's own
- * cumulative-threshold constants (expressed here against `grilleCible`'s own `duree` data instead
- * of a hand-maintained table, via `seuilEntreeEchelon`). Throws for an échelon outside the known
- * mapping (1-7 for HC, 1-5 for EXC) — matches the union's own tool, which doesn't support others.
+ * classe-exceptionnelle (processus, échelon) pair. The échelon-cible numbers below (8/9/10/11 for
+ * HC, 10/11 for EXC) come from the classeur's own "reclassement_liste_aptitude_<grille>" lookup
+ * tables (Données!N166:Q172 for HC_PROFS, O176:R182 for EXC_PROFS — read directly from the source
+ * .xls) — each row's "majoration" column (720/900/1980/3060) is reproduced as-is as the `+ N`
+ * additions. The threshold itself must be `seuilFinEchelon` (cumulative days THROUGH the
+ * échelon-cible), not `seuilEntreeEchelon` (threshold to enter it) — confirmed by reading the
+ * classeur's own grille tables (Données!A45:E55 for AGR), whose column used by the classeur's
+ * `VLOOKUP(échelon, AGR, 5, TRUE)` stores 6480 at the échelon-8 row (cumulative through échelon 8),
+ * not 5220 (seuilEntreeEchelon's threshold to enter it) — a real mismatch reported 2026-10-31
+ * (Certifié HC échelon 1, "Base théorique d'équivalence" should be 6480j, this computed 5220j).
+ * Throws for an échelon outside the known mapping (1-7 for HC, 1-5 for EXC) — matches the union's
+ * own tool, which doesn't support others.
  */
 function baseTheoriqueJours(
   processus: "HC" | "EXC",
@@ -183,7 +191,7 @@ function baseTheoriqueJours(
   grilleCible: "AGR" | "PROFS",
   grilles: Record<GrilleCode, EchelonRow[]> = GRILLES,
 ): number {
-  const seuil = (echelon: number) => seuilEntreeEchelon(grilleCible, echelon, grilles);
+  const seuil = (echelon: number) => seuilFinEchelon(grilleCible, echelon, grilles);
   if (processus === "HC") {
     switch (echelonActuel) {
       case 1:
