@@ -884,6 +884,10 @@ function Cas3() {
             { code: "HC_PROFS" as const, label: "Certifié / PEPS / PLP / Prof. des écoles — Hors Classe" },
             { code: "HC_AGR" as const, label: "Agrégé — Hors Classe" },
             { code: "HC_PEGC" as const, label: "PEGC — Hors Classe" },
+            {
+              code: "EXC_PROFS" as const,
+              label: "Certifié / PEPS / PLP / Prof. des écoles — Classe exceptionnelle (échelon 4 → chevron HEA1)",
+            },
           ],
     [processus],
   );
@@ -961,7 +965,15 @@ function Cas3() {
         </label>
         <label>
           Grade
-          <select value={grilleActuelle} onChange={(e) => setGrilleActuelle(e.target.value as GrilleCode)}>
+          <select
+            value={grilleActuelle}
+            onChange={(e) => {
+              const nouvelleGrille = e.target.value as GrilleCode;
+              setGrilleActuelle(nouvelleGrille);
+              // Classe exceptionnelle -> chevron : un seul échelon de départ possible (4).
+              if (nouvelleGrille === "EXC_PROFS") setEchelonActuel("4");
+            }}
+          >
             {optionsGrille.map((g) => (
               <option key={g.code} value={g.code}>
                 {g.label}

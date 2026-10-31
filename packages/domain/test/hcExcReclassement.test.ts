@@ -118,6 +118,21 @@ describe("computeReclassementHcExc (ported from the central spreadsheet's own re
     expect(hcPegc.nouvelEchelon).toBe(1);
   });
 
+  it("real case reported 2026-11-01: Certifié classe exceptionnelle échelon 4 -> chevron HEA1 (déjà codé échelon 5 dans GRILLES.EXC_PROFS, indice 895 — confirmé par l'utilisateur, aucune nouvelle donnée d'indice)", () => {
+    const result = computeReclassementHcExc({
+      processus: "EXC",
+      grilleActuelle: "EXC_PROFS",
+      echelonActuel: 4,
+      ancienneteJoursAuReference: 1000, // sans effet : conservationAnciennete=false ici (voir G11 du classeur)
+      dateReference: "2026-09-01",
+    });
+    expect(result.nouvelleGrille).toBe("EXC_PROFS"); // reste dans la même grille
+    expect(result.nouvelEchelon).toBe(5);
+    expect(result.ancienIndice).toBe(835);
+    expect(result.nouvelIndice).toBe(895);
+    expect(result.ancienneteReporteeJours).toBe(0);
+  });
+
   it("throws for a grille with no known reclassement table (e.g. INSTIT, never a HC/EXC origin)", () => {
     expect(() =>
       computeReclassementHcExc({

@@ -158,6 +158,16 @@ export const RECLASSEMENT_AGR_VERS_HORS_CLASSE: ReclassementRow[] = [
   { cle: 113, echelonReclassement: "A1", conservationAnciennete: false },
 ];
 
+/** Certifié/PLP/PEPS/Prof. Ecoles classe exceptionnelle, échelon 4 (son seul échelon de départ
+ * pertinent ici — un seul échelon possible, pas de palier ancienneté-dépendant, donc une seule
+ * ligne) → "chevron HEA1" dans le classeur, confirmé par l'utilisateur (2026-11-01) être
+ * exactement la position déjà codée "échelon 5" dans GRILLES.EXC_PROFS (indice 895) — aucune
+ * nouvelle donnée d'indice nécessaire. Pas de report d'ancienneté (G11 du classeur : "Non" pour
+ * toute échelle préfixée "EXC"). La grille d'arrivée reste EXC_PROFS elle-même (voir
+ * nouvelleGrilleApresReclassement, qui gère déjà ce cas sans changement : .replace("HC_","EXC_")
+ * est un no-op sur un code qui n'a pas ce préfixe). */
+export const RECLASSEMENT_EXC_PROFS_VERS_CHEVRON: ReclassementRow[] = [{ cle: 40, echelonReclassement: 5, conservationAnciennete: false }];
+
 /** Certifié/PLP/PEPS bi-admissible → Hors Classe — atterrit dans la grille HC_PROFS ordinaire (la
  * bi-admissibilité ne se prolonge pas en tant que grille Hors Classe distincte ; aucune
  * "reclassement_HC_BI_ADMISSIBLE_PROFS" n'existe dans le classeur, voir nouvelleGrilleApresReclassement). */
