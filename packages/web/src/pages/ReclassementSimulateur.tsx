@@ -855,6 +855,21 @@ interface Cas3Parametres {
   ancienneteADeduire: string;
 }
 
+/** Libellé affiché pour l'échelon d'arrivée — le code brut stocké ne correspond pas toujours à la
+ * terminologie du syndicat :
+ * - EXC_PROFS (échelon 4 → chevron HEA1) réutilise la position déjà codée "échelon 5" dans
+ *   GRILLES.EXC_PROFS (même indice, 895 — confirmé par l'utilisateur, 2026-11-01), mais ce code
+ *   numérique seul ne dit rien du "chevron HEA1" : toujours un seul résultat possible pour cette
+ *   transition, donc toujours ce même libellé fixe.
+ * - Un code composite du classeur ("7-HEB2", CHAIRE_SUP) est affiché "7 - chevron HEB2" plutôt que
+ *   tel quel. */
+function formatNouvelEchelonLabel(grilleActuelle: GrilleCode, nouvelEchelon: EchelonCode): string {
+  if (grilleActuelle === "EXC_PROFS") return "4 - chevron HEA1";
+  const code = String(nouvelEchelon);
+  const m = /^(\d+)-((?:HEA|HEB)\d)$/.exec(code);
+  return m ? `${m[1]} - chevron ${m[2]}` : code;
+}
+
 function Cas3() {
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
@@ -1040,7 +1055,7 @@ function Cas3() {
             </p>
           )}
           <p className="gain-positive">
-            Nouvelle grille : {result.nouvelleGrille} — échelon {result.nouvelEchelon}
+            Nouvelle grille : {result.nouvelleGrille} — échelon {formatNouvelEchelonLabel(grilleActuelle, result.nouvelEchelon)}
           </p>
           <p>
             Report d'ancienneté : <strong>{result.ancienneteReporteeJours} jours</strong> ({formatJours(result.ancienneteReporteeJours)})
