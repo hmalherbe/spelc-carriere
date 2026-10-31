@@ -515,6 +515,7 @@ interface Cas2Parametres {
   dateAccesEchelon6HC: string;
   dateAccesEchelon7HC: string;
   dateAccesEchelon4EXC: string;
+  dateAccesClasseExceptionnelle: string;
 }
 
 function Cas2() {
@@ -535,6 +536,9 @@ function Cas2() {
   const [dateAccesEchelon6HC, setDateAccesEchelon6HC] = useState("");
   const [dateAccesEchelon7HC, setDateAccesEchelon7HC] = useState("");
   const [dateAccesEchelon4EXC, setDateAccesEchelon4EXC] = useState("");
+  // Conditionne, pour EXC uniquement, si la majoration 6e échelon HC s'applique (A20 du classeur :
+  // réforme de 2021 — voir anneeAccesClasseExceptionnelleEligible côté domaine).
+  const [dateAccesClasseExceptionnelle, setDateAccesClasseExceptionnelle] = useState("");
   const [result, setResult] = useState<ReturnType<typeof computeReclassementConcoursDepuisHcExc> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const gestion = useReclassementGestion("CAS2");
@@ -550,7 +554,13 @@ function Cas2() {
     // échelon transitoire invalide pour la nouvelle grille — resynchronisé par l'effet ci-dessous
   }
   const montreCn11 = (processus === "HC" && rang >= 5) || (processus === "EXC" && rang >= 3);
-  const montreHc6 = (processus === "HC" && rang >= 7) || (processus === "EXC" && rang >= 4);
+  // Pour EXC, la majoration 6e échelon HC ne s'applique que si l'accès à la classe exceptionnelle
+  // date de 2021 ou après (A20 du classeur, réforme 2021) — le champ de date lui-même reste
+  // affiché dès l'échelon 4 pour pouvoir le renseigner, mais les deux dates 6e/7e échelon HC
+  // n'apparaissent que si l'année saisie qualifie (ou toujours, côté HC, où la condition ne joue pas).
+  const montreDateAccesClasseExceptionnelle = processus === "EXC" && rang >= 4;
+  const anneeAccesExcEligible = Number(dateAccesClasseExceptionnelle.slice(0, 4)) >= 2021;
+  const montreHc6 = (processus === "HC" && rang >= 7) || (processus === "EXC" && rang >= 4 && anneeAccesExcEligible);
   const montreExc4 = processus === "EXC" && rang >= 5;
 
   function calculer() {
@@ -569,6 +579,7 @@ function Cas2() {
             dateAccesEchelon6HorsClasse: montreHc6 ? dateAccesEchelon6HC : undefined,
             dateAccesEchelon7HorsClasse: montreHc6 ? dateAccesEchelon7HC : undefined,
             dateAccesEchelon4ClasseExceptionnelle: montreExc4 ? dateAccesEchelon4EXC : undefined,
+            dateAccesClasseExceptionnelle: montreDateAccesClasseExceptionnelle ? dateAccesClasseExceptionnelle : undefined,
           },
         }),
       );
@@ -595,6 +606,7 @@ function Cas2() {
     setDateAccesEchelon6HC(params.dateAccesEchelon6HC ?? "");
     setDateAccesEchelon7HC(params.dateAccesEchelon7HC ?? "");
     setDateAccesEchelon4EXC(params.dateAccesEchelon4EXC ?? "");
+    setDateAccesClasseExceptionnelle(params.dateAccesClasseExceptionnelle ?? "");
     setResult(saved.resultat as ReturnType<typeof computeReclassementConcoursDepuisHcExc>);
     setError(null);
   }
@@ -672,6 +684,24 @@ function Cas2() {
             Date d'accès à la hors classe
             <input type="date" min="1960-01-01" max="2099-12-31" value={dateAccesHorsClasse} onChange={(e) => setDateAccesHorsClasse(e.target.value)} />
           </label>
+        </div>
+      )}
+      {montreDateAccesClasseExceptionnelle && (
+        <div className="inline-form">
+          <label>
+            Date d'accès à la classe exceptionnelle
+            <input
+              type="date"
+              min="1960-01-01"
+              max="2099-12-31"
+              value={dateAccesClasseExceptionnelle}
+              onChange={(e) => setDateAccesClasseExceptionnelle(e.target.value)}
+            />
+          </label>
+          <p className="hint">
+            La majoration 6ᵉ échelon de la hors classe ne s'applique, pour la classe exceptionnelle, que si cet accès
+            date de 2021 ou après (réforme 2021) — les dates 6ᵉ/7ᵉ échelon n'apparaissent ci-dessous que dans ce cas.
+          </p>
         </div>
       )}
       {montreHc6 && (
@@ -767,6 +797,7 @@ function Cas2() {
                     dateAccesEchelon6HC,
                     dateAccesEchelon7HC,
                     dateAccesEchelon4EXC,
+                    dateAccesClasseExceptionnelle,
                   } satisfies Cas2Parametres,
                   result,
                 )

@@ -142,6 +142,12 @@ export interface ReclassementConcoursDepuisHcExcInput {
      * `processus` HC (pas pour EXC, fidèle à la formule F47). */
     dateAccesEchelon6HorsClasse?: string;
     dateAccesEchelon7HorsClasse?: string;
+    /** Pour EXC uniquement (voir le gating au point d'appel) : la majoration 6e échelon HC ne
+     * s'applique à un agent de classe exceptionnelle que si son accès à la classe exceptionnelle
+     * date de 2021 ou après (A20 du classeur : `YEAR(Date_acces_EXC_concours_HC_EXC)>=2021`) — une
+     * réforme ayant changé la règle à cette date. Sans cette date (candidat classé avant 2021, ou
+     * simplement non renseignée), la majoration ne s'applique pas. Jamais utilisée pour HC. */
+    dateAccesClasseExceptionnelle?: string;
     /** 4e échelon classe exceptionnelle — durée entre la date d'accès et `dateReclassement`, moins
      * 3 ans (1080j), plancher à 0. */
     dateAccesEchelon4ClasseExceptionnelle?: string;
@@ -247,6 +253,17 @@ function majorationCN11(majorations: ReclassementConcoursDepuisHcExcInput["major
   return duree - minoration;
 }
 
+/** Pour EXC uniquement (A20 du classeur) : la majoration 6e échelon HC ne s'applique à un agent de
+ * classe exceptionnelle que si son accès à la classe exceptionnelle (`dateAccesClasseExceptionnelle`)
+ * date de 2021 ou après. Absente ou invalide -> non éligible (pas d'erreur, simplement 0 — même
+ * logique "date non fournie = sans effet" que les autres majorations). */
+function anneeAccesClasseExceptionnelleEligible(majorations: ReclassementConcoursDepuisHcExcInput["majorations"]): boolean {
+  const { dateAccesClasseExceptionnelle } = majorations ?? {};
+  if (!dateAccesClasseExceptionnelle) return false;
+  const annee = Number(dateAccesClasseExceptionnelle.slice(0, 4));
+  return Number.isFinite(annee) && annee >= 2021;
+}
+
 /** Majoration 6e échelon hors classe (Calculs!F47) : durée entre les deux dates d'accès, moins 3
  * ans (1080j) uniquement pour un `processus` HC (jamais pour EXC — fidèle à F47).
  *
@@ -301,8 +318,8 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
   const joursAcquisDansEchelon = joursComptablesEntre(input.dateEchelon, input.dateReclassement);
 
   const majCN11 = (processus === "HC" && rang >= 5) || (processus === "EXC" && rang >= 3) ? majorationCN11(input.majorations) : 0;
-  const majHC6 =
-    (processus === "HC" && rang >= 7) || (processus === "EXC" && rang >= 4) ? majorationHC6(input.majorations, processus, input.dateEchelon) : 0;
+  const eligibleHc6 = processus === "HC" ? rang >= 7 : rang >= 4 && anneeAccesClasseExceptionnelleEligible(input.majorations);
+  const majHC6 = eligibleHc6 ? majorationHC6(input.majorations, processus, input.dateEchelon) : 0;
   const majEXC4 = processus === "EXC" && rang >= 5 ? majorationEXC4(input.majorations, input.dateReclassement) : 0;
 
   const totalVirtuelCN = base + joursAcquisDansEchelon + majCN11 + majHC6 + majEXC4;

@@ -251,7 +251,7 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
     expect(withIgnoredField.totalAvantCoefficientJours).toBe(12060);
   });
 
-  it("still uses the separately-entered échelon-7 date for EXC's own hc6 majoration (unaffected by the HC substitution above)", () => {
+  it("still uses the separately-entered échelon-7 date for EXC's own hc6 majoration (unaffected by the HC substitution above), gated on dateAccesClasseExceptionnelle >= 2021 (A20)", () => {
     // EXC_PROFS échelon 4+ : les deux dates restent deux faits indépendants dans le classeur
     // (A20/A21 demandent les deux), jamais la date d'effet du reclassement.
     const result = computeReclassementConcoursDepuisHcExc({
@@ -259,10 +259,38 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
       echelonActuel: 4,
       dateEchelon: "2020-01-01",
       dateReclassement: "2023-01-01", // sans rapport avec la majoration hc6 ici
-      majorations: { dateAccesEchelon6HorsClasse: "2022-01-01", dateAccesEchelon7HorsClasse: "2022-07-01" },
+      majorations: {
+        dateAccesEchelon6HorsClasse: "2022-01-01",
+        dateAccesEchelon7HorsClasse: "2022-07-01",
+        dateAccesClasseExceptionnelle: "2021-09-01",
+      },
     });
     // (2022-07-01 - 2022-01-01) = 180j ; moins 0 (processus EXC, jamais -1080) = 180j.
     expect(result.majorationsJours).toBe(180);
+  });
+
+  it("never applies the hc6 majoration for EXC without dateAccesClasseExceptionnelle, or when it's before 2021 (A20's own cutoff)", () => {
+    const sansDate = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "EXC_PROFS",
+      echelonActuel: 4,
+      dateEchelon: "2020-01-01",
+      dateReclassement: "2023-01-01",
+      majorations: { dateAccesEchelon6HorsClasse: "2022-01-01", dateAccesEchelon7HorsClasse: "2022-07-01" },
+    });
+    expect(sansDate.majorationsJours).toBe(0);
+
+    const avant2021 = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "EXC_PROFS",
+      echelonActuel: 4,
+      dateEchelon: "2020-01-01",
+      dateReclassement: "2023-01-01",
+      majorations: {
+        dateAccesEchelon6HorsClasse: "2022-01-01",
+        dateAccesEchelon7HorsClasse: "2022-07-01",
+        dateAccesClasseExceptionnelle: "2020-09-01",
+      },
+    });
+    expect(avant2021.majorationsJours).toBe(0);
   });
 
   it("computes the cn11 majoration from the two access dates once the échelon qualifies for it, with no minoration when bi-admissible (the default)", () => {
