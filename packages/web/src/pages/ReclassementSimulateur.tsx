@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ancienneteToBankingDays,
   bankingDaysToYMD,
@@ -870,12 +870,30 @@ function formatNouvelEchelonLabel(grilleActuelle: GrilleCode, nouvelEchelon: Ech
   return m ? `${m[1]} - chevron ${m[2]}` : code;
 }
 
+/** Échelons de départ possibles — borne le champ "Échelon de départ" (un <input type="number">
+ * libre jusqu'ici, laissait saisir n'importe quelle valeur sans rapport avec la grille/situation
+ * choisie, ex. 14) selon les règles du syndicat (2026-11-01) :
+ * - Classe normale (PROFS/AGR/BI_ADM/PEGC) : dépend de l'ancienneté dans l'échelon À LA DATE DU
+ *   RECLASSEMENT — {10, 11} si < 720j (2 ans), {9, 10, 11} si >= 720j.
+ * - Hors Classe Certifié/PEPS/PLP/Prof. des écoles (HC_PROFS) uniquement : {3, 4, 5, 6, 7} — PEGC
+ *   et Agrégé Hors Classe (HC_PEGC/HC_AGR) gardent toutes les valeurs de leur propre grille,
+ *   aucune restriction supplémentaire demandée pour eux.
+ * - Classe exceptionnelle (EXC_PROFS) : un seul échelon possible, "4" (→ chevron HEA1).
+ * - Chaire supérieure (CHAIRE_SUP) : un seul échelon possible, "6-HEA2" (→ 7-HEB2). */
+function echelonOptionsCas3(processus: "HC" | "EXC", grilleActuelle: GrilleCode, ancienneteJoursAuReclassement: number): string[] {
+  if (processus === "HC") return ancienneteJoursAuReclassement < 720 ? ["10", "11"] : ["9", "10", "11"];
+  if (grilleActuelle === "HC_PROFS") return ["3", "4", "5", "6", "7"];
+  if (grilleActuelle === "EXC_PROFS") return ["4"];
+  if (grilleActuelle === "CHAIRE_SUP") return ["6-HEA2"];
+  return (GRILLES[grilleActuelle] ?? []).map((r) => String(r.echelon));
+}
+
 function Cas3() {
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
   const [processus, setProcessus] = useState<"HC" | "EXC">("HC");
   const [grilleActuelle, setGrilleActuelle] = useState<GrilleCode>("PROFS");
-  const [echelonActuel, setEchelonActuel] = useState("9");
+  const [echelonActuel, setEchelonActuel] = useState("10");
   const [dateDernierChangement, setDateDernierChangement] = useState("");
   const [dateReference, setDateReference] = useState("");
   // Corrections éventuelles de l'ancienneté dans l'échelon avant reclassement (Calculs!B17, même
@@ -911,13 +929,27 @@ function Cas3() {
     [processus],
   );
 
+  // Ancienneté dans l'échelon À LA DATE DU RECLASSEMENT (pas juste la différence de dates brute :
+  // les corrections report/déduire comptent aussi) — pilote, pour une classe normale, les échelons
+  // de départ possibles (echelonOptionsCas3 ci-dessus), donc recalculée à chaque rendu plutôt que
+  // seulement au clic sur "Calculer".
+  const ancienneteJoursAuReclassement = Math.max(
+    0,
+    (dateDernierChangement && dateReference ? joursComptablesEntre(dateDernierChangement, dateReference) : 0) +
+      ancienneteToBankingDays(parseAncienneteText(reportAnciennete.trim() || null)) -
+      ancienneteToBankingDays(parseAncienneteText(ancienneteADeduire.trim() || null)),
+  );
+  const optionsEchelon = echelonOptionsCas3(processus, grilleActuelle, ancienneteJoursAuReclassement);
+
+  // Resynchronise l'échelon sélectionné dès que les options changent (grille, ou franchissement du
+  // seuil de 720j pour une classe normale) et que la valeur actuelle n'en fait plus partie.
+  useEffect(() => {
+    if (!optionsEchelon.includes(echelonActuel)) setEchelonActuel(optionsEchelon[0] ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optionsEchelon.join("|")]);
+
   function calculer() {
     try {
-      const ancienneteBrute = dateDernierChangement && dateReference ? joursComptablesEntre(dateDernierChangement, dateReference) : 0;
-      const ancienneteAvecCorrections =
-        ancienneteBrute +
-        ancienneteToBankingDays(parseAncienneteText(reportAnciennete.trim() || null)) -
-        ancienneteToBankingDays(parseAncienneteText(ancienneteADeduire.trim() || null));
       setResult(
         computeReclassementHcExc({
           processus,
@@ -925,7 +957,7 @@ function Cas3() {
           // Numérique pour toutes les grilles sauf CHAIRE_SUP (seul échelon de départ possible :
           // le code composite "6-HEA2", pas convertible en nombre).
           echelonActuel: Number(echelonActuel) || echelonActuel,
-          ancienneteJoursAuReference: Math.max(0, ancienneteAvecCorrections),
+          ancienneteJoursAuReference: ancienneteJoursAuReclassement,
           dateReference,
         }),
       );
@@ -986,16 +1018,7 @@ function Cas3() {
         </label>
         <label>
           Grade
-          <select
-            value={grilleActuelle}
-            onChange={(e) => {
-              const nouvelleGrille = e.target.value as GrilleCode;
-              setGrilleActuelle(nouvelleGrille);
-              // Un seul échelon de départ possible pour ces deux grilles.
-              if (nouvelleGrille === "EXC_PROFS") setEchelonActuel("4");
-              if (nouvelleGrille === "CHAIRE_SUP") setEchelonActuel("6-HEA2");
-            }}
-          >
+          <select value={grilleActuelle} onChange={(e) => setGrilleActuelle(e.target.value as GrilleCode)}>
             {optionsGrille.map((g) => (
               <option key={g.code} value={g.code}>
                 {g.label}
@@ -1005,10 +1028,23 @@ function Cas3() {
         </label>
         <label>
           Échelon de départ
-          {grilleActuelle === "EXC_PROFS" || grilleActuelle === "CHAIRE_SUP" ? (
-            <input type="text" value={echelonActuel} readOnly title="Seul échelon de départ possible pour cette grille" />
-          ) : (
-            <input type="number" min={1} value={echelonActuel} onChange={(e) => setEchelonActuel(e.target.value)} />
+          <select
+            value={echelonActuel}
+            disabled={optionsEchelon.length <= 1}
+            onChange={(e) => setEchelonActuel(e.target.value)}
+          >
+            {optionsEchelon.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+          {processus === "HC" && (
+            <span className="hint">
+              {ancienneteJoursAuReclassement < 720
+                ? "Ancienneté dans l'échelon < 2 ans à la date du reclassement : échelons 10 et 11 possibles."
+                : "Ancienneté dans l'échelon ≥ 2 ans à la date du reclassement : échelons 9, 10 et 11 possibles."}
+            </span>
           )}
         </label>
         <label>
