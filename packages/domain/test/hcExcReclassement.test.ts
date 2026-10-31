@@ -133,6 +133,21 @@ describe("computeReclassementHcExc (ported from the central spreadsheet's own re
     expect(result.ancienneteReporteeJours).toBe(0);
   });
 
+  it("real case reported 2026-11-01: Professeur de chaire supérieure échelon 6-HEA2 -> 7-HEB2 (table fournie par l'utilisateur, recoupée avec Données!M58:P68 du classeur)", () => {
+    const result = computeReclassementHcExc({
+      processus: "EXC",
+      grilleActuelle: "CHAIRE_SUP",
+      echelonActuel: "6-HEA2",
+      ancienneteJoursAuReference: 500, // sans effet : conservationAnciennete=false (G11 exclut CHAIRE_SUP)
+      dateReference: "2026-09-01",
+    });
+    expect(result.nouvelleGrille).toBe("CHAIRE_SUP"); // reste dans la même grille
+    expect(result.nouvelEchelon).toBe("7-HEB2");
+    expect(result.ancienIndice).toBe(925);
+    expect(result.nouvelIndice).toBe(1013);
+    expect(result.ancienneteReporteeJours).toBe(0);
+  });
+
   it("throws for a grille with no known reclassement table (e.g. INSTIT, never a HC/EXC origin)", () => {
     expect(() =>
       computeReclassementHcExc({

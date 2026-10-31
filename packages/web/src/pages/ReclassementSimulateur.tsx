@@ -888,6 +888,10 @@ function Cas3() {
               code: "EXC_PROFS" as const,
               label: "Certifié / PEPS / PLP / Prof. des écoles — Classe exceptionnelle (échelon 4 → chevron HEA1)",
             },
+            {
+              code: "CHAIRE_SUP" as const,
+              label: "Professeur de chaire supérieure (échelon 6-HEA2 → 7-HEB2)",
+            },
           ],
     [processus],
   );
@@ -903,7 +907,9 @@ function Cas3() {
         computeReclassementHcExc({
           processus,
           grilleActuelle,
-          echelonActuel: Number(echelonActuel) || 0,
+          // Numérique pour toutes les grilles sauf CHAIRE_SUP (seul échelon de départ possible :
+          // le code composite "6-HEA2", pas convertible en nombre).
+          echelonActuel: Number(echelonActuel) || echelonActuel,
           ancienneteJoursAuReference: Math.max(0, ancienneteAvecCorrections),
           dateReference,
         }),
@@ -970,8 +976,9 @@ function Cas3() {
             onChange={(e) => {
               const nouvelleGrille = e.target.value as GrilleCode;
               setGrilleActuelle(nouvelleGrille);
-              // Classe exceptionnelle -> chevron : un seul échelon de départ possible (4).
+              // Un seul échelon de départ possible pour ces deux grilles.
               if (nouvelleGrille === "EXC_PROFS") setEchelonActuel("4");
+              if (nouvelleGrille === "CHAIRE_SUP") setEchelonActuel("6-HEA2");
             }}
           >
             {optionsGrille.map((g) => (
@@ -983,7 +990,11 @@ function Cas3() {
         </label>
         <label>
           Échelon de départ
-          <input type="number" min={1} value={echelonActuel} onChange={(e) => setEchelonActuel(e.target.value)} />
+          {grilleActuelle === "EXC_PROFS" || grilleActuelle === "CHAIRE_SUP" ? (
+            <input type="text" value={echelonActuel} readOnly title="Seul échelon de départ possible pour cette grille" />
+          ) : (
+            <input type="number" min={1} value={echelonActuel} onChange={(e) => setEchelonActuel(e.target.value)} />
+          )}
         </label>
         <label>
           Date d'entrée dans cet échelon

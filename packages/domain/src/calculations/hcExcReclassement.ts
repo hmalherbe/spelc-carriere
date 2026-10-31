@@ -6,6 +6,7 @@ import {
   RECLASSEMENT_PROFS_VERS_HORS_CLASSE,
   RECLASSEMENT_AGR_VERS_HORS_CLASSE,
   RECLASSEMENT_EXC_PROFS_VERS_CHEVRON,
+  RECLASSEMENT_CHAIRE_SUP_VERS_CHEVRON,
   RECLASSEMENT_BI_ADMISSIBLE_PROFS_VERS_HORS_CLASSE,
   RECLASSEMENT_PEGC_VERS_HORS_CLASSE,
   RECLASSEMENT_HC_PROFS_VERS_CLASSE_EXCEPTIONNELLE,
@@ -28,6 +29,7 @@ const TABLES_RECLASSEMENT: Partial<Record<GrilleCode, ReclassementRow[]>> = {
   HC_AGR: RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE,
   HC_PEGC: RECLASSEMENT_HC_PEGC_VERS_CLASSE_EXCEPTIONNELLE,
   EXC_PROFS: RECLASSEMENT_EXC_PROFS_VERS_CHEVRON,
+  CHAIRE_SUP: RECLASSEMENT_CHAIRE_SUP_VERS_CHEVRON,
 };
 
 export interface HcExcReclassementInput {
@@ -36,9 +38,13 @@ export interface HcExcReclassementInput {
    * Hors Classe reclassement, or a Hors Classe grille ("HC_PROFS"/"HC_AGR") for a Classe
    * Exceptionnelle one. */
   grilleActuelle: GrilleCode;
-  /** The échelon within `grilleActuelle` the teacher is being promoted FROM — numeric only for
-   * now (see module doc comment for the known Agrégé lettered-échelon gap). */
-  echelonActuel: number;
+  /** The échelon within `grilleActuelle` the teacher is being promoted FROM — numeric for the
+   * tables that key their correspondance on échelon+ancienneté (`reclassement()`'s own `cle`
+   * mechanism). Can be a lettered code (e.g. "6-HEA2") only for a grille whose table has exactly
+   * one row (CHAIRE_SUP) — see computeReclassementHcExc, which bypasses the numeric key entirely
+   * in that case. Still numeric-only for HC_AGR→Classe Exceptionnelle in the general case (known
+   * gap, see this function's own doc comment). */
+  echelonActuel: EchelonCode;
   /** The teacher's ancienneté in `echelonActuel`, in banking days, AS OF `dateReference` (not
    * necessarily as of whatever date it was last measured — project it forward first if needed). */
   ancienneteJoursAuReference: number;
@@ -96,13 +102,14 @@ export function computeReclassementHcExc(input: HcExcReclassementInput): HcExcRe
     throw new Error(`Aucune table de reclassement connue pour la grille ${input.grilleActuelle}`);
   }
 
-  const ancienneteAnnees = input.ancienneteJoursAuReference / 360;
-  const cle = input.echelonActuel * 10 + ancienneteAnnees;
-  const row = reclassement(table, cle);
+  // Une table à une seule ligne (EXC_PROFS->chevron, CHAIRE_SUP) représente un seul échelon de
+  // départ possible : pas de recherche par ancienneté, et son code d'échelon n'est pas forcément
+  // numérique (ex. "6-HEA2"), donc pas de `cle` à construire du tout.
+  const row = table.length === 1 ? table[0] : reclassement(table, (input.echelonActuel as number) * 10 + input.ancienneteJoursAuReference / 360);
 
   const ancienneteReporteeJours =
     input.processus === "HC"
-      ? ancienneteReporteeReclassementHC(input.echelonActuel, input.ancienneteJoursAuReference, row.conservationAnciennete)
+      ? ancienneteReporteeReclassementHC(Number(input.echelonActuel), input.ancienneteJoursAuReference, row.conservationAnciennete)
       : row.conservationAnciennete
         ? input.ancienneteJoursAuReference
         : 0;

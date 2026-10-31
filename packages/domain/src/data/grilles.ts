@@ -34,7 +34,8 @@ export type GrilleCode =
   | "EXC_PROFS"
   | "EXC_PEGC"
   | "MA_1"
-  | "MA_2";
+  | "MA_2"
+  | "CHAIRE_SUP";
 
 export const GRILLES: Record<GrilleCode, EchelonRow[]> = {
   "AGR": [
@@ -825,5 +826,23 @@ export const GRILLES: Record<GrilleCode, EchelonRow[]> = {
       "duree": "MAX",
       "dureeAvantVivier2": "MAX"
     }
+  ],
+  // Professeur de chaire supérieure — Données!M58:P68 du classeur source (fourni par l'utilisateur,
+  // 2026-11-01, et confirmé directement dans le classeur). Échelons 6 et 7 composites
+  // ("6-HEA1"/"6-HEA2"/"6-HEA3", "7-HEB1"/"7-HEB2"/"7-HEB3") : le classeur ne sépare pas ici
+  // "échelon" et "chevron" en deux axes distincts comme pour HC_AGR/EXC_AGR — le code brut EST le
+  // nom complet de la position, gardé tel quel plutôt que traduit en "A1"/"B2".
+  "CHAIRE_SUP": [
+    { "echelon": 1, "echelonSuivant": 2, "indice": 673, "duree": 2 },
+    { "echelon": 2, "echelonSuivant": 3, "indice": 710, "duree": 2 },
+    { "echelon": 3, "echelonSuivant": 4, "indice": 757, "duree": 2 },
+    { "echelon": 4, "echelonSuivant": 5, "indice": 800, "duree": 2 },
+    { "echelon": 5, "echelonSuivant": "6-HEA1", "indice": 830, "duree": 4.5 },
+    { "echelon": "6-HEA1", "echelonSuivant": "6-HEA2", "indice": 890, "duree": 1 },
+    { "echelon": "6-HEA2", "echelonSuivant": "6-HEA3", "indice": 925, "duree": 1 },
+    { "echelon": "6-HEA3", "echelonSuivant": "7-HEB1", "indice": 972, "duree": 1 },
+    { "echelon": "7-HEB1", "echelonSuivant": "7-HEB2", "indice": 972, "duree": 1 },
+    { "echelon": "7-HEB2", "echelonSuivant": "7-HEB3", "indice": 1013, "duree": 1 },
+    { "echelon": "7-HEB3", "echelonSuivant": "7-HEB3", "indice": 1067, "duree": "MAX" }
   ]
 };

@@ -168,6 +168,15 @@ export const RECLASSEMENT_AGR_VERS_HORS_CLASSE: ReclassementRow[] = [
  * est un no-op sur un code qui n'a pas ce préfixe). */
 export const RECLASSEMENT_EXC_PROFS_VERS_CHEVRON: ReclassementRow[] = [{ cle: 40, echelonReclassement: 5, conservationAnciennete: false }];
 
+/** Professeur de chaire supérieure, échelon "6-HEA2" (son seul échelon de départ pertinent ici) →
+ * "7-HEB2" — confirmé par l'utilisateur (2026-11-01), table fournie directement et recoupée avec
+ * Données!M58:P68 du classeur source (voir grilles.ts's GRILLES.CHAIRE_SUP). Pas de report
+ * d'ancienneté (G11 du classeur exclut explicitement "CHAIRE_SUP"). `cle` n'a ici aucun rôle
+ * ancienneté-dépendant — un seul échelon de départ existe, jamais interrogé numériquement
+ * puisque le code d'échelon lui-même ("6-HEA2") n'est pas numérique (voir computeReclassementHcExc,
+ * qui court-circuite la recherche par clé pour toute table à une seule ligne). */
+export const RECLASSEMENT_CHAIRE_SUP_VERS_CHEVRON: ReclassementRow[] = [{ cle: 0, echelonReclassement: "7-HEB2", conservationAnciennete: false }];
+
 /** Certifié/PLP/PEPS bi-admissible → Hors Classe — atterrit dans la grille HC_PROFS ordinaire (la
  * bi-admissibilité ne se prolonge pas en tant que grille Hors Classe distincte ; aucune
  * "reclassement_HC_BI_ADMISSIBLE_PROFS" n'existe dans le classeur, voir nouvelleGrilleApresReclassement). */
