@@ -207,6 +207,49 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
     expect(withIrrelevantMajoration.totalReconstitueJours).toBe(5276);
   });
 
+  it("computes the hc6 majoration for HC échelon 7 from dateReclassement (classeur's Calculs!B43 substitution), never from a separately-entered échelon-7 date", () => {
+    // Bug réel (2026-10-31) : un Hors Classe échelon 7 n'a jamais de date d'accès au 7e échelon
+    // séparée à saisir dans le classeur — Calculs!B43 substitue automatiquement la date d'effet du
+    // reclassement. majorationHC6 = joursComptablesEntre(6e échelon, date d'effet) - 1080j.
+    const result = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 7,
+      dateEchelon: "2020-01-01",
+      dateReclassement: "2023-01-01",
+      majorations: { dateAccesEchelon6HorsClasse: "2022-01-01" },
+    });
+    expect(result.baseTheoriqueJours).toBe(12420); // seuil fin échelon 11 (9360) + 3060
+    expect(result.joursAcquisDansEchelon).toBe(1080);
+    // (2023-01-01 - 2022-01-01) - 1080 = 360 - 1080 = -720.
+    expect(result.majorationsJours).toBe(-720);
+    expect(result.totalAvantCoefficientJours).toBe(12780);
+
+    // Un éventuel dateAccesEchelon7HorsClasse saisi n'a aucun effet pour HC (champ qui n'existe
+    // même pas dans le classeur pour ce cas) — seul EXC l'utilise encore (voir le test EXC ci-dessous).
+    const withIgnoredField = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 7,
+      dateEchelon: "2020-01-01",
+      dateReclassement: "2023-01-01",
+      majorations: { dateAccesEchelon6HorsClasse: "2022-01-01", dateAccesEchelon7HorsClasse: "1999-01-01" },
+    });
+    expect(withIgnoredField.totalAvantCoefficientJours).toBe(12780);
+  });
+
+  it("still uses the separately-entered échelon-7 date for EXC's own hc6 majoration (unaffected by the HC substitution above)", () => {
+    // EXC_PROFS échelon 4+ : les deux dates restent deux faits indépendants dans le classeur
+    // (A20/A21 demandent les deux), jamais la date d'effet du reclassement.
+    const result = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "EXC_PROFS",
+      echelonActuel: 4,
+      dateEchelon: "2020-01-01",
+      dateReclassement: "2023-01-01", // sans rapport avec la majoration hc6 ici
+      majorations: { dateAccesEchelon6HorsClasse: "2022-01-01", dateAccesEchelon7HorsClasse: "2022-07-01" },
+    });
+    // (2022-07-01 - 2022-01-01) = 180j ; moins 0 (processus EXC, jamais -1080) = 180j.
+    expect(result.majorationsJours).toBe(180);
+  });
+
   it("computes the cn11 majoration from the two access dates once the échelon qualifies for it, with no minoration when bi-admissible (the default)", () => {
     // base théorique (échelon 11 AGR, HC échelon 5) = 9360 + 900 = 10260j, 0j acquis dans l'échelon
     // (mêmes dates) -> floor(10260*135/175) = 7914 sans majoration.

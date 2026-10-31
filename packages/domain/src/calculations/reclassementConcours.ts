@@ -238,12 +238,28 @@ function majorationCN11(majorations: ReclassementConcoursDepuisHcExcInput["major
 }
 
 /** Majoration 6e échelon hors classe (Calculs!F47) : durée entre les deux dates d'accès, moins 3
- * ans (1080j) uniquement pour un `processus` HC (jamais pour EXC — fidèle à F47). 0 si la date
- * d'accès au 7e échelon manque. */
-function majorationHC6(majorations: ReclassementConcoursDepuisHcExcInput["majorations"], processus: "HC" | "EXC"): number {
+ * ans (1080j) uniquement pour un `processus` HC (jamais pour EXC — fidèle à F47).
+ *
+ * Pour HC spécifiquement, cette majoration ne s'applique qu'à l'échelon 7 (voir le gating au point
+ * d'appel) — le 7e échelon HC étant la position ACTUELLE de l'agent, le classeur ne demande jamais
+ * sa date d'accès séparément : Calculs!B43 ("Date_acces_echelon_7_HC_calculs_concours_HC_EXC")
+ * substitue automatiquement la date d'effet du reclassement dans ce cas précis — confirmé en
+ * lisant sa formule exacte (`IF(AND(HC_PROFS, échelon=7), date_effet_reclassement, <champ séparé,
+ * EXC uniquement>)`) ; un enseignant n'ayant donc jamais ce champ à saisir pour un Hors Classe,
+ * contrairement à EXC où les deux dates restent deux faits indépendants. Confirmé par un cas réel
+ * (2026-10-31) : HC échelon 7, la majoration restait silencieusement à 0 côté appli faute de ce
+ * champ, jamais demandé par le classeur, jamais rempli par l'utilisateur à juste titre.
+ * `dateAccesEchelon7HorsClasse` (saisie séparément) ne sert donc plus qu'à EXC. 0 si la date
+ * d'accès au 6e échelon manque. */
+function majorationHC6(
+  majorations: ReclassementConcoursDepuisHcExcInput["majorations"],
+  processus: "HC" | "EXC",
+  dateReclassement: string,
+): number {
   const { dateAccesEchelon6HorsClasse, dateAccesEchelon7HorsClasse } = majorations ?? {};
-  if (!dateAccesEchelon7HorsClasse || !dateAccesEchelon6HorsClasse) return 0;
-  const duree = joursComptablesEntre(dateAccesEchelon6HorsClasse, dateAccesEchelon7HorsClasse);
+  const dateAcces7 = processus === "HC" ? dateReclassement : dateAccesEchelon7HorsClasse;
+  if (!dateAcces7 || !dateAccesEchelon6HorsClasse) return 0;
+  const duree = joursComptablesEntre(dateAccesEchelon6HorsClasse, dateAcces7);
   return duree - (processus === "HC" ? 1080 : 0);
 }
 
@@ -272,7 +288,7 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
   const majCN11 = (processus === "HC" && input.echelonActuel >= 5) || (processus === "EXC" && input.echelonActuel >= 3) ? majorationCN11(input.majorations) : 0;
   const majHC6 =
     (processus === "HC" && input.echelonActuel >= 7) || (processus === "EXC" && input.echelonActuel >= 4)
-      ? majorationHC6(input.majorations, processus)
+      ? majorationHC6(input.majorations, processus, input.dateReclassement)
       : 0;
   const majEXC4 = processus === "EXC" && input.echelonActuel >= 5 ? majorationEXC4(input.majorations, input.dateReclassement) : 0;
 
