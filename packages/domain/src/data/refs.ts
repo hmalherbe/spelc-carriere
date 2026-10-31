@@ -129,8 +129,20 @@ export interface ReclassementRow {
   conservationAnciennete: boolean;
 }
 
+// Les 7 tables ci-dessous sont lues directement de Données!D134:F204 du classeur source (chacune
+// sous son propre nom "reclassement_<suffixe>", choisi par une formule générique
+// INDIRECT("reclassement_"&VLOOKUP(grade,Grades_echelles,6,FALSE)) côté classeur — voir
+// computeReclassementHcExc, calculations/hcExcReclassement.ts, qui reproduit ce choix de table par
+// grille plutôt que l'ancien branchement "AGR ou pas"). Relu intégralement le 2026-11-01 : PROFS et
+// AGR avaient chacune une ligne manquante (cle 94, Non) et HC_PROFS en avait deux (cle 70 et 73) en
+// plus d'un drapeau conservationAnciennete inversé pour sa ligne cle=60 (Non, pas Oui) — corrigés ;
+// une clé manquante fausse le résultat de vlookupApprox pour toute ancienneté tombant dans l'écart
+// laissé vacant, pas seulement sur la clé exacte absente. HC_AGR, seule à l'origine complète,
+// confirmée inchangée. Les codes d'échelon lettrés du classeur ("2-HEA1"/"3-HEB2"...) sont traduits
+// ici en les codes qu'utilise réellement GRILLES.HC_AGR/EXC_AGR ("A1"/"B2"...).
 export const RECLASSEMENT_PROFS_VERS_HORS_CLASSE: ReclassementRow[] = [
   { cle: 92, echelonReclassement: 2, conservationAnciennete: true },
+  { cle: 94, echelonReclassement: 3, conservationAnciennete: false },
   { cle: 100, echelonReclassement: 3, conservationAnciennete: true },
   { cle: 102.5, echelonReclassement: 4, conservationAnciennete: false },
   { cle: 110, echelonReclassement: 4, conservationAnciennete: true },
@@ -139,10 +151,31 @@ export const RECLASSEMENT_PROFS_VERS_HORS_CLASSE: ReclassementRow[] = [
 
 export const RECLASSEMENT_AGR_VERS_HORS_CLASSE: ReclassementRow[] = [
   { cle: 92, echelonReclassement: 2, conservationAnciennete: true },
+  { cle: 94, echelonReclassement: 3, conservationAnciennete: false },
   { cle: 100, echelonReclassement: 2, conservationAnciennete: true },
   { cle: 102, echelonReclassement: 3, conservationAnciennete: false },
   { cle: 110, echelonReclassement: 3, conservationAnciennete: true },
   { cle: 113, echelonReclassement: "A1", conservationAnciennete: false },
+];
+
+/** Certifié/PLP/PEPS bi-admissible → Hors Classe — atterrit dans la grille HC_PROFS ordinaire (la
+ * bi-admissibilité ne se prolonge pas en tant que grille Hors Classe distincte ; aucune
+ * "reclassement_HC_BI_ADMISSIBLE_PROFS" n'existe dans le classeur, voir nouvelleGrilleApresReclassement). */
+export const RECLASSEMENT_BI_ADMISSIBLE_PROFS_VERS_HORS_CLASSE: ReclassementRow[] = [
+  { cle: 92, echelonReclassement: 3, conservationAnciennete: true },
+  { cle: 94, echelonReclassement: 4, conservationAnciennete: false },
+  { cle: 100, echelonReclassement: 4, conservationAnciennete: false },
+  { cle: 102.5, echelonReclassement: 4, conservationAnciennete: false },
+  { cle: 110, echelonReclassement: 4, conservationAnciennete: true },
+  { cle: 112.5, echelonReclassement: 5, conservationAnciennete: false },
+];
+
+export const RECLASSEMENT_PEGC_VERS_HORS_CLASSE: ReclassementRow[] = [
+  { cle: 92, echelonReclassement: 3, conservationAnciennete: true },
+  { cle: 100, echelonReclassement: 4, conservationAnciennete: true },
+  { cle: 103, echelonReclassement: 4, conservationAnciennete: false },
+  { cle: 110, echelonReclassement: 4, conservationAnciennete: true },
+  { cle: 113, echelonReclassement: 5, conservationAnciennete: false },
 ];
 
 export const RECLASSEMENT_HC_PROFS_VERS_CLASSE_EXCEPTIONNELLE: ReclassementRow[] = [
@@ -152,7 +185,20 @@ export const RECLASSEMENT_HC_PROFS_VERS_CLASSE_EXCEPTIONNELLE: ReclassementRow[]
   { cle: 42, echelonReclassement: 3, conservationAnciennete: false },
   { cle: 50, echelonReclassement: 3, conservationAnciennete: true },
   { cle: 52.5, echelonReclassement: 4, conservationAnciennete: false },
-  { cle: 60, echelonReclassement: 4, conservationAnciennete: true },
+  { cle: 60, echelonReclassement: 4, conservationAnciennete: false },
+  { cle: 70, echelonReclassement: 4, conservationAnciennete: true },
+  { cle: 73, echelonReclassement: 5, conservationAnciennete: false },
+];
+
+export const RECLASSEMENT_HC_PEGC_VERS_CLASSE_EXCEPTIONNELLE: ReclassementRow[] = [
+  { cle: 30, echelonReclassement: 1, conservationAnciennete: false },
+  { cle: 31, echelonReclassement: 1, conservationAnciennete: false },
+  { cle: 40, echelonReclassement: 1, conservationAnciennete: false },
+  { cle: 42.5, echelonReclassement: 1, conservationAnciennete: false },
+  { cle: 50, echelonReclassement: 1, conservationAnciennete: true },
+  { cle: 52.5, echelonReclassement: 2, conservationAnciennete: false },
+  { cle: 60, echelonReclassement: 2, conservationAnciennete: true },
+  { cle: 62.5, echelonReclassement: 3, conservationAnciennete: false },
 ];
 
 export const RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE: ReclassementRow[] = [

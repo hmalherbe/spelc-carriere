@@ -5,10 +5,28 @@ import { reclassement, ancienneteReporteeReclassementHC } from "./hcExc.js";
 import {
   RECLASSEMENT_PROFS_VERS_HORS_CLASSE,
   RECLASSEMENT_AGR_VERS_HORS_CLASSE,
+  RECLASSEMENT_BI_ADMISSIBLE_PROFS_VERS_HORS_CLASSE,
+  RECLASSEMENT_PEGC_VERS_HORS_CLASSE,
   RECLASSEMENT_HC_PROFS_VERS_CLASSE_EXCEPTIONNELLE,
   RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE,
+  RECLASSEMENT_HC_PEGC_VERS_CLASSE_EXCEPTIONNELLE,
+  type ReclassementRow,
 } from "../data/refs.js";
 import type { EchelonCode, EchelonRow, GrilleCode } from "../data/grilles.js";
+
+/** Quelle table de correspondance utiliser pour chaque grille d'origine — reproduit le choix
+ * générique du classeur (`INDIRECT("reclassement_"&VLOOKUP(grade,Grades_echelles,6,FALSE))`),
+ * plutôt que l'ancien branchement binaire "AGR ou pas" qui retombait, à tort, sur la table PROFS
+ * pour toute autre grille (BI_ADM, PEGC...). */
+const TABLES_RECLASSEMENT: Partial<Record<GrilleCode, ReclassementRow[]>> = {
+  PROFS: RECLASSEMENT_PROFS_VERS_HORS_CLASSE,
+  AGR: RECLASSEMENT_AGR_VERS_HORS_CLASSE,
+  BI_ADM: RECLASSEMENT_BI_ADMISSIBLE_PROFS_VERS_HORS_CLASSE,
+  PEGC: RECLASSEMENT_PEGC_VERS_HORS_CLASSE,
+  HC_PROFS: RECLASSEMENT_HC_PROFS_VERS_CLASSE_EXCEPTIONNELLE,
+  HC_AGR: RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE,
+  HC_PEGC: RECLASSEMENT_HC_PEGC_VERS_CLASSE_EXCEPTIONNELLE,
+};
 
 export interface HcExcReclassementInput {
   processus: "HC" | "EXC";
@@ -45,9 +63,14 @@ export interface HcExcReclassementResult {
 /** Maps a grille moving into Hors Classe ("PROFS" -> "HC_PROFS") or from Hors Classe into Classe
  * Exceptionnelle ("HC_PROFS" -> "EXC_PROFS", "HC_AGR" -> "EXC_AGR") — matches the central
  * spreadsheet's own `Grade & " HC"` / `SUBSTITUTE(Grade,"HC","EXC")` formulas, expressed on grille
- * codes instead of grade labels (the two follow the exact same naming — see GRADE_MAPPINGS). */
+ * codes instead of grade labels (the two follow the exact same naming — see GRADE_MAPPINGS).
+ *
+ * Exception : "BI_ADM" (Certifié/PLP/PEPS bi-admissible) atterrit dans "HC_PROFS" ordinaire, pas
+ * dans une "HC_BI_ADM" qui n'existe pas (ni dans GRILLES ni comme table de correspondance dans le
+ * classeur) — la bi-admissibilité ne distingue que la classe normale. */
 function nouvelleGrilleApresReclassement(processus: "HC" | "EXC", grilleActuelle: GrilleCode): GrilleCode {
-  return (processus === "HC" ? `HC_${grilleActuelle}` : grilleActuelle.replace("HC_", "EXC_")) as GrilleCode;
+  if (processus === "HC") return grilleActuelle === "BI_ADM" ? "HC_PROFS" : ((`HC_${grilleActuelle}`) as GrilleCode);
+  return grilleActuelle.replace("HC_", "EXC_") as GrilleCode;
 }
 
 /**
@@ -66,14 +89,10 @@ function nouvelleGrilleApresReclassement(processus: "HC" | "EXC", grilleActuelle
  * not yet correctly handled.
  */
 export function computeReclassementHcExc(input: HcExcReclassementInput): HcExcReclassementResult {
-  const table =
-    input.processus === "HC"
-      ? input.grilleActuelle === "AGR"
-        ? RECLASSEMENT_AGR_VERS_HORS_CLASSE
-        : RECLASSEMENT_PROFS_VERS_HORS_CLASSE
-      : input.grilleActuelle === "HC_AGR"
-        ? RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE
-        : RECLASSEMENT_HC_PROFS_VERS_CLASSE_EXCEPTIONNELLE;
+  const table = TABLES_RECLASSEMENT[input.grilleActuelle];
+  if (!table) {
+    throw new Error(`Aucune table de reclassement connue pour la grille ${input.grilleActuelle}`);
+  }
 
   const ancienneteAnnees = input.ancienneteJoursAuReference / 360;
   const cle = input.echelonActuel * 10 + ancienneteAnnees;

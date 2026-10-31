@@ -164,6 +164,32 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
     expect(result.coefficientFraction).toEqual({ numerateur: 27, denominateur: 35 });
   });
 
+  it("adds reportAnciennete and subtracts ancienneteADeduire from joursAcquisDansEchelon (Calculs!B41)", () => {
+    const base = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 1,
+      dateEchelon: "2024-09-01",
+      dateReclassement: "2025-09-01",
+    });
+    const avecReport = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 1,
+      dateEchelon: "2024-09-01",
+      dateReclassement: "2025-09-01",
+      reportAnciennete: "01a00m00j", // +360j
+    });
+    expect(avecReport.joursAcquisDansEchelon).toBe(base.joursAcquisDansEchelon + 360);
+
+    const avecDeduction = computeReclassementConcoursDepuisHcExc({
+      grilleOrigine: "HC_PROFS",
+      echelonActuel: 1,
+      dateEchelon: "2024-09-01",
+      dateReclassement: "2025-09-01",
+      ancienneteADeduire: "00a06m00j", // -180j
+    });
+    expect(avecDeduction.joursAcquisDansEchelon).toBe(base.joursAcquisDansEchelon - 180);
+  });
+
   it("real case reported 2026-10-31: Certifié HC échelon 1 au 01/09/2024, reclassement au 01/09/2026 — base théorique 6480j, pas 5220j", () => {
     const result = computeReclassementConcoursDepuisHcExc({
       grilleOrigine: "HC_PROFS",

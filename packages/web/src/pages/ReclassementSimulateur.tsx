@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  ancienneteToBankingDays,
   bankingDaysToYMD,
   coefficientAppliqueFraction,
   computeReclassementConcours,
@@ -8,6 +9,7 @@ import {
   GRILLES,
   joursComptablesEntre,
   joursRetenusPourService,
+  parseAncienneteText,
   rangEchelon,
   seuilEntreeEchelon,
   SITUATIONS_AVANT_RECLASSEMENT,
@@ -508,6 +510,8 @@ interface Cas2Parametres {
   echelonActuel: string;
   dateEchelon: string;
   dateReclassement: string;
+  reportAnciennete: string;
+  ancienneteADeduire: string;
   grilleCible: "AGR" | "PROFS";
   biAdmissible: boolean;
   dateAccesEchelon11CN: string;
@@ -526,6 +530,11 @@ function Cas2() {
   const options = echelonOptionsCas2(grilleOrigine);
   const [dateEchelon, setDateEchelon] = useState("");
   const [dateReclassement, setDateReclassement] = useState("");
+  // Corrections éventuelles de l'ancienneté dans l'échelon avant reclassement (Calculs!B41) —
+  // mêmes champs "AAaMMmJJj" que les corrections "ancienneté à reporter/à déduire" déjà présentes
+  // ailleurs dans l'application (Enseignants, Saisies manuelles).
+  const [reportAnciennete, setReportAnciennete] = useState("");
+  const [ancienneteADeduire, setAncienneteADeduire] = useState("");
   // Corps cible unique dans ce cas (contrairement au cas 1) : toujours Agrégé.
   const grilleCible = "AGR" as const;
   // Majorations d'ancienneté (décret 2022-708) — calculées à partir de ces dates d'accès, plutôt
@@ -571,6 +580,8 @@ function Cas2() {
           echelonActuel,
           dateEchelon,
           dateReclassement,
+          reportAnciennete: reportAnciennete.trim() || undefined,
+          ancienneteADeduire: ancienneteADeduire.trim() || undefined,
           grilleCible,
           majorations: {
             biAdmissibleAgregation: biAdmissible,
@@ -600,6 +611,8 @@ function Cas2() {
     setEchelonActuel(params.echelonActuel);
     setDateEchelon(params.dateEchelon);
     setDateReclassement(params.dateReclassement);
+    setReportAnciennete(params.reportAnciennete ?? "");
+    setAncienneteADeduire(params.ancienneteADeduire ?? "");
     setBiAdmissible(params.biAdmissible ?? true);
     setDateAccesEchelon11CN(params.dateAccesEchelon11CN ?? "");
     setDateAccesHorsClasse(params.dateAccesHorsClasse ?? "");
@@ -663,7 +676,19 @@ function Cas2() {
           Date d'effet du reclassement
           <input type="date" min="1960-01-01" max="2099-12-31" value={dateReclassement} onChange={(e) => setDateReclassement(e.target.value)} />
         </label>
+        <label>
+          Report d'ancienneté (optionnel)
+          <input placeholder='ex. "01a00m00j"' value={reportAnciennete} onChange={(e) => setReportAnciennete(e.target.value)} />
+        </label>
+        <label>
+          Ancienneté à déduire (optionnel)
+          <input placeholder='ex. "00a06m00j"' value={ancienneteADeduire} onChange={(e) => setAncienneteADeduire(e.target.value)} />
+        </label>
       </div>
+      <p className="hint">
+        Report d'ancienneté et ancienneté à déduire, format "AAaMMmJJj" (années/mois/jours) — pris en compte dans
+        l'ancienneté dans l'échelon avant reclassement.
+      </p>
 
       <BoutonCharger recherche={gestion.recherche} rechercheError={gestion.rechercheError} onRechercher={charger} />
 
@@ -790,6 +815,8 @@ function Cas2() {
                     echelonActuel,
                     dateEchelon,
                     dateReclassement,
+                    reportAnciennete,
+                    ancienneteADeduire,
                     grilleCible,
                     biAdmissible,
                     dateAccesEchelon11CN,
@@ -820,20 +847,26 @@ function Cas2() {
 
 interface Cas3Parametres {
   processus: "HC" | "EXC";
-  grilleActuelle: "PROFS" | "AGR" | "HC_PROFS" | "HC_AGR";
+  grilleActuelle: GrilleCode;
   echelonActuel: string;
   dateDernierChangement: string;
   dateReference: string;
+  reportAnciennete: string;
+  ancienneteADeduire: string;
 }
 
 function Cas3() {
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
   const [processus, setProcessus] = useState<"HC" | "EXC">("HC");
-  const [grilleActuelle, setGrilleActuelle] = useState<"PROFS" | "AGR" | "HC_PROFS" | "HC_AGR">("PROFS");
+  const [grilleActuelle, setGrilleActuelle] = useState<GrilleCode>("PROFS");
   const [echelonActuel, setEchelonActuel] = useState("9");
   const [dateDernierChangement, setDateDernierChangement] = useState("");
   const [dateReference, setDateReference] = useState("");
+  // Corrections éventuelles de l'ancienneté dans l'échelon avant reclassement (Calculs!B17, même
+  // mécanique que Cas2 — voir son propre commentaire).
+  const [reportAnciennete, setReportAnciennete] = useState("");
+  const [ancienneteADeduire, setAncienneteADeduire] = useState("");
   const [result, setResult] = useState<ReturnType<typeof computeReclassementHcExc> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const gestion = useReclassementGestion("CAS3");
@@ -844,22 +877,30 @@ function Cas3() {
         ? [
             { code: "PROFS" as const, label: "Certifié / PEPS / PLP / Prof. des écoles" },
             { code: "AGR" as const, label: "Agrégé" },
+            { code: "BI_ADM" as const, label: "Certifié / PEPS / PLP — Bi-admissible" },
+            { code: "PEGC" as const, label: "PEGC" },
           ]
         : [
             { code: "HC_PROFS" as const, label: "Certifié / PEPS / PLP / Prof. des écoles — Hors Classe" },
             { code: "HC_AGR" as const, label: "Agrégé — Hors Classe" },
+            { code: "HC_PEGC" as const, label: "PEGC — Hors Classe" },
           ],
     [processus],
   );
 
   function calculer() {
     try {
+      const ancienneteBrute = dateDernierChangement && dateReference ? joursComptablesEntre(dateDernierChangement, dateReference) : 0;
+      const ancienneteAvecCorrections =
+        ancienneteBrute +
+        ancienneteToBankingDays(parseAncienneteText(reportAnciennete.trim() || null)) -
+        ancienneteToBankingDays(parseAncienneteText(ancienneteADeduire.trim() || null));
       setResult(
         computeReclassementHcExc({
           processus,
           grilleActuelle,
           echelonActuel: Number(echelonActuel) || 0,
-          ancienneteJoursAuReference: dateDernierChangement && dateReference ? Math.max(0, joursComptablesEntre(dateDernierChangement, dateReference)) : 0,
+          ancienneteJoursAuReference: Math.max(0, ancienneteAvecCorrections),
           dateReference,
         }),
       );
@@ -881,6 +922,8 @@ function Cas3() {
     setEchelonActuel(params.echelonActuel);
     setDateDernierChangement(params.dateDernierChangement);
     setDateReference(params.dateReference);
+    setReportAnciennete(params.reportAnciennete ?? "");
+    setAncienneteADeduire(params.ancienneteADeduire ?? "");
     setResult(saved.resultat as ReturnType<typeof computeReclassementHcExc>);
     setError(null);
   }
@@ -918,7 +961,7 @@ function Cas3() {
         </label>
         <label>
           Grade
-          <select value={grilleActuelle} onChange={(e) => setGrilleActuelle(e.target.value as "PROFS" | "AGR" | "HC_PROFS" | "HC_AGR")}>
+          <select value={grilleActuelle} onChange={(e) => setGrilleActuelle(e.target.value as GrilleCode)}>
             {optionsGrille.map((g) => (
               <option key={g.code} value={g.code}>
                 {g.label}
@@ -938,7 +981,19 @@ function Cas3() {
           Date d'effet du reclassement (rentrée de la campagne)
           <input type="date" min="1960-01-01" max="2099-12-31" value={dateReference} onChange={(e) => setDateReference(e.target.value)} />
         </label>
+        <label>
+          Report d'ancienneté (optionnel)
+          <input placeholder='ex. "01a00m00j"' value={reportAnciennete} onChange={(e) => setReportAnciennete(e.target.value)} />
+        </label>
+        <label>
+          Ancienneté à déduire (optionnel)
+          <input placeholder='ex. "00a06m00j"' value={ancienneteADeduire} onChange={(e) => setAncienneteADeduire(e.target.value)} />
+        </label>
       </div>
+      <p className="hint">
+        Report d'ancienneté et ancienneté à déduire, format "AAaMMmJJj" (années/mois/jours) — pris en compte dans
+        l'ancienneté dans l'échelon avant reclassement.
+      </p>
 
       <BoutonCharger recherche={gestion.recherche} rechercheError={gestion.rechercheError} onRechercher={charger} />
 
@@ -983,7 +1038,15 @@ function Cas3() {
                 gestion.enregistrer(
                   nom,
                   prenom,
-                  { processus, grilleActuelle, echelonActuel, dateDernierChangement, dateReference } satisfies Cas3Parametres,
+                  {
+                    processus,
+                    grilleActuelle,
+                    echelonActuel,
+                    dateDernierChangement,
+                    dateReference,
+                    reportAnciennete,
+                    ancienneteADeduire,
+                  } satisfies Cas3Parametres,
                   result,
                 )
               }

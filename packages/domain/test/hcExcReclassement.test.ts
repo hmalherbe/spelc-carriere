@@ -62,4 +62,71 @@ describe("computeReclassementHcExc (ported from the central spreadsheet's own re
     expect(result.ancienIndice).toBeGreaterThan(0);
     expect(result.nouvelIndice).toBeGreaterThanOrEqual(result.ancienIndice);
   });
+
+  it("resolves the previously-missing clé 94 bracket for PROFS and AGR (2026-11-01 fix — see refs.ts)", () => {
+    const profs = computeReclassementHcExc({
+      processus: "HC",
+      grilleActuelle: "PROFS",
+      echelonActuel: 9,
+      ancienneteJoursAuReference: 1440, // 4 ans -> clé 9*10+4 = 94
+      dateReference: "2026-09-01",
+    });
+    expect(profs.nouvelEchelon).toBe(3);
+    expect(profs.ancienneteReporteeJours).toBe(0); // conservation=false sur ce palier
+
+    const agr = computeReclassementHcExc({
+      processus: "HC",
+      grilleActuelle: "AGR",
+      echelonActuel: 9,
+      ancienneteJoursAuReference: 1440,
+      dateReference: "2026-09-01",
+    });
+    expect(agr.nouvelEchelon).toBe(3);
+  });
+
+  it("supports BI_ADM (bi-admissible) and PEGC origins for Hors Classe, and PEGC's own Hors Classe for Classe Exceptionnelle", () => {
+    // clé 92 (échelon 9 + 2 ans, en dessous de la plus petite clé des deux tables) -> exact.
+    // BI_ADM atterrit dans HC_PROFS ordinaire, pas une grille "HC_BI_ADM" inexistante.
+    const biAdm = computeReclassementHcExc({
+      processus: "HC",
+      grilleActuelle: "BI_ADM",
+      echelonActuel: 9,
+      ancienneteJoursAuReference: 720,
+      dateReference: "2026-09-01",
+    });
+    expect(biAdm.nouvelleGrille).toBe("HC_PROFS");
+    expect(biAdm.nouvelEchelon).toBe(3);
+
+    const pegc = computeReclassementHcExc({
+      processus: "HC",
+      grilleActuelle: "PEGC",
+      echelonActuel: 9,
+      ancienneteJoursAuReference: 720,
+      dateReference: "2026-09-01",
+    });
+    expect(pegc.nouvelleGrille).toBe("HC_PEGC");
+    expect(pegc.nouvelEchelon).toBe(3);
+
+    const hcPegc = computeReclassementHcExc({
+      processus: "EXC",
+      grilleActuelle: "HC_PEGC",
+      echelonActuel: 5,
+      ancienneteJoursAuReference: 0,
+      dateReference: "2026-09-01",
+    });
+    expect(hcPegc.nouvelleGrille).toBe("EXC_PEGC");
+    expect(hcPegc.nouvelEchelon).toBe(1);
+  });
+
+  it("throws for a grille with no known reclassement table (e.g. INSTIT, never a HC/EXC origin)", () => {
+    expect(() =>
+      computeReclassementHcExc({
+        processus: "HC",
+        grilleActuelle: "INSTIT",
+        echelonActuel: 9,
+        ancienneteJoursAuReference: 0,
+        dateReference: "2026-09-01",
+      }),
+    ).toThrow();
+  });
 });

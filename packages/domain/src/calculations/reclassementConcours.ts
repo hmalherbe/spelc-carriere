@@ -1,5 +1,5 @@
 import { classerParAncienneteJours, findEchelonRow, gainSalaireBrut, gainSalaireNet, rangEchelon, seuilFinEchelon } from "./grille.js";
-import { joursComptablesEntre } from "./anciennete.js";
+import { ancienneteToBankingDays, joursComptablesEntre, parseAncienneteText } from "./anciennete.js";
 import { simplifierFraction } from "./fraction.js";
 import { COEFFICIENT_CARACTERISTIQUE, SITUATIONS_AVANT_RECLASSEMENT } from "../data/refs.js";
 import { GRILLES, type EchelonCode, type EchelonRow, type GrilleCode } from "../data/grilles.js";
@@ -121,6 +121,12 @@ export interface ReclassementConcoursDepuisHcExcInput {
   dateEchelon: string;
   /** ISO — date du reclassement (jour de la nomination issue du concours). */
   dateReclassement: string;
+  /** "AAaMMmJJj" — ajoutée à l'ancienneté dans l'échelon avant reclassement (Calculs!B41 =
+   * joursComptablesEntre(dateEchelon, dateReclassement) + report - à déduire). Même format que les
+   * corrections "ancienneté à reporter/à déduire" de l'app principale. Absente ou vide -> 0. */
+  reportAnciennete?: string | null;
+  /** "AAaMMmJJj" — retranchée de l'ancienneté dans l'échelon avant reclassement, voir `reportAnciennete`. */
+  ancienneteADeduire?: string | null;
   /**
    * Majorations d'ancienneté (décret 2022-708) — CALCULÉES à partir des dates d'accès réelles, pas
    * saisies à la main (porté depuis Calculs!B47=SUM(C47:G47) du classeur : la formule C47 n'est pas
@@ -315,7 +321,10 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
 
   const rang = rangEchelon(input.grilleOrigine, input.echelonActuel, input.grilles);
   const base = baseTheoriqueJours(processus, rang, grilleCible, input.grilles);
-  const joursAcquisDansEchelon = joursComptablesEntre(input.dateEchelon, input.dateReclassement);
+  const joursAcquisDansEchelon =
+    joursComptablesEntre(input.dateEchelon, input.dateReclassement) +
+    ancienneteToBankingDays(parseAncienneteText(input.reportAnciennete)) -
+    ancienneteToBankingDays(parseAncienneteText(input.ancienneteADeduire));
 
   const majCN11 = (processus === "HC" && rang >= 5) || (processus === "EXC" && rang >= 3) ? majorationCN11(input.majorations) : 0;
   const eligibleHc6 = processus === "HC" ? rang >= 7 : rang >= 4 && anneeAccesClasseExceptionnelleEligible(input.majorations);

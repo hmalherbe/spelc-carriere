@@ -51,8 +51,14 @@ describe("reclassement (approximate VLOOKUP into breakpoint tables)", () => {
   });
 
   it("falls back to the largest key <= the lookup value, like Excel's approximate VLOOKUP", () => {
-    // 95 falls between clé 92 and clé 100 -> should resolve to the 92 bracket
+    // 95 falls between clé 94 et clé 100 -> doit résoudre sur le palier 94 (clé manquante jusqu'au
+    // 2026-11-01, voir refs.ts's own doc comment — 91 résout bien lui sur le palier 92 inférieur).
     expect(reclassement(RECLASSEMENT_AGR_VERS_HORS_CLASSE, 95)).toEqual({
+      cle: 94,
+      echelonReclassement: 3,
+      conservationAnciennete: false,
+    });
+    expect(reclassement(RECLASSEMENT_AGR_VERS_HORS_CLASSE, 93)).toEqual({
       cle: 92,
       echelonReclassement: 2,
       conservationAnciennete: true,
