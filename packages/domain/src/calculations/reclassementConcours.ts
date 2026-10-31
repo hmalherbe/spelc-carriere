@@ -243,21 +243,25 @@ function majorationCN11(majorations: ReclassementConcoursDepuisHcExcInput["major
  * Pour HC spécifiquement, cette majoration ne s'applique qu'à l'échelon 7 (voir le gating au point
  * d'appel) — le 7e échelon HC étant la position ACTUELLE de l'agent, le classeur ne demande jamais
  * sa date d'accès séparément : Calculs!B43 ("Date_acces_echelon_7_HC_calculs_concours_HC_EXC")
- * substitue automatiquement la date d'effet du reclassement dans ce cas précis — confirmé en
- * lisant sa formule exacte (`IF(AND(HC_PROFS, échelon=7), date_effet_reclassement, <champ séparé,
- * EXC uniquement>)`) ; un enseignant n'ayant donc jamais ce champ à saisir pour un Hors Classe,
- * contrairement à EXC où les deux dates restent deux faits indépendants. Confirmé par un cas réel
- * (2026-10-31) : HC échelon 7, la majoration restait silencieusement à 0 côté appli faute de ce
- * champ, jamais demandé par le classeur, jamais rempli par l'utilisateur à juste titre.
+ * substitue automatiquement `dateEchelon` dans ce cas précis — confirmé en résolvant la cellule
+ * exacte derrière le nom "date_effet_concours_HC_EXC" qu'utilise B43 : 'Reclt concours HC et EXC
+ * '!B9, soit le champ "date d'accès à l'échelon actuel" lui-même (PAS la date d'effet du
+ * reclassement, malgré un nom de variable trompeur dans le classeur — une première lecture de ce
+ * nom m'avait fait conclure, à tort, que B43 substituait la date d'effet du reclassement ;
+ * confirmé faux par un second cas réel, 2026-10-31 : HC échelon 7 au 01/09/2024, 6e échelon HC au
+ * 01/09/2025, date d'effet du reclassement 01/09/2027 — seule dateEchelon=2024-09-01 reproduit les
+ * 12060j du classeur, pas dateReclassement=2027-09-01 qui donnait 13140j). Un enseignant n'a donc
+ * jamais ce champ à saisir pour un Hors Classe, contrairement à EXC où les deux dates restent deux
+ * faits indépendants (voir le test "still uses the separately-entered échelon-7 date for EXC").
  * `dateAccesEchelon7HorsClasse` (saisie séparément) ne sert donc plus qu'à EXC. 0 si la date
  * d'accès au 6e échelon manque. */
 function majorationHC6(
   majorations: ReclassementConcoursDepuisHcExcInput["majorations"],
   processus: "HC" | "EXC",
-  dateReclassement: string,
+  dateEchelon: string,
 ): number {
   const { dateAccesEchelon6HorsClasse, dateAccesEchelon7HorsClasse } = majorations ?? {};
-  const dateAcces7 = processus === "HC" ? dateReclassement : dateAccesEchelon7HorsClasse;
+  const dateAcces7 = processus === "HC" ? dateEchelon : dateAccesEchelon7HorsClasse;
   if (!dateAcces7 || !dateAccesEchelon6HorsClasse) return 0;
   const duree = joursComptablesEntre(dateAccesEchelon6HorsClasse, dateAcces7);
   return duree - (processus === "HC" ? 1080 : 0);
@@ -288,7 +292,7 @@ export function computeReclassementConcoursDepuisHcExc(input: ReclassementConcou
   const majCN11 = (processus === "HC" && input.echelonActuel >= 5) || (processus === "EXC" && input.echelonActuel >= 3) ? majorationCN11(input.majorations) : 0;
   const majHC6 =
     (processus === "HC" && input.echelonActuel >= 7) || (processus === "EXC" && input.echelonActuel >= 4)
-      ? majorationHC6(input.majorations, processus, input.dateReclassement)
+      ? majorationHC6(input.majorations, processus, input.dateEchelon)
       : 0;
   const majEXC4 = processus === "EXC" && input.echelonActuel >= 5 ? majorationEXC4(input.majorations, input.dateReclassement) : 0;
 

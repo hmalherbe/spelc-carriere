@@ -638,11 +638,11 @@ function Cas2() {
           </label>
           {/* Pour un Hors Classe à l'échelon 7 (le seul cas où processus === "HC" déclenche cette
              majoration), le classeur ne demande jamais cette date séparément — il réutilise la date
-             d'effet du reclassement (Calculs!B43, voir reclassementConcours.ts's majorationHC6).
-             Un enseignant à l'échelon 7 EST déjà au 7e échelon depuis `dateEchelon` : lui redemander
-             cette même date dans un second champ n'a pas de sens et laissait la majoration à 0 en
-             silence faute de saisie (bug réel du 2026-10-31). Toujours nécessaire pour EXC en
-             revanche (les deux dates y restent deux faits indépendants). */}
+             d'accès à l'échelon actuel (`dateEchelon`, Calculs!B43, voir reclassementConcours.ts's
+             majorationHC6). Un enseignant à l'échelon 7 EST déjà au 7e échelon depuis `dateEchelon` :
+             lui redemander cette même date dans un second champ n'a pas de sens et laissait la
+             majoration à 0 en silence faute de saisie (bug réel du 2026-10-31). Toujours nécessaire
+             pour EXC en revanche (les deux dates y restent deux faits indépendants). */}
           {processus === "EXC" && (
             <label>
               Date d'accès au 7ᵉ échelon de la hors classe
