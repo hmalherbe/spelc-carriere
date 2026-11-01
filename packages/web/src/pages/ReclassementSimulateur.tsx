@@ -861,9 +861,11 @@ function formatNouvelEchelonLabel(grilleActuelle: GrilleCode, nouvelEchelon: Ech
  * choisie, ex. 14) selon les règles du syndicat (2026-11-01) :
  * - Classe normale (PROFS/AGR/BI_ADM/PEGC) : dépend de l'ancienneté dans l'échelon À LA DATE DU
  *   RECLASSEMENT — {10, 11} si < 720j (2 ans), {9, 10, 11} si >= 720j.
- * - Hors Classe Certifié/PEPS/PLP/Prof. des écoles (HC_PROFS) uniquement : {3, 4, 5, 6, 7} — PEGC
- *   (HC_PEGC) garde toutes les valeurs de sa propre grille, aucune restriction supplémentaire
- *   demandée pour lui.
+ * - Hors Classe Certifié/PEPS/PLP/Prof. des écoles (HC_PROFS) : {3, 4, 5, 6, 7}.
+ * - Hors Classe PEGC (HC_PEGC) : {3, 4, 5, 6} — initialement laissé sans restriction supplémentaire
+ *   (seul HC_PROFS avait été borné), mais échelon 1/2 fait planter le calcul (RECLASSEMENT_HC_PEGC_
+ *   VERS_CLASSE_EXCEPTIONNELLE, refs.ts, ne couvre pas ces clés) — bug réel trouvé et corrigé le
+ *   2026-11-01 en générant le jeu de test de cet onglet.
  * - Hors Classe Agrégé (HC_AGR) : {2, 3, "4-HEA1", "4-HEA2", "4-HEA3"} (2026-11-01) — le code brut
  *   stocké reste "A1"/"A2"/"A3" (GRILLES.HC_AGR), seul le libellé affiché est francisé en
  *   "4-HEA<n>", la conversion numérique nécessaire au calcul se fait côté domaine
@@ -879,6 +881,7 @@ function echelonOptionsCas3(
   const plain = (codes: string[]) => codes.map((v) => ({ value: v, label: v }));
   if (processus === "HC") return plain(ancienneteJoursAuReclassement < 720 ? ["10", "11"] : ["9", "10", "11"]);
   if (grilleActuelle === "HC_PROFS") return plain(["3", "4", "5", "6", "7"]);
+  if (grilleActuelle === "HC_PEGC") return plain(["3", "4", "5", "6"]);
   if (grilleActuelle === "HC_AGR") {
     return [
       { value: "2", label: "2" },
