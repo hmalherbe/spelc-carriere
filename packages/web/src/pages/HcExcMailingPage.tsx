@@ -187,6 +187,17 @@ export function HcExcMailingPage() {
           : "Calcule et annonce le reclassement (échelon, report d'ancienneté, gain de salaire, prochaine promotion) — réservé aux adhérents effectivement promus."}
       </p>
 
+      <div className="toolbar">
+        <button type="button" className="secondary" onClick={generatePdf} disabled={selected.size === 0 || generatingPdf}>
+          {generatingPdf ? "Génération en cours..." : "Générer PDF"}
+        </button>
+        <button type="button" className="secondary" onClick={generateText} disabled={selected.size === 0 || generatingText}>
+          {generatingText ? "Génération en cours..." : "Exporter en texte"}
+        </button>
+      </div>
+      {pdfError && <p className="error-text">{pdfError}</p>}
+      {textError && <p className="error-text">{textError}</p>}
+
       {loading ? (
         <p>Chargement...</p>
       ) : recipients.length === 0 ? (
@@ -286,15 +297,7 @@ export function HcExcMailingPage() {
         <button type="button" onClick={send} disabled={selected.size === 0 || sending}>
           {sending ? "Envoi en cours..." : `Envoyer (${selected.size})`}
         </button>
-        <button type="button" className="secondary" onClick={generatePdf} disabled={selected.size === 0 || generatingPdf}>
-          {generatingPdf ? "Génération en cours..." : "Générer PDF"}
-        </button>
-        <button type="button" className="secondary" onClick={generateText} disabled={selected.size === 0 || generatingText}>
-          {generatingText ? "Génération en cours..." : "Exporter en texte"}
-        </button>
       </div>
-      {pdfError && <p className="error-text">{pdfError}</p>}
-      {textError && <p className="error-text">{textError}</p>}
 
       {sendResult && (
         <p className="hint">
