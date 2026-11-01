@@ -17,6 +17,8 @@ function formatDate(iso: string | null | undefined): string {
  */
 export function HcExcMailingPage() {
   const { candidates: campagnes, campagneId } = useCampagneSelection(["HC", "EXC"]);
+  const selectedCampagne = campagnes.find((c) => c.id === campagneId) ?? null;
+  const resultatLabel = selectedCampagne?.commission === "CCMA" ? "Résultat de la CCMA" : "Résultat de la CCMI";
   const [kind, setKind] = useState<HcExcMailingKind>("resultat");
   const [recipients, setRecipients] = useState<HcExcMailingRecipient[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -116,7 +118,7 @@ export function HcExcMailingPage() {
       <div className="toolbar">
         <h2>Mailing Hors Classe / Classe exceptionnelle</h2>
         <select value={kind} onChange={(e) => setKind(e.target.value as HcExcMailingKind)}>
-          <option value="resultat">Résultat de la CCMA/CCMI</option>
+          <option value="resultat">{resultatLabel}</option>
           <option value="reclassement">Reclassement (adhérents promus)</option>
         </select>
       </div>
