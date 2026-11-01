@@ -94,7 +94,7 @@ function AnneeScolairePicker() {
     }
   }
 
-  const totalTeachers = campagnesAnneeSelectionnee.reduce((sum, c) => sum + c._count.teacherSnapshots, 0);
+  const totalTeachers = campagnesAnneeSelectionnee.reduce((sum, c) => sum + c._count.teacherSnapshots + c._count.hcExcSnapshots, 0);
   const totalImports = campagnesAnneeSelectionnee.reduce((sum, c) => sum + c._count.imports, 0);
 
   return (

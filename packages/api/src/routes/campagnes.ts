@@ -57,7 +57,7 @@ campagnesRouter.get("/", async (_req, res) => {
   // breaks the tie deterministically in favor of the most recently created campagne.
   const campagnes = await prisma.campagne.findMany({
     orderBy: [{ periodeDebut: "desc" }, { createdAt: "desc" }],
-    include: { _count: { select: { teacherSnapshots: true, imports: true } } },
+    include: { _count: { select: { teacherSnapshots: true, hcExcSnapshots: true, imports: true } } },
   });
   res.json(campagnes);
 });

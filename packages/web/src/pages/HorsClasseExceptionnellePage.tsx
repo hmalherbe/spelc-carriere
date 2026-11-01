@@ -138,7 +138,7 @@ export function HorsClasseExceptionnellePage() {
             <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
               {hcExcCampagnes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {labelForCampagneCandidate(c, 2)} ({c._count.teacherSnapshots} enseignants)
+                  {labelForCampagneCandidate(c, 2)} ({c._count.hcExcSnapshots} enseignants)
                 </option>
               ))}
             </select>

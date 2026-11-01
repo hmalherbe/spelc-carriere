@@ -112,7 +112,7 @@ export interface Campagne {
   /** ECHELON (avancement d'échelon) / HC (hors classe) / EXC (classe exceptionnelle) — quel
    * processus cette campagne couvre, indépendamment de la commission. */
   nature: "ECHELON" | "HC" | "EXC" | null;
-  _count: { teacherSnapshots: number; imports: number };
+  _count: { teacherSnapshots: number; hcExcSnapshots: number; imports: number };
 }
 
 export interface ComputedState {
