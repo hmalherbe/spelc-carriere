@@ -281,9 +281,9 @@ export function HorsClasseExceptionnellePage() {
         <section className="card">
           <h2>Import tableau d'avancement (PDF ou texte)</h2>
           <p className="hint">
-            Fichier "Tableau Avancement" fourni par le rectorat (un fichier par grade — et pour la classe exceptionnelle, par
-            vivier). Le grade, le vivier et le processus sont détectés automatiquement à partir du contenu. Réimporter un
-            fichier pour un grade/vivier déjà chargé dans cette campagne remplace entièrement les fiches précédentes.
+            Fichier "Tableau Avancement" fourni par le rectorat (un fichier par grade). Le grade et le processus sont
+            détectés automatiquement à partir du contenu. Réimporter un fichier pour un grade déjà chargé dans cette
+            campagne remplace entièrement les fiches précédentes.
           </p>
           <form className="inline-form" onSubmit={submitFiles}>
             <label>
