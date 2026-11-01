@@ -36,11 +36,11 @@ import { api, type ReclassementCas, type ReclassementSauvegarde } from "../api.j
 
 type SimTab = "cas1" | "cas2" | "cas3" | "regles";
 
-const TABS: { id: SimTab; label: string }[] = [
-  { id: "cas1", label: "Reclt concours & Reprise anc." },
-  { id: "cas2", label: "Reclt concours HC et EXC" },
-  { id: "cas3", label: "Reclassement HC et EXC" },
-  { id: "regles", label: "Règles de calcul" },
+const TABS: { id: SimTab; label: string; color: string }[] = [
+  { id: "cas1", label: "Reclt concours & Reprise anc.", color: "#a1d2e3" },
+  { id: "cas2", label: "Reclt concours HC et EXC", color: "#c2a582" },
+  { id: "cas3", label: "Reclassement HC et EXC", color: "#b78aba" },
+  { id: "regles", label: "Règles de calcul", color: "#adba8a" },
 ];
 
 function formatJours(jours: number): string {
@@ -65,7 +65,13 @@ export function ReclassementSimulateur() {
     <div>
       <div className="page-tabs">
         {TABS.map((t) => (
-          <button key={t.id} type="button" className={`page-tab-btn${tab === t.id ? " active" : ""}`} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            type="button"
+            className={`page-tab-btn${tab === t.id ? " active" : ""}`}
+            style={{ backgroundColor: t.color, color: "#1a1a1a" }}
+            onClick={() => setTab(t.id)}
+          >
             {t.label}
           </button>
         ))}

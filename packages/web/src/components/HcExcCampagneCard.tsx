@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Campagne } from "../api.js";
 import { useCampagneContext, labelForCampagneCandidate } from "../CampagneContext.js";
+import { useHcExcCampagneSelection } from "../hcExcCampagneSelection.js";
 import { derivePeriodeFromAnneeScolaire } from "../format.js";
 
 function todayIso(): string {
@@ -24,19 +25,8 @@ function dateCommissionLabel(commission: "CCMA" | "CCMI"): string {
  * le reste de sa page (import, résultats...).
  */
 export function HcExcCampagneCard({ canEdit, onSelect }: { canEdit: boolean; onSelect: (campagne: Campagne | null) => void }) {
-  const { campagnesAnneeSelectionnee, refresh: refreshContextCampagnes, setSelectedAnneeScolaire } = useCampagneContext();
-  const hcExcCampagnes = campagnesAnneeSelectionnee.filter((c) => c.nature === "HC" || c.nature === "EXC");
-  const [campagneId, setCampagneId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (hcExcCampagnes.some((c) => c.id === campagneId)) return;
-    setCampagneId(hcExcCampagnes[0]?.id ?? null);
-    // Gardé sur la liste jointe des id : `hcExcCampagnes` est un nouveau tableau à chaque rendu
-    // (dérivé du contexte) — ne doit se redéclencher que si l'ENSEMBLE des id change réellement.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hcExcCampagnes.map((c) => c.id).join("|")]);
-
-  const selectedCampagne = hcExcCampagnes.find((c) => c.id === campagneId) ?? null;
+  const { refresh: refreshContextCampagnes, setSelectedAnneeScolaire } = useCampagneContext();
+  const { campagnes: hcExcCampagnes, campagneId, setCampagneId, selectedCampagne } = useHcExcCampagneSelection();
 
   useEffect(() => {
     onSelect(selectedCampagne);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, downloadBlob, type AdherentEligible } from "../api.js";
-import { useCampagneSelection, type Nature } from "../CampagneContext.js";
+import { useCampagneSelection, labelForCampagneCandidate, type Nature } from "../CampagneContext.js";
+import { useHcExcCampagneSelection } from "../hcExcCampagneSelection.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null): string {
@@ -18,7 +19,15 @@ type PresenceFilter = "all" | "oui" | "non";
 
 export function AdherentsEligiblesPage({ natures = ["ECHELON"] }: { natures?: Nature[] }) {
   const isHcExc = natures.includes("HC") || natures.includes("EXC");
-  const { candidates: campagnes, campagneId } = useCampagneSelection(natures);
+  // Pour HC/EXC, useCampagneSelection (sélecteur de commission global) ne peut pas distinguer une
+  // campagne HC d'une campagne EXC de même commission — voir hcExcCampagneSelection.ts's own doc
+  // comment — donc sa propre sélection locale (indépendante) prend le relais dans ce cas,
+  // affichée explicitement ci-dessous.
+  const echelonSelection = useCampagneSelection(natures);
+  const hcExcSelection = useHcExcCampagneSelection();
+  const { campagnes, campagneId, setCampagneId } = isHcExc
+    ? { campagnes: hcExcSelection.campagnes, campagneId: hcExcSelection.campagneId, setCampagneId: hcExcSelection.setCampagneId }
+    : { campagnes: echelonSelection.candidates, campagneId: echelonSelection.campagneId, setCampagneId: echelonSelection.setCampagneId };
   const [adherents, setAdherents] = useState<AdherentEligible[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +80,15 @@ export function AdherentsEligiblesPage({ natures = ["ECHELON"] }: { natures?: Na
     <div>
       <div className="toolbar">
         <h2>Adhérents éligibles à la {titreCommission}</h2>
+        {isHcExc && campagnes.length > 0 && (
+          <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
+            {campagnes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {labelForCampagneCandidate(c, 2)}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       {campagnes.length === 0 && (
         <p className="hint">

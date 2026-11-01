@@ -8,7 +8,8 @@ import {
   type MailingPreview,
   type MailingSendResult,
 } from "../api.js";
-import { useCampagneSelection } from "../CampagneContext.js";
+import { labelForCampagneCandidate } from "../CampagneContext.js";
+import { useHcExcCampagneSelection } from "../hcExcCampagneSelection.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null | undefined): string {
@@ -37,8 +38,10 @@ function buildHcExcPdfFileName(
  * échelon — seul le contenu diffère (voir hcExcResultatTemplate.ts/hcExcReclassementTemplate.ts).
  */
 export function HcExcMailingPage() {
-  const { candidates: campagnes, campagneId } = useCampagneSelection(["HC", "EXC"]);
-  const selectedCampagne = campagnes.find((c) => c.id === campagneId) ?? null;
+  // Sélection locale (pas le sélecteur de commission global) : voir hcExcCampagneSelection.ts's
+  // own doc comment — nécessaire pour distinguer explicitement une campagne HC d'une campagne EXC
+  // de même commission.
+  const { campagnes, campagneId, setCampagneId, selectedCampagne } = useHcExcCampagneSelection();
   const resultatLabel = selectedCampagne?.commission === "CCMA" ? "Résultat de la CCMA" : "Résultat de la CCMI";
   const [kind, setKind] = useState<HcExcMailingKind>("resultat");
   const [recipients, setRecipients] = useState<HcExcMailingRecipient[]>([]);
@@ -170,6 +173,15 @@ export function HcExcMailingPage() {
     <div>
       <div className="toolbar">
         <h2>Mailing Hors Classe / Classe exceptionnelle</h2>
+        {campagnes.length > 0 && (
+          <select value={campagneId ?? ""} onChange={(e) => setCampagneId(e.target.value)}>
+            {campagnes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {labelForCampagneCandidate(c, 2)}
+              </option>
+            ))}
+          </select>
+        )}
         <select value={kind} onChange={(e) => setKind(e.target.value as HcExcMailingKind)}>
           <option value="resultat">{resultatLabel}</option>
           <option value="reclassement">Reclassement (adhérents promus)</option>
