@@ -255,7 +255,12 @@ function Cas1() {
   function calculer() {
     try {
       const services: ServiceAnterieur[] = rows.map(construireServiceAnterieur);
-      setResult(computeReclassementConcours({ grilleCible, services }));
+      const premiere = rows[0];
+      const situationAvantReclassement =
+        premiere.mode === "echelon" && Number(premiere.echelonSituation1) > 0
+          ? { grille: grilleOrigineSituation1(premiere.nature) as GrilleCode, echelon: Number(premiere.echelonSituation1) }
+          : undefined;
+      setResult(computeReclassementConcours({ grilleCible, services, situationAvantReclassement }));
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -449,6 +454,16 @@ function Cas1() {
           <p>
             Report d'ancienneté : <strong>{result.ancienneteReporteeJours} jours</strong> ({formatJours(result.ancienneteReporteeJours)})
           </p>
+          {result.indiceAvant != null && result.indiceApres != null && (
+            <>
+              <p>
+                Indice avant : {result.indiceAvant} — Indice après : {result.indiceApres}
+              </p>
+              <p>
+                Gain : {result.gainSalaireBrut} € brut / {result.gainSalaireNet} € net par mois
+              </p>
+            </>
+          )}
           <div className="toolbar">
             <button
               type="button"

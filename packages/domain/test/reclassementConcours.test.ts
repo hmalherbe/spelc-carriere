@@ -136,6 +136,28 @@ describe("computeReclassementConcours (Reclt concours & reprise d'ancienneté, p
   it("throws for a service nature not in the union's own SITUATIONS_AVANT_RECLASSEMENT table", () => {
     expect(() => computeReclassementConcours({ grilleCible: "AGR", services: [{ nature: "Pas une vraie nature", joursBruts: 1 }] })).toThrow();
   });
+
+  it("leaves indiceAvant/indiceApres/gainSalaireBrut/gainSalaireNet undefined when no situationAvantReclassement is given (matches the spreadsheet's own C23/C24/C25 left blank when C9 is empty)", () => {
+    const result = computeReclassementConcours({ grilleCible: "AGR", services: [{ nature: "AECE", joursBruts: 1000 }] });
+    expect(result.indiceAvant).toBeUndefined();
+    expect(result.indiceApres).toBeUndefined();
+    expect(result.gainSalaireBrut).toBeUndefined();
+    expect(result.gainSalaireNet).toBeUndefined();
+  });
+
+  it("computes indiceAvant/indiceApres/gain de salaire from situationAvantReclassement (Calculs!C23/C24/C25), even from a grille different from the target", () => {
+    // AECE 1000j -> 657j retenus -> AGR échelon 2 (indice 503). Situation avant : PROFS échelon 1 (indice 395).
+    const result = computeReclassementConcours({
+      grilleCible: "AGR",
+      services: [{ nature: "AECE", joursBruts: 1000 }],
+      situationAvantReclassement: { grille: "PROFS", echelon: 1 },
+    });
+    expect(result.echelon).toBe(2);
+    expect(result.indiceAvant).toBe(395);
+    expect(result.indiceApres).toBe(503);
+    expect(result.gainSalaireBrut).toBe(532);
+    expect(result.gainSalaireNet).toBe(409);
+  });
 });
 
 describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — reconstitution virtuelle)", () => {

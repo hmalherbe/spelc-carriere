@@ -39,12 +39,27 @@ export interface ReclassementConcoursInput {
   /** Only the two grilles the union's own tool exposes as a reclassement target. */
   grilleCible: "AGR" | "PROFS";
   services: ServiceAnterieur[];
+  /**
+   * Grille + échelon de la situation de l'agent AVANT le reclassement, pour l'indice avant/après
+   * et le gain de salaire (Calculs!C23/C24/C25 du classeur : `VLOOKUP(C9, INDIRECT(VLOOKUP(A9,
+   * Grades_echelles, 2, FALSE)), 3, FALSE)`, où A9/C9 sont la nature et l'échelon de la toute
+   * première ligne de service — connus seulement quand cette ligne utilise le mode "Échelon et
+   * reliquat"). Absent -> `indiceAvant`/`indiceApres`/`gainSalaireBrut`/`gainSalaireNet` restent
+   * absents du résultat, exactement comme le classeur laisse C23/C24/C25 vides quand C9 l'est.
+   */
+  situationAvantReclassement?: { grille: GrilleCode; echelon: EchelonCode };
+  grilles?: Record<GrilleCode, EchelonRow[]>;
+  valeurDuPoint?: number;
 }
 
 export interface ReclassementConcoursResult {
   totalJoursRetenus: number;
   echelon: number;
   ancienneteReporteeJours: number;
+  indiceAvant?: number;
+  indiceApres?: number;
+  gainSalaireBrut?: number;
+  gainSalaireNet?: number;
 }
 
 /** Recherche la situation d'une nature de service dans SITUATIONS_AVANT_RECLASSEMENT (refs.ts) —
@@ -105,8 +120,28 @@ export function computeReclassementConcours(input: ReclassementConcoursInput): R
   }
 
   const totalJoursRetenus = Math.floor(total);
-  const { echelon, reportJours } = classerParAncienneteJours(input.grilleCible, totalJoursRetenus);
-  return { totalJoursRetenus, echelon, ancienneteReporteeJours: reportJours };
+  const { echelon, reportJours } = classerParAncienneteJours(input.grilleCible, totalJoursRetenus, input.grilles);
+
+  let indiceAvant: number | undefined;
+  let indiceApres: number | undefined;
+  let gainBrut: number | undefined;
+  let gainNet: number | undefined;
+  if (input.situationAvantReclassement) {
+    indiceAvant = findEchelonRow(input.situationAvantReclassement.grille, input.situationAvantReclassement.echelon, input.grilles).indice;
+    indiceApres = findEchelonRow(input.grilleCible, echelon, input.grilles).indice;
+    gainBrut = gainSalaireBrut(indiceAvant, indiceApres, input.valeurDuPoint);
+    gainNet = gainSalaireNet(indiceAvant, indiceApres, input.valeurDuPoint);
+  }
+
+  return {
+    totalJoursRetenus,
+    echelon,
+    ancienneteReporteeJours: reportJours,
+    indiceAvant,
+    indiceApres,
+    gainSalaireBrut: gainBrut,
+    gainSalaireNet: gainNet,
+  };
 }
 
 export interface ReclassementConcoursDepuisHcExcInput {
