@@ -13,8 +13,6 @@ import {
   joursComptablesEntre,
   joursRetenusPourService,
   parseAncienneteText,
-  POINTS_ANCIENNETE_EXC_AGREGES,
-  POINTS_ANCIENNETE_EXC_CERTIFIES,
   POINTS_ANCIENNETE_HC,
   POINTS_BONIFICATION_EXC_AVIS_RECTEUR,
   POINTS_BONIFICATION_HC_AVIS_RECTEUR,
@@ -1489,46 +1487,6 @@ function DonneesReference() {
                 <td>{p.cle}</td>
                 <td>{p.points1erDegre}</td>
                 <td>{p.points2ndDegre}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <h3>Points d'ancienneté — accès à la Classe exceptionnelle (Certifiés / PLP / PEPS / Prof. des écoles)</h3>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Clé</th>
-              <th>Points</th>
-            </tr>
-          </thead>
-          <tbody>
-            {POINTS_ANCIENNETE_EXC_CERTIFIES.map((p) => (
-              <tr key={p.cle}>
-                <td>{p.cle}</td>
-                <td>{p.points}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <h3>Points d'ancienneté — accès à la Classe exceptionnelle (Agrégés)</h3>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Clé</th>
-              <th>Points</th>
-            </tr>
-          </thead>
-          <tbody>
-            {POINTS_ANCIENNETE_EXC_AGREGES.map((p) => (
-              <tr key={p.cle}>
-                <td>{p.cle}</td>
-                <td>{p.points}</td>
               </tr>
             ))}
           </tbody>
