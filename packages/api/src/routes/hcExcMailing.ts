@@ -11,7 +11,8 @@ import { sendBrevoEmail, BrevoConfigError } from "../mailing/brevo.js";
 import { buildHcExcResultatEmail, type HcExcResultatContext } from "../mailing/hcExcResultatTemplate.js";
 import { buildHcExcReclassementEmail, type HcExcReclassementContext } from "../mailing/hcExcReclassementTemplate.js";
 import { loadBrevoConfigFromDb, loadElusByCommission, loadSocialLinks, buildRecipientUnsubscribeUrl } from "./mailing.js";
-import type { MailingElu, MailingSocialLink } from "../mailing/template.js";
+import { escapeHtml, htmlToPlainText, type MailingElu, type MailingSocialLink } from "../mailing/template.js";
+import { renderMailingPdf } from "../mailing/pdf.js";
 import { decisionEffective } from "../hcExcComputation.js";
 
 export const hcExcMailingRouter = Router();
@@ -497,5 +498,106 @@ hcExcMailingRouter.post(
       testMode,
       skippedOptedOut,
     });
+  }),
+);
+
+const exportSchema = z.object({
+  campagneId: z.string().min(1),
+  kind: z.enum(["resultat", "reclassement"]),
+  teacherIds: z.array(z.string()).min(1),
+});
+
+/**
+ * Construit les mêmes lettres que /send enverrait (via buildResultatContext/buildReclassementContext,
+ * partagés avec cette route), pour un ensemble choisi de destinataires — base commune aux deux
+ * exports en lecture ci-dessous (/pdf et /text), même pattern que buildMailingLetters
+ * (routes/mailing.ts) pour l'échelon.
+ */
+async function buildHcExcLetters(
+  body: unknown,
+): Promise<
+  | { status: number; error: string }
+  | { campagne: { anneeScolaire: string; dateCcma: Date; commission: "CCMA" | "CCMI" | null; nature: string | null }; letters: { to: string; subject: string; html: string }[] }
+> {
+  const parsed = exportSchema.safeParse(body);
+  if (!parsed.success) return { status: 400, error: "Corps de requête invalide" };
+  const { campagneId, kind, teacherIds } = parsed.data;
+
+  const data = kind === "reclassement" ? await reclassementRecipients(campagneId) : await resultatRecipients(campagneId);
+  if (!data) return { status: 404, error: "Campagne introuvable ou non HC/EXC" };
+  if (!data.campagne.commission) return { status: 400, error: "Campagne non scopée par commission (CCMA/CCMI)" };
+  const commission = data.campagne.commission;
+
+  const targets = data.rows.filter((r) => teacherIds.includes(r.teacherId));
+  if (targets.length === 0) return { status: 400, error: "Aucun destinataire sélectionné." };
+
+  const shared = await loadShared(commission);
+
+  const letters = targets.map((r) => {
+    const { subject, html } =
+      kind === "reclassement"
+        ? buildHcExcReclassementEmail(buildReclassementContext(r as ReclassementRow, { ...data.campagne, commission }, shared))
+        : buildHcExcResultatEmail(
+            buildResultatContext(r, { ...data.campagne, commission, nature: data.campagne.nature as "HC" | "EXC" }, shared, buildRecipientUnsubscribeUrl(r)),
+          );
+    return { to: r.email ?? "aucune adresse connue", subject, html };
+  });
+
+  return { campagne: data.campagne, letters };
+}
+
+function buildHcExcExportFileName(
+  campagne: { dateCcma: Date; commission: "CCMA" | "CCMI" | null; nature: string | null },
+  kind: "resultat" | "reclassement",
+  ext: "pdf" | "txt",
+): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const dateCcma = campagne.dateCcma.toISOString().slice(0, 10);
+  const commission = campagne.commission ?? "CCMA";
+  const nature = campagne.nature ?? "HC";
+  return `${today}_Projet_mailing_${nature}_${kind}_${commission}_${dateCcma}.${ext}`;
+}
+
+/** Un PDF, une page par lettre sélectionnée — même contenu que /send enverrait, pour relecture/
+ * archivage hors ligne. Jamais touché par le mode test ni par MailingLog (purement en lecture). */
+hcExcMailingRouter.post(
+  "/pdf",
+  requireRole("ADMIN", "GESTIONNAIRE"),
+  asyncHandler(async (req, res) => {
+    const result = await buildHcExcLetters(req.body);
+    if ("error" in result) return res.status(result.status).json({ error: result.error });
+    const { campagne, letters } = result;
+
+    const pages = letters.map(
+      ({ to, subject, html }) => `<section style="page-break-after: always;">
+        <p style="font-size: 0.75rem; color: #666666; border-bottom: 1px solid #cccccc; padding-bottom: 8px; margin-bottom: 16px;">
+          À : ${escapeHtml(to)} — Sujet : ${escapeHtml(subject)}
+        </p>
+        ${html}
+      </section>`,
+    );
+
+    const pdf = await renderMailingPdf(pages);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${buildHcExcExportFileName(campagne, req.body.kind, "pdf")}"`);
+    res.send(pdf);
+  }),
+);
+
+/** Les mêmes lettres que /pdf, en texte brut — aucun rendu Chromium, quasi instantané. */
+hcExcMailingRouter.post(
+  "/text",
+  requireRole("ADMIN", "GESTIONNAIRE"),
+  asyncHandler(async (req, res) => {
+    const result = await buildHcExcLetters(req.body);
+    if ("error" in result) return res.status(result.status).json({ error: result.error });
+    const { campagne, letters } = result;
+
+    const separator = `\n\n${"=".repeat(70)}\n\n`;
+    const text = letters.map(({ to, subject, html }) => `À : ${to} — Sujet : ${subject}\n\n${htmlToPlainText(html)}`).join(separator) + "\n";
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${buildHcExcExportFileName(campagne, req.body.kind, "txt")}"`);
+    res.send(text);
   }),
 );

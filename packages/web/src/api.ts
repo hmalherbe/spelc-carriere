@@ -760,6 +760,12 @@ export const api = {
     request<MailingLogEntry[]>(`/hc-exc-mailing/log?campagneId=${campagneId}&kind=${kind}`),
   hcExcMailingSend: (campagneId: string, kind: HcExcMailingKind, teacherIds?: string[]) =>
     request<MailingSendResult>("/hc-exc-mailing/send", { method: "POST", body: JSON.stringify({ campagneId, kind, teacherIds }) }),
+  /** Un PDF, une page par destinataire sélectionné — même contenu que hcExcMailingSend enverrait. */
+  hcExcMailingPdf: (campagneId: string, kind: HcExcMailingKind, teacherIds: string[]) =>
+    requestBlob("/hc-exc-mailing/pdf", { method: "POST", body: JSON.stringify({ campagneId, kind, teacherIds }) }),
+  /** Mêmes lettres que hcExcMailingPdf, en texte brut. */
+  hcExcMailingText: (campagneId: string, kind: HcExcMailingKind, teacherIds: string[]) =>
+    requestBlob("/hc-exc-mailing/text", { method: "POST", body: JSON.stringify({ campagneId, kind, teacherIds }) }),
   grilles: () => request<GrillesData>("/grilles"),
   updateEchelonIndice: (grilleCode: string, echelon: string, indice: number) =>
     request<EchelonRowApi>(`/grilles/${encodeURIComponent(grilleCode)}/rows/${encodeURIComponent(echelon)}`, {

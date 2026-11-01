@@ -1,11 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type HcExcMailingKind, type HcExcMailingRecipient, type MailingLogEntry, type MailingPreview, type MailingSendResult } from "../api.js";
+import {
+  api,
+  downloadBlob,
+  type HcExcMailingKind,
+  type HcExcMailingRecipient,
+  type MailingLogEntry,
+  type MailingPreview,
+  type MailingSendResult,
+} from "../api.js";
 import { useCampagneSelection } from "../CampagneContext.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("fr-FR");
+}
+
+/** Même convention que buildMailingPdfFileName (MailingPage.tsx) côté échelon : le nom proposé par
+ * le navigateur avant enregistrement vient d'ici, pas du Content-Disposition de la réponse. */
+function buildHcExcPdfFileName(
+  campagne: { dateCcma: string; commission: "CCMA" | "CCMI" | null; nature: "ECHELON" | "HC" | "EXC" | null } | null,
+  kind: HcExcMailingKind,
+): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const dateCcma = campagne?.dateCcma ? campagne.dateCcma.slice(0, 10) : today;
+  const commission = campagne?.commission ?? "CCMA";
+  const nature = campagne?.nature ?? "HC";
+  return `${today}_Projet_mailing_${nature}_${kind}_${commission}_${dateCcma}.pdf`;
 }
 
 /**
@@ -30,6 +51,10 @@ export function HcExcMailingPage() {
   const [sendResult, setSendResult] = useState<MailingSendResult | null>(null);
   const [mailingLog, setMailingLog] = useState<MailingLogEntry[]>([]);
   const [decisionBusyId, setDecisionBusyId] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [generatingText, setGeneratingText] = useState(false);
+  const [textError, setTextError] = useState<string | null>(null);
 
   function refresh() {
     if (!campagneId) {
@@ -108,6 +133,34 @@ export function HcExcMailingPage() {
       setError(String(e));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function generatePdf() {
+    if (!campagneId || selected.size === 0) return;
+    setGeneratingPdf(true);
+    setPdfError(null);
+    try {
+      const blob = await api.hcExcMailingPdf(campagneId, kind, Array.from(selected));
+      downloadBlob(blob, buildHcExcPdfFileName(selectedCampagne, kind));
+    } catch (e) {
+      setPdfError(String(e));
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }
+
+  async function generateText() {
+    if (!campagneId || selected.size === 0) return;
+    setGeneratingText(true);
+    setTextError(null);
+    try {
+      const blob = await api.hcExcMailingText(campagneId, kind, Array.from(selected));
+      downloadBlob(blob, `mailing-${kind}-${selectedCampagne?.anneeScolaire ?? campagneId}.txt`);
+    } catch (e) {
+      setTextError(String(e));
+    } finally {
+      setGeneratingText(false);
     }
   }
 
@@ -233,7 +286,15 @@ export function HcExcMailingPage() {
         <button type="button" onClick={send} disabled={selected.size === 0 || sending}>
           {sending ? "Envoi en cours..." : `Envoyer (${selected.size})`}
         </button>
+        <button type="button" className="secondary" onClick={generatePdf} disabled={selected.size === 0 || generatingPdf}>
+          {generatingPdf ? "Génération en cours..." : "Générer PDF"}
+        </button>
+        <button type="button" className="secondary" onClick={generateText} disabled={selected.size === 0 || generatingText}>
+          {generatingText ? "Génération en cours..." : "Exporter en texte"}
+        </button>
       </div>
+      {pdfError && <p className="error-text">{pdfError}</p>}
+      {textError && <p className="error-text">{textError}</p>}
 
       {sendResult && (
         <p className="hint">
