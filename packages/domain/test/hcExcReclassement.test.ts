@@ -148,6 +148,27 @@ describe("computeReclassementHcExc (ported from the central spreadsheet's own re
     expect(result.ancienneteReporteeJours).toBe(0);
   });
 
+  it("real case reported 2026-11-01: BI_ADM and EXC_PEGC indices were off by -5/+5 everywhere (GRILLES data-entry bug, fixed in grilles.ts) — EXC_PEGC also had a 6th échelon that doesn't exist in the classeur (Données!M91:P95 only goes to échelon 5, indice 806)", () => {
+    const biAdm = computeReclassementHcExc({
+      processus: "HC",
+      grilleActuelle: "BI_ADM",
+      echelonActuel: 10,
+      ancienneteJoursAuReference: 0,
+      dateReference: "2026-09-01",
+    });
+    expect(biAdm.ancienIndice).toBe(680); // était 675 avant correction
+
+    const pegcVersExc = computeReclassementHcExc({
+      processus: "EXC",
+      grilleActuelle: "HC_PEGC",
+      echelonActuel: 3,
+      ancienneteJoursAuReference: 0,
+      dateReference: "2026-09-01",
+    });
+    expect(pegcVersExc.nouvelleGrille).toBe("EXC_PEGC");
+    expect(pegcVersExc.nouvelIndice).toBe(621); // était 626 avant correction
+  });
+
   it("handles HC_AGR's lettered échelons (A1/A2/A3) via CONVERSION_NUMERIQUE_HC_AGR, fixing the 'cle NaN' gap (2026-11-01)", () => {
     // Avant le correctif, echelonActuel="A1"/"A2"/"A3" donnait cle=NaN (chaîne non numérique * 10),
     // faisant planter ou mal répondre reclassement(). cle numérisée (41/42/43)*10 doit matcher

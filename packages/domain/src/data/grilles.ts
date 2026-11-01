@@ -178,67 +178,67 @@ export const GRILLES: Record<GrilleCode, EchelonRow[]> = {
     {
       "echelon": 1,
       "echelonSuivant": 2,
-      "indice": 407,
+      "indice": 412,
       "duree": 1
     },
     {
       "echelon": 2,
       "echelonSuivant": 3,
-      "indice": 445,
+      "indice": 450,
       "duree": 1
     },
     {
       "echelon": 3,
       "echelonSuivant": 4,
-      "indice": 452,
+      "indice": 457,
       "duree": 2
     },
     {
       "echelon": 4,
       "echelonSuivant": 5,
-      "indice": 473,
+      "indice": 478,
       "duree": 2
     },
     {
       "echelon": 5,
       "echelonSuivant": 6,
-      "indice": 501,
+      "indice": 506,
       "duree": 2.5
     },
     {
       "echelon": 6,
       "echelonSuivant": 7,
-      "indice": 525,
+      "indice": 530,
       "duree": 3
     },
     {
       "echelon": 7,
       "echelonSuivant": 8,
-      "indice": 551,
+      "indice": 556,
       "duree": 3
     },
     {
       "echelon": 8,
       "echelonSuivant": 9,
-      "indice": 593,
+      "indice": 598,
       "duree": 3.5
     },
     {
       "echelon": 9,
       "echelonSuivant": 10,
-      "indice": 635,
+      "indice": 640,
       "duree": 4
     },
     {
       "echelon": 10,
       "echelonSuivant": 11,
-      "indice": 675,
+      "indice": 680,
       "duree": 4
     },
     {
       "echelon": 11,
       "echelonSuivant": 11,
-      "indice": 703,
+      "indice": 708,
       "duree": "MAX"
     }
   ],
@@ -677,37 +677,31 @@ export const GRILLES: Record<GrilleCode, EchelonRow[]> = {
     {
       "echelon": 1,
       "echelonSuivant": 2,
-      "indice": 626,
+      "indice": 621,
       "duree": 1
     },
     {
       "echelon": 2,
       "echelonSuivant": 3,
-      "indice": 678,
+      "indice": 673,
       "duree": 2.5
     },
     {
       "echelon": 3,
       "echelonSuivant": 4,
-      "indice": 720,
+      "indice": 715,
       "duree": 2.5
     },
     {
       "echelon": 4,
       "echelonSuivant": 5,
-      "indice": 768,
+      "indice": 763,
       "duree": 2.5
     },
     {
       "echelon": 5,
       "echelonSuivant": 5,
-      "indice": 811,
-      "duree": 3
-    },
-    {
-      "echelon": 6,
-      "echelonSuivant": 6,
-      "indice": 821,
+      "indice": 806,
       "duree": "MAX"
     }
   ],
