@@ -365,7 +365,7 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
     expect(dureeLongueNonBiAdmissible.totalReconstitueJours).toBe(7992);
   });
 
-  it("computes the hc6 majoration (HC only, minus 3 years) and the exc4 majoration (minus 3 years, floored at 0) from their own access dates", () => {
+  it("computes the hc6 majoration (HC only, minus 3 years) from its own access dates", () => {
     // HC6 : échelon 7 HC, durée 2023-09-01 -> 2026-09-01 = 1080j (3 ans) ; moins 3 ans (processus HC) = 0j -> aucun effet.
     const hc6SansEffet = computeReclassementConcoursDepuisHcExc({
       grilleOrigine: "HC_PROFS",
@@ -381,22 +381,25 @@ describe("computeReclassementConcoursDepuisHcExc (Reclt concours HC et EXC — r
       dateReclassement: "2026-09-01",
     });
     expect(hc6SansEffet.totalReconstitueJours).toBe(hc6BaseSansMajoration.totalReconstitueJours);
+  });
 
-    // EXC4 : échelon 5 EXC, durée accès-échelon4 -> date de reclassement = 1180j ; moins 1080j (3 ans) = 100j.
-    const exc4 = computeReclassementConcoursDepuisHcExc({
+  it("real case reported 2026-11-01: no separate EXC4 majoration for rang >= 5 (HEA1/HEA2/HEA3) — baseTheoriqueJours' own +3060j forfait already covers it, confirmed against the real classeur via 4 cases (échelons HEA1/HEA2/HEA3, écarts exactement égaux à la majoration EXC4 qui était ajoutée en double)", () => {
+    // Prof. Ecoles EXC, échelon HEA3 (rang 7), avec report d'ancienneté — classeur réel : 15420j
+    // avant coefficient (mon app calculait 16860j avant correction, soit 1440j de trop = exactement
+    // la majoration EXC4 qu'elle ajoutait en plus du forfait déjà inclus dans baseTheoriqueJours).
+    const result = computeReclassementConcoursDepuisHcExc({
       grilleOrigine: "EXC_PROFS",
-      echelonActuel: 5,
-      dateEchelon: "2026-09-01",
-      dateReclassement: "2026-09-01",
-      majorations: { dateAccesEchelon4ClasseExceptionnelle: "2023-05-25" },
+      echelonActuel: "A3",
+      dateEchelon: "2026-03-02",
+      dateReclassement: "2028-03-02",
+      reportAnciennete: "00a04m00j",
+      majorations: {
+        biAdmissibleAgregation: true,
+        dateAccesEchelon11ClasseNormale: "2008-09-01",
+        dateAccesHorsClasse: "2014-09-01",
+      },
     });
-    const exc4Base = computeReclassementConcoursDepuisHcExc({
-      grilleOrigine: "EXC_PROFS",
-      echelonActuel: 5,
-      dateEchelon: "2026-09-01",
-      dateReclassement: "2026-09-01",
-    });
-    expect(exc4.totalReconstitueJours).toBeGreaterThan(exc4Base.totalReconstitueJours);
+    expect(result.totalAvantCoefficientJours).toBe(15420);
   });
 
   it("throws for an échelon outside the union's own supported range (1-7 HC, 1-5 EXC)", () => {

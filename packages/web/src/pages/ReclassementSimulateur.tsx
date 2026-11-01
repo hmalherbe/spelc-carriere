@@ -518,7 +518,6 @@ interface Cas2Parametres {
   dateAccesHorsClasse: string;
   dateAccesEchelon6HC: string;
   dateAccesEchelon7HC: string;
-  dateAccesEchelon4EXC: string;
   dateAccesClasseExceptionnelle: string;
 }
 
@@ -544,7 +543,6 @@ function Cas2() {
   const [dateAccesHorsClasse, setDateAccesHorsClasse] = useState("");
   const [dateAccesEchelon6HC, setDateAccesEchelon6HC] = useState("");
   const [dateAccesEchelon7HC, setDateAccesEchelon7HC] = useState("");
-  const [dateAccesEchelon4EXC, setDateAccesEchelon4EXC] = useState("");
   // Conditionne, pour EXC uniquement, si la majoration 6e échelon HC s'applique (A20 du classeur :
   // réforme de 2021 — voir anneeAccesClasseExceptionnelleEligible côté domaine).
   const [dateAccesClasseExceptionnelle, setDateAccesClasseExceptionnelle] = useState("");
@@ -570,7 +568,6 @@ function Cas2() {
   const montreDateAccesClasseExceptionnelle = processus === "EXC" && rang >= 4;
   const anneeAccesExcEligible = Number(dateAccesClasseExceptionnelle.slice(0, 4)) >= 2021;
   const montreHc6 = (processus === "HC" && rang >= 7) || (processus === "EXC" && rang >= 4 && anneeAccesExcEligible);
-  const montreExc4 = processus === "EXC" && rang >= 5;
 
   function calculer() {
     try {
@@ -589,7 +586,6 @@ function Cas2() {
             dateAccesHorsClasse: montreCn11 ? dateAccesHorsClasse : undefined,
             dateAccesEchelon6HorsClasse: montreHc6 ? dateAccesEchelon6HC : undefined,
             dateAccesEchelon7HorsClasse: montreHc6 ? dateAccesEchelon7HC : undefined,
-            dateAccesEchelon4ClasseExceptionnelle: montreExc4 ? dateAccesEchelon4EXC : undefined,
             dateAccesClasseExceptionnelle: montreDateAccesClasseExceptionnelle ? dateAccesClasseExceptionnelle : undefined,
           },
         }),
@@ -618,7 +614,6 @@ function Cas2() {
     setDateAccesHorsClasse(params.dateAccesHorsClasse ?? "");
     setDateAccesEchelon6HC(params.dateAccesEchelon6HC ?? "");
     setDateAccesEchelon7HC(params.dateAccesEchelon7HC ?? "");
-    setDateAccesEchelon4EXC(params.dateAccesEchelon4EXC ?? "");
     setDateAccesClasseExceptionnelle(params.dateAccesClasseExceptionnelle ?? "");
     setResult(saved.resultat as ReturnType<typeof computeReclassementConcoursDepuisHcExc>);
     setError(null);
@@ -750,14 +745,6 @@ function Cas2() {
           )}
         </div>
       )}
-      {montreExc4 && (
-        <div className="inline-form">
-          <label>
-            Date d'accès à l'échelon 4 de la classe exceptionnelle
-            <input type="date" min="1960-01-01" max="2099-12-31" value={dateAccesEchelon4EXC} onChange={(e) => setDateAccesEchelon4EXC(e.target.value)} />
-          </label>
-        </div>
-      )}
 
       <div className="toolbar">
         <button type="button" onClick={calculer}>
@@ -823,7 +810,6 @@ function Cas2() {
                     dateAccesHorsClasse,
                     dateAccesEchelon6HC,
                     dateAccesEchelon7HC,
-                    dateAccesEchelon4EXC,
                     dateAccesClasseExceptionnelle,
                   } satisfies Cas2Parametres,
                   result,
