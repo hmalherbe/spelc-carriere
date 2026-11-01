@@ -26,7 +26,12 @@ const AVANCEMENT_PATHS = [
 // ReviewQueuePage.tsx), donc la visiter affiche volontairement le sous-menu Avancement plutôt que
 // de dupliquer la page ou d'ajouter une distinction artificielle — un lien y pointe tout de même
 // depuis le sous-menu ci-dessous.
-const HC_EXC_PATHS = ["/hors-classe-exceptionnelle", "/hors-classe-exceptionnelle/adherents-eligibles", "/hors-classe-exceptionnelle/mailing"];
+const HC_EXC_PATHS = [
+  "/hors-classe-exceptionnelle",
+  "/hors-classe-exceptionnelle/adherents-eligibles",
+  "/hors-classe-exceptionnelle/import",
+  "/hors-classe-exceptionnelle/mailing",
+];
 
 type AnneeScolaireDraft = { anneeScolaire: string; periodeDebut: string; periodeFin: string };
 const EMPTY_DRAFT: AnneeScolaireDraft = { anneeScolaire: "", periodeDebut: "", periodeFin: "" };
@@ -289,6 +294,7 @@ export function Layout() {
           </NavLink>
           <NavLink to="/revue">File de révision</NavLink>
           <NavLink to="/hors-classe-exceptionnelle/adherents-eligibles">Adhérents éligibles</NavLink>
+          <NavLink to="/hors-classe-exceptionnelle/import">Import</NavLink>
           <NavLink to="/hors-classe-exceptionnelle/mailing">Mailing</NavLink>
         </nav>
       )}

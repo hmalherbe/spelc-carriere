@@ -11,6 +11,7 @@ import { MailingPage } from "./pages/MailingPage.js";
 import { RulesPage } from "./pages/RulesPage.js";
 import { GrillesPage } from "./pages/GrillesPage.js";
 import { HorsClasseExceptionnellePage } from "./pages/HorsClasseExceptionnellePage.js";
+import { HcExcImportPage } from "./pages/HcExcImportPage.js";
 import { HcExcMailingPage } from "./pages/HcExcMailingPage.js";
 import { ReclassementPage } from "./pages/ReclassementPage.js";
 import { MouvementPage } from "./pages/MouvementPage.js";
@@ -54,6 +55,7 @@ export function App() {
         <Route path="reliquats" element={<ReliquatsPage />} />
         <Route path="saisies-manuelles" element={<SaisiesManuellesPage />} />
         <Route path="hors-classe-exceptionnelle" element={<HorsClasseExceptionnellePage />} />
+        <Route path="hors-classe-exceptionnelle/import" element={<HcExcImportPage />} />
         <Route path="hors-classe-exceptionnelle/adherents-eligibles" element={<AdherentsEligiblesPage natures={["HC", "EXC"]} />} />
         <Route path="hors-classe-exceptionnelle/mailing" element={<HcExcMailingPage />} />
         <Route path="reclassement" element={<ReclassementPage />} />
