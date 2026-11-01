@@ -32,6 +32,22 @@ const TABLES_RECLASSEMENT: Partial<Record<GrilleCode, ReclassementRow[]>> = {
   CHAIRE_SUP: RECLASSEMENT_CHAIRE_SUP_VERS_CHEVRON,
 };
 
+/** HC_AGR code son 4e échelon en 3 paliers lettrés ("A1"/"A2"/"A3", la terminologie du syndicat pour
+ * "4-HEA1"/"4-HEA2"/"4-HEA3") qui ne sont pas directement des nombres — le classeur les traduit via
+ * sa propre table `conversion_numerique_echelon_HC_agrege` (Données!A175:B183, lue directement dans
+ * le fichier source le 2026-11-01) avant de construire la clé `echelon*10+ancienneté`, exactement
+ * comme `conversion_numerique_echelon_EXC_liste_apt` le fait côté EXC_PROFS dans
+ * reclassementConcours.ts. RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE (refs.ts) utilise déjà ces
+ * codes convertis (cle 200-431) — sans cette conversion, `cle` passé à `reclassement()` ci-dessous
+ * vaudrait NaN pour "A1"/"A2"/"A3" (une chaîne non numérique multipliée par 10). */
+const CONVERSION_NUMERIQUE_HC_AGR: Partial<Record<string, number>> = {
+  "2": 20,
+  "3": 30,
+  A1: 41,
+  A2: 42,
+  A3: 43,
+};
+
 export interface HcExcReclassementInput {
   processus: "HC" | "EXC";
   /** The grille the teacher is being promoted FROM: a classe-normale grille ("PROFS"/"AGR") for a
@@ -40,10 +56,10 @@ export interface HcExcReclassementInput {
   grilleActuelle: GrilleCode;
   /** The échelon within `grilleActuelle` the teacher is being promoted FROM — numeric for the
    * tables that key their correspondance on échelon+ancienneté (`reclassement()`'s own `cle`
-   * mechanism). Can be a lettered code (e.g. "6-HEA2") only for a grille whose table has exactly
-   * one row (CHAIRE_SUP) — see computeReclassementHcExc, which bypasses the numeric key entirely
-   * in that case. Still numeric-only for HC_AGR→Classe Exceptionnelle in the general case (known
-   * gap, see this function's own doc comment). */
+   * mechanism). Can be a lettered code: "6-HEA2" for a grille whose table has exactly one row
+   * (CHAIRE_SUP) — see computeReclassementHcExc, which bypasses the numeric key entirely in that
+   * case — or "A1"/"A2"/"A3" for HC_AGR, converted via CONVERSION_NUMERIQUE_HC_AGR before building
+   * the `cle` (added 2026-11-01, see that constant's own doc comment). */
   echelonActuel: EchelonCode;
   /** The teacher's ancienneté in `echelonActuel`, in banking days, AS OF `dateReference` (not
    * necessarily as of whatever date it was last measured — project it forward first if needed). */
@@ -89,12 +105,6 @@ function nouvelleGrilleApresReclassement(processus: "HC" | "EXC", grilleActuelle
  * projected forward from the campagne's own rentrée date, with the reclassement's carried-over
  * ancienneté (see `reclassement`/`ancienneteReporteeReclassementHC`) fed in exactly the same way
  * `computeEchelonPromotion` already accepts a reported ancienneté for the échelon-advancement path.
- *
- * ⚠️ Known gap: `echelonActuel` is numeric-only — an agrégé's lettered Hors Classe échelon (A1/A2/
- * A3) reclassing into Classe Exceptionnelle needs its own numeric encoding (per the spreadsheet's
- * own `conversion_numerique_echelon_HC_agrege` lookup) that isn't implemented here yet. Only call
- * this for a numeric échelon until that's added — an agrégé Classe Exceptionnelle reclassement is
- * not yet correctly handled.
  */
 export function computeReclassementHcExc(input: HcExcReclassementInput): HcExcReclassementResult {
   const table = TABLES_RECLASSEMENT[input.grilleActuelle];
@@ -104,8 +114,14 @@ export function computeReclassementHcExc(input: HcExcReclassementInput): HcExcRe
 
   // Une table à une seule ligne (EXC_PROFS->chevron, CHAIRE_SUP) représente un seul échelon de
   // départ possible : pas de recherche par ancienneté, et son code d'échelon n'est pas forcément
-  // numérique (ex. "6-HEA2"), donc pas de `cle` à construire du tout.
-  const row = table.length === 1 ? table[0] : reclassement(table, (input.echelonActuel as number) * 10 + input.ancienneteJoursAuReference / 360);
+  // numérique (ex. "6-HEA2"), donc pas de `cle` à construire du tout. HC_AGR passe par sa propre
+  // conversion (voir CONVERSION_NUMERIQUE_HC_AGR) avant de construire la clé, les autres grilles
+  // utilisent leur code d'échelon numérique directement.
+  const echelonNumerise =
+    input.grilleActuelle === "HC_AGR" && CONVERSION_NUMERIQUE_HC_AGR[String(input.echelonActuel)] !== undefined
+      ? CONVERSION_NUMERIQUE_HC_AGR[String(input.echelonActuel)]!
+      : (input.echelonActuel as number);
+  const row = table.length === 1 ? table[0] : reclassement(table, echelonNumerise * 10 + input.ancienneteJoursAuReference / 360);
 
   const ancienneteReporteeJours =
     input.processus === "HC"

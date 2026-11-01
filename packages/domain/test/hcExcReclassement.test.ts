@@ -148,6 +148,32 @@ describe("computeReclassementHcExc (ported from the central spreadsheet's own re
     expect(result.ancienneteReporteeJours).toBe(0);
   });
 
+  it("handles HC_AGR's lettered échelons (A1/A2/A3) via CONVERSION_NUMERIQUE_HC_AGR, fixing the 'cle NaN' gap (2026-11-01)", () => {
+    // Avant le correctif, echelonActuel="A1"/"A2"/"A3" donnait cle=NaN (chaîne non numérique * 10),
+    // faisant planter ou mal répondre reclassement(). cle numérisée (41/42/43)*10 doit matcher
+    // RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE (refs.ts, cle 410/411/420/421/430/431).
+    const a1 = computeReclassementHcExc({
+      processus: "EXC",
+      grilleActuelle: "HC_AGR",
+      echelonActuel: "A1",
+      ancienneteJoursAuReference: 360, // 1 an -> cle 41*10+1=411 -> échelon "A2"
+      dateReference: "2026-09-01",
+    });
+    expect(a1.nouvelleGrille).toBe("EXC_AGR");
+    expect(a1.nouvelEchelon).toBe("A2");
+    expect(a1.ancienIndice).toBe(895);
+
+    const a3 = computeReclassementHcExc({
+      processus: "EXC",
+      grilleActuelle: "HC_AGR",
+      echelonActuel: "A3",
+      ancienneteJoursAuReference: 360, // 1 an -> cle 43*10+1=431 -> échelon "B2"
+      dateReference: "2026-09-01",
+    });
+    expect(a3.nouvelEchelon).toBe("B2");
+    expect(a3.ancienIndice).toBe(977);
+  });
+
   it("throws for a grille with no known reclassement table (e.g. INSTIT, never a HC/EXC origin)", () => {
     expect(() =>
       computeReclassementHcExc({

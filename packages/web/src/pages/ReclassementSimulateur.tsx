@@ -862,16 +862,35 @@ function formatNouvelEchelonLabel(grilleActuelle: GrilleCode, nouvelEchelon: Ech
  * - Classe normale (PROFS/AGR/BI_ADM/PEGC) : dépend de l'ancienneté dans l'échelon À LA DATE DU
  *   RECLASSEMENT — {10, 11} si < 720j (2 ans), {9, 10, 11} si >= 720j.
  * - Hors Classe Certifié/PEPS/PLP/Prof. des écoles (HC_PROFS) uniquement : {3, 4, 5, 6, 7} — PEGC
- *   et Agrégé Hors Classe (HC_PEGC/HC_AGR) gardent toutes les valeurs de leur propre grille,
- *   aucune restriction supplémentaire demandée pour eux.
+ *   (HC_PEGC) garde toutes les valeurs de sa propre grille, aucune restriction supplémentaire
+ *   demandée pour lui.
+ * - Hors Classe Agrégé (HC_AGR) : {2, 3, "4-HEA1", "4-HEA2", "4-HEA3"} (2026-11-01) — le code brut
+ *   stocké reste "A1"/"A2"/"A3" (GRILLES.HC_AGR), seul le libellé affiché est francisé en
+ *   "4-HEA<n>", la conversion numérique nécessaire au calcul se fait côté domaine
+ *   (CONVERSION_NUMERIQUE_HC_AGR, hcExcReclassement.ts — corrige au passage un bug réel où ces 3
+ *   échelons plantaient ou donnaient un résultat faux, `cle` valant NaN).
  * - Classe exceptionnelle (EXC_PROFS) : un seul échelon possible, "4" (→ chevron HEA1).
  * - Chaire supérieure (CHAIRE_SUP) : un seul échelon possible, "6-HEA2" (→ 7-HEB2). */
-function echelonOptionsCas3(processus: "HC" | "EXC", grilleActuelle: GrilleCode, ancienneteJoursAuReclassement: number): string[] {
-  if (processus === "HC") return ancienneteJoursAuReclassement < 720 ? ["10", "11"] : ["9", "10", "11"];
-  if (grilleActuelle === "HC_PROFS") return ["3", "4", "5", "6", "7"];
-  if (grilleActuelle === "EXC_PROFS") return ["4"];
-  if (grilleActuelle === "CHAIRE_SUP") return ["6-HEA2"];
-  return (GRILLES[grilleActuelle] ?? []).map((r) => String(r.echelon));
+function echelonOptionsCas3(
+  processus: "HC" | "EXC",
+  grilleActuelle: GrilleCode,
+  ancienneteJoursAuReclassement: number,
+): { value: string; label: string }[] {
+  const plain = (codes: string[]) => codes.map((v) => ({ value: v, label: v }));
+  if (processus === "HC") return plain(ancienneteJoursAuReclassement < 720 ? ["10", "11"] : ["9", "10", "11"]);
+  if (grilleActuelle === "HC_PROFS") return plain(["3", "4", "5", "6", "7"]);
+  if (grilleActuelle === "HC_AGR") {
+    return [
+      { value: "2", label: "2" },
+      { value: "3", label: "3" },
+      { value: "A1", label: "4-HEA1" },
+      { value: "A2", label: "4-HEA2" },
+      { value: "A3", label: "4-HEA3" },
+    ];
+  }
+  if (grilleActuelle === "EXC_PROFS") return plain(["4"]);
+  if (grilleActuelle === "CHAIRE_SUP") return plain(["6-HEA2"]);
+  return plain((GRILLES[grilleActuelle] ?? []).map((r) => String(r.echelon)));
 }
 
 function Cas3() {
@@ -930,9 +949,9 @@ function Cas3() {
   // Resynchronise l'échelon sélectionné dès que les options changent (grille, ou franchissement du
   // seuil de 720j pour une classe normale) et que la valeur actuelle n'en fait plus partie.
   useEffect(() => {
-    if (!optionsEchelon.includes(echelonActuel)) setEchelonActuel(optionsEchelon[0] ?? "");
+    if (!optionsEchelon.some((o) => o.value === echelonActuel)) setEchelonActuel(optionsEchelon[0]?.value ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [optionsEchelon.join("|")]);
+  }, [optionsEchelon.map((o) => o.value).join("|")]);
 
   function calculer() {
     try {
@@ -1020,8 +1039,8 @@ function Cas3() {
             onChange={(e) => setEchelonActuel(e.target.value)}
           >
             {optionsEchelon.map((o) => (
-              <option key={o} value={o}>
-                {o}
+              <option key={o.value} value={o.value}>
+                {o.label}
               </option>
             ))}
           </select>
