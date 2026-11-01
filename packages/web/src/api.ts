@@ -288,8 +288,10 @@ export interface HcExcTeacherRow {
   rang: number;
   totalBareme: number | null;
   choixRecteur: boolean;
+  /** Override manuel (onglet Mailing) — null = suit choixRecteur. */
+  decisionManuelle: boolean | null;
+  /** Décision effective (decisionManuelle si renseignée, sinon choixRecteur). */
   promu: boolean;
-  contingent: number;
   appreciationRecteur: string | null;
   pointsRecteur: number | null;
   pointsAnciennete: number | null;
@@ -300,7 +302,7 @@ export interface HcExcTeacherRow {
 export interface HcExcGroupe {
   grade: string;
   vivier: string | null;
-  contingent: number;
+  nombrePromus: number;
   rangDernierPromu: number | null;
   totalBaremeDernierPromu: number | null;
 }
@@ -308,24 +310,6 @@ export interface HcExcGroupe {
 export interface HcExcListResult {
   rows: HcExcTeacherRow[];
   groupes: HcExcGroupe[];
-}
-
-export interface Contingent {
-  id: string;
-  campagneId: string;
-  grade: string;
-  vivier: string | null;
-  contingentAnnonce: number | null;
-  contingentPropose: number | null;
-  updatedAt: string;
-  updatedById: string | null;
-}
-
-export interface ContingentInput {
-  grade: string;
-  vivier: string | null;
-  contingentAnnonce: number | null;
-  contingentPropose: number | null;
 }
 
 export interface AcademicEmailImportResult {
@@ -433,8 +417,12 @@ export interface HcExcMailingRecipient {
   grade: string;
   rang: number;
   vivier: string | null;
-  contingent: number;
+  hcExcSnapshotId: string;
   choixRecteur: boolean;
+  /** Override manuel (modifiable depuis cette page) — null = suit choixRecteur. */
+  decisionManuelle: boolean | null;
+  /** Décision effective (decisionManuelle si renseignée, sinon choixRecteur). */
+  promu: boolean;
   totalBareme: number | null;
   email: string | null;
   lastStatus: "SENT" | "FAILED" | null;
@@ -720,9 +708,12 @@ export const api = {
     return upload<HcExcImportResult>("/imports/hc-exc", form);
   },
   hcExcTeachers: (campagneId: string) => request<HcExcListResult>(`/hc-exc?campagneId=${campagneId}`),
-  hcExcContingents: (campagneId: string) => request<Contingent[]>(`/campagnes/${campagneId}/contingents`),
-  updateHcExcContingents: (campagneId: string, contingents: ContingentInput[]) =>
-    request<Contingent[]>(`/campagnes/${campagneId}/contingents`, { method: "PUT", body: JSON.stringify({ contingents }) }),
+  /** null revient au marqueur "Choix du Recteur" du fichier rectorat. */
+  updateHcExcDecision: (hcExcSnapshotId: string, decisionManuelle: boolean | null) =>
+    request<{ id: string; choixRecteur: boolean; decisionManuelle: boolean | null; promu: boolean }>(`/hc-exc/${hcExcSnapshotId}/decision`, {
+      method: "PATCH",
+      body: JSON.stringify({ decisionManuelle }),
+    }),
   importAdherents: (file: File, campagneId: string) => {
     const form = new FormData();
     form.append("file", file);

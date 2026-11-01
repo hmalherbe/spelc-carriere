@@ -166,7 +166,7 @@ function AnneeScolairePicker() {
             <strong>Action irréversible.</strong> Supprime les {campagnesAnneeSelectionnee.length} campagne(s) de l'année
             scolaire « {selectedAnneeScolaire} » (avancement d'échelon CCMA/CCMI, hors classe, classe exceptionnelle) et
             TOUTES leurs données : {totalTeachers} enseignant(s) importé(s) au total, {totalImports} fichier(s) rectorat
-            importé(s), les promotions calculées, les reliquats, les contingents et l'historique d'envois de mailing de
+            importé(s), les promotions calculées, les reliquats et l'historique d'envois de mailing de
             chacune.
           </p>
           <label>

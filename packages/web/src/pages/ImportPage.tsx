@@ -142,7 +142,7 @@ export function ImportPage() {
     const confirmed = window.confirm(
       `Supprimer définitivement la campagne "${label}" ?\n\n` +
         `Toutes les données liées à cette campagne seront supprimées : les ${selectedCampagne._count.teacherSnapshots} enseignant(s) importé(s), ` +
-        `les ${selectedCampagne._count.imports} fichier(s) rectorat importé(s), les promotions calculées, les reliquats, les contingents et ` +
+        `les ${selectedCampagne._count.imports} fichier(s) rectorat importé(s), les promotions calculées, les reliquats et ` +
         `l'historique d'envois de mailing de cette campagne.\n\n` +
         `Cette action est irréversible.`,
     );

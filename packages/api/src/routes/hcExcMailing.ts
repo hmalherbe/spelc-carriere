@@ -12,7 +12,7 @@ import { buildHcExcResultatEmail, type HcExcResultatContext } from "../mailing/h
 import { buildHcExcReclassementEmail, type HcExcReclassementContext } from "../mailing/hcExcReclassementTemplate.js";
 import { loadBrevoConfigFromDb, loadElusByCommission, loadSocialLinks, buildRecipientUnsubscribeUrl } from "./mailing.js";
 import type { MailingElu, MailingSocialLink } from "../mailing/template.js";
-import { computeContingentCutline } from "../hcExcComputation.js";
+import { decisionEffective } from "../hcExcComputation.js";
 
 export const hcExcMailingRouter = Router();
 hcExcMailingRouter.use(requireAuth);
@@ -36,6 +36,7 @@ function estAgrege(grade: string): boolean {
 }
 
 interface ResultatRow {
+  hcExcSnapshotId: string;
   teacherId: string;
   adherentId: string | null;
   isAdherent: boolean;
@@ -46,8 +47,14 @@ interface ResultatRow {
   grade: string;
   rang: number;
   vivier: string | null;
-  contingent: number;
+  /** Nombre de fiches décidées promues dans le même (grade, vivier) — voir decisionEffective,
+   * calculé une fois par groupe ci-dessous, jamais saisi à la main. */
+  nombrePromus: number;
   choixRecteur: boolean;
+  decisionManuelle: boolean | null;
+  /** Décision effective affichée dans la lettre (decisionManuelle si renseignée, sinon choixRecteur
+   * — voir decisionEffective). */
+  promu: boolean;
   appreciationRecteur: string | null;
   pointsRecteur: number | null;
   pointsAnciennete: number | null;
@@ -62,9 +69,9 @@ interface ResultatRow {
 /** Tous les enseignants d'une campagne HC/EXC, rapprochés adhérent↔enseignant exactement comme
  * eligibleRecipients (routes/mailing.ts) le fait pour l'échelon — même logique de résolution
  * d'adresse/civilité, lue depuis HcExcSnapshot plutôt que TeacherSnapshot/ComputedPromotionState.
- * `promu` reprend verbatim le marqueur "Choix du Recteur" du fichier rectorat (snap.choixRecteur),
- * PAS le contingent recalculé par l'appli (voir HcExcSnapshot.choixRecteur's own doc comment) —
- * c'est exactement ce champ que le modèle Word réel utilise pour décider la phrase promu/non-promu.
+ * `promu` (voir decisionEffective) décide la phrase promu/non-promu de la lettre — modifiable par
+ * fiche depuis l'onglet Mailing (PATCH /hc-exc/:id/decision), sans quoi elle suit le marqueur
+ * "Choix du Recteur" du fichier rectorat.
  */
 async function resultatRecipients(campagneId: string): Promise<{ campagne: NonNullable<Awaited<ReturnType<typeof findCampagne>>>; rows: ResultatRow[] } | null> {
   const campagne = await findCampagne(campagneId);
@@ -76,15 +83,14 @@ async function resultatRecipients(campagneId: string): Promise<{ campagne: NonNu
     orderBy: [{ grade: "asc" }, { vivier: "asc" }, { rang: "asc" }],
   });
 
-  const contingentCache = new Map<string, number>();
-  async function contingentFor(grade: string, vivier: string | null): Promise<number> {
-    const key = `${grade}|${vivier ?? ""}`;
-    let cached = contingentCache.get(key);
-    if (cached == null) {
-      cached = (await computeContingentCutline(campagneId, grade, vivier)).contingent;
-      contingentCache.set(key, cached);
-    }
-    return cached;
+  // Nombre de promus par (grade, vivier) — calculé une seule fois ici à partir des décisions
+  // effectives déjà chargées ci-dessus, plutôt qu'un contingent saisi à la main (voir
+  // HcExcSnapshot.decisionManuelle's own doc comment).
+  const nombrePromusByGroup = new Map<string, number>();
+  for (const snap of snapshots) {
+    if (!decisionEffective(snap)) continue;
+    const key = `${snap.grade}|${snap.vivier ?? ""}`;
+    nombrePromusByGroup.set(key, (nombrePromusByGroup.get(key) ?? 0) + 1);
   }
 
   const academicEmails = await prisma.academicEmail.findMany();
@@ -123,8 +129,10 @@ async function resultatRecipients(campagneId: string): Promise<{ campagne: NonNu
     const civiliteEstimee = !teacher.civiliteCorrigee && !isAdherentReel && civilite != null;
     const email = adherent ? adherent.mailPersonnel : (academicEmailByName.get(`${normalizeName(snap.nomUsage)}|${normalizeName(snap.prenom)}`) ?? null);
     const log = logByTeacherId.get(teacher.id) ?? null;
+    const groupKey = `${snap.grade}|${snap.vivier ?? ""}`;
 
     rows.push({
+      hcExcSnapshotId: snap.id,
       teacherId: teacher.id,
       adherentId: adherent?.id ?? null,
       isAdherent,
@@ -135,8 +143,10 @@ async function resultatRecipients(campagneId: string): Promise<{ campagne: NonNu
       grade: snap.grade,
       rang: snap.rang,
       vivier: snap.vivier,
-      contingent: await contingentFor(snap.grade, snap.vivier),
+      nombrePromus: nombrePromusByGroup.get(groupKey) ?? 0,
       choixRecteur: snap.choixRecteur,
+      decisionManuelle: snap.decisionManuelle,
+      promu: decisionEffective(snap),
       appreciationRecteur: snap.appreciationRecteur,
       pointsRecteur: snap.pointsRecteur,
       pointsAnciennete: snap.pointsAnciennete,
@@ -161,8 +171,8 @@ interface ReclassementRow extends ResultatRow {
 }
 
 /** Sous-ensemble de resultatRecipients : seulement les adhérents effectivement promus (voir
- * ResultatRow.choixRecteur's own doc comment — "promu" pour CETTE lettre, pas le recalcul du
- * contingent), avec leur reclassement calculé via computeReclassementHcExc (déjà vérifié
+ * ResultatRow.promu's own doc comment — decisionManuelle si renseignée, sinon choixRecteur), avec
+ * leur reclassement calculé via computeReclassementHcExc (déjà vérifié
  * exhaustivement contre le classeur réel du syndicat dans cette même session). Silencieusement
  * exclu (pas une erreur bloquante) quand la grille d'origine ou l'ancienneté dans l'échelon
  * manquent pour calculer — même esprit que computeEtStockerBaremeExc's `nonCalcules`, à affiner
@@ -182,7 +192,7 @@ async function reclassementRecipients(campagneId: string): Promise<{ campagne: N
 
   const result: ReclassementRow[] = [];
   for (const r of rows) {
-    if (!r.isAdherent || !r.choixRecteur) continue;
+    if (!r.isAdherent || !r.promu) continue;
     const grilleActuelle = gradeToGrille(r.grade);
     if (!grilleActuelle || r.ancienneteEchelon == null) continue;
 
@@ -263,10 +273,10 @@ function buildResultatContext(
     grade: r.grade,
     estAgrege: estAgrege(r.grade),
     rang: r.rang,
-    contingent: r.contingent,
+    nombrePromus: r.nombrePromus,
     appreciationRecteur: r.appreciationRecteur,
     pointsRecteur: r.pointsRecteur,
-    choixRecteur: r.choixRecteur,
+    promu: r.promu,
     pointsAnciennete: r.pointsAnciennete,
     totalBareme: r.totalBareme,
   };

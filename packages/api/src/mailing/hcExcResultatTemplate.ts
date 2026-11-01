@@ -48,12 +48,14 @@ export interface HcExcResultatContext {
 
   /** Null pour un Agrégé (non affiché — voir estAgrege). */
   rang: number | null;
-  contingent: number | null;
+  /** Nombre de fiches décidées promues dans le même (grade, vivier) — voir decisionEffective
+   * (hcExcComputation.ts), calculé par l'appelant à partir des décisions, jamais saisi à la main. */
+  nombrePromus: number | null;
   appreciationRecteur: string | null;
   pointsRecteur: number | null;
-  /** Marqueur "Choix du Recteur" du fichier rectorat ("P") — décide la promotion annoncée dans
-   * cette lettre, indépendamment de tout calcul de contingent fait ailleurs dans l'appli. */
-  choixRecteur: boolean;
+  /** Décision effective de promotion (override manuel si renseigné, sinon "Choix du Recteur" du
+   * fichier rectorat — voir decisionEffective) : décide la promotion annoncée dans cette lettre. */
+  promu: boolean;
   pointsAnciennete: number | null;
   totalBareme: number | null;
 }
@@ -83,7 +85,7 @@ function buildRangContingentBlock(ctx: HcExcResultatContext): string {
   if (ctx.estAgrege) return "";
   const lines: string[] = [];
   if (ctx.rang != null) lines.push(`Votre rang est : <strong>${ctx.rang}</strong>.`);
-  if (ctx.contingent != null) lines.push(`Le nombre de promus pour l'échelle de rémunération ${escapeHtml(ctx.grade)} est : <strong>${ctx.contingent}</strong>.`);
+  if (ctx.nombrePromus != null) lines.push(`Le nombre de promus pour l'échelle de rémunération ${escapeHtml(ctx.grade)} est : <strong>${ctx.nombrePromus}</strong>.`);
   return lines.length > 0 ? p(lines.join("<br>")) : "";
 }
 
@@ -92,7 +94,7 @@ function buildBaremeBlock(ctx: HcExcResultatContext): string {
   if (ctx.appreciationRecteur != null && ctx.pointsRecteur != null) {
     lines.push(`L'appréciation du Recteur est « ${escapeHtml(ctx.appreciationRecteur)} », ce qui correspond à ${ctx.pointsRecteur} points*.`);
   }
-  if (!ctx.choixRecteur) {
+  if (!ctx.promu) {
     lines.push("Cette appréciation sera prise en compte pour la prochaine campagne de promotion.");
   }
   if (ctx.pointsAnciennete != null) {
@@ -107,7 +109,7 @@ function buildBaremeBlock(ctx: HcExcResultatContext): string {
 }
 
 function buildDecisionBlock(ctx: HcExcResultatContext): string {
-  if (!ctx.choixRecteur) {
+  if (!ctx.promu) {
     return p(`Vous n'avez pas été promu(e) à ${processusLabelCourt(ctx.processus)}.`);
   }
   if (ctx.estAgrege) {

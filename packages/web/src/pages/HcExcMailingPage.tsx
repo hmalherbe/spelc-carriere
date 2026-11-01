@@ -27,6 +27,7 @@ export function HcExcMailingPage() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<MailingSendResult | null>(null);
   const [mailingLog, setMailingLog] = useState<MailingLogEntry[]>([]);
+  const [decisionBusyId, setDecisionBusyId] = useState<string | null>(null);
 
   function refresh() {
     if (!campagneId) {
@@ -77,6 +78,21 @@ export function HcExcMailingPage() {
     }
   }
 
+  /** Override manuel de la décision de promotion — null (auto) revient au marqueur "Choix du
+   * Recteur" du fichier rectorat (voir HcExcSnapshot.decisionManuelle's own doc comment). */
+  async function changeDecision(hcExcSnapshotId: string, value: "auto" | "promu" | "non_promu") {
+    setDecisionBusyId(hcExcSnapshotId);
+    setError(null);
+    try {
+      await api.updateHcExcDecision(hcExcSnapshotId, value === "auto" ? null : value === "promu");
+      refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setDecisionBusyId(null);
+    }
+  }
+
   async function send() {
     if (!campagneId || selected.size === 0) return;
     setSending(true);
@@ -112,7 +128,7 @@ export function HcExcMailingPage() {
       )}
       <p className="hint">
         {kind === "resultat"
-          ? "Informe chaque enseignant (adhérent ou non) du résultat de son examen à la CCMA/CCMI — rang, contingent, appréciation du recteur, et la décision de promotion (\"Choix du Recteur\" du fichier rectorat)."
+          ? "Informe chaque enseignant (adhérent ou non) du résultat de son examen à la CCMA/CCMI — rang, appréciation du recteur, et la décision de promotion (\"Choix du Recteur\" du fichier rectorat par défaut, modifiable ci-dessous)."
           : "Calcule et annonce le reclassement (échelon, report d'ancienneté, gain de salaire, prochaine promotion) — réservé aux adhérents effectivement promus."}
       </p>
 
@@ -134,7 +150,6 @@ export function HcExcMailingPage() {
                 <>
                   <th>Rang</th>
                   <th>Vivier</th>
-                  <th>Contingent</th>
                   <th>Décision</th>
                 </>
               ) : (
@@ -163,8 +178,17 @@ export function HcExcMailingPage() {
                   <>
                     <td>{r.rang}</td>
                     <td>{r.vivier ?? "—"}</td>
-                    <td>{r.contingent}</td>
-                    <td>{r.choixRecteur ? <span className="badge badge-promu_estime">Promu</span> : <span className="badge badge-non_promu_estime">Non promu</span>}</td>
+                    <td>
+                      <select
+                        value={r.decisionManuelle == null ? "auto" : r.decisionManuelle ? "promu" : "non_promu"}
+                        disabled={decisionBusyId === r.hcExcSnapshotId}
+                        onChange={(e) => changeDecision(r.hcExcSnapshotId, e.target.value as "auto" | "promu" | "non_promu")}
+                      >
+                        <option value="auto">Auto ({r.choixRecteur ? "Promu" : "Non promu"} — choix du recteur)</option>
+                        <option value="promu">Promu (forcé)</option>
+                        <option value="non_promu">Non promu (forcé)</option>
+                      </select>
+                    </td>
                   </>
                 ) : (
                   <>

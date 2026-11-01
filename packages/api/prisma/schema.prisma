@@ -77,8 +77,8 @@ model GradeMapping {
 // ---------------------------------------------------------------------------
 
 // CCMA (second degré) / CCMI (premier degré) — the échelon-advancement process, see
-// TeacherSnapshot — or HC (hors classe) / EXC (classe exceptionnelle) — the barème-ranked,
-// contingent-capped promotion process, see HcExcSnapshot. A distinct enum from AdelSyncType
+// TeacherSnapshot — or HC (hors classe) / EXC (classe exceptionnelle) — the barème-ranked
+// promotion process, see HcExcSnapshot. A distinct enum from AdelSyncType
 // (below): that one is specifically about what the ADEL scraper syncs (CCMA/CCMI membership data
 // only, never applicable to HC/EXC), so extending it with HC/EXC would mislabel what it means.
 enum CampagneType {
@@ -141,7 +141,6 @@ model Campagne {
   imports            RectoratImport[]
   teacherSnapshots   TeacherSnapshot[]
   hcExcSnapshots     HcExcSnapshot[]
-  contingents        Contingent[]
   mailingLogs        MailingLog[]
   reliquatPromotions ReliquatPromotion[]
 }
@@ -239,11 +238,11 @@ model TeacherSnapshot {
 }
 
 // One row = one teacher's rectorat "Tableau Avancement" barème-ranking record, for one Hors
-// Classe or Classe Exceptionnelle campagne — a ranked-list-with-contingent-cutline promotion
-// mechanism, structurally different from TeacherSnapshot's échelon-advancement PROJECTION (see
-// that model's own doc comment): here the rectorat provides a barème score and a rank directly,
-// and the union decides who's promoted by comparing the rank against a contingent (see
-// Contingent below), not by a duration/date computation. Grade is the CLASSE NORMALE label a
+// Classe or Classe Exceptionnelle campagne — a ranked-list promotion mechanism, structurally
+// different from TeacherSnapshot's échelon-advancement PROJECTION (see that model's own doc
+// comment): here the rectorat provides a barème score and a rank directly, and the union decides
+// who's promoted line by line (choixRecteur/decisionManuelle below), not by a duration/date
+// computation or a manually-entered quota. Grade is the CLASSE NORMALE label a
 // teacher rises FROM for a Hors Classe campagne ("CERTIFIE"), or the HORS CLASSE label they rise
 // from for a Classe Exceptionnelle campagne ("CERTIFIE HC") — matches GRADE_MAPPINGS/reclassement
 // table selection in @spelc/domain.
@@ -267,12 +266,16 @@ model HcExcSnapshot {
   vivier String?
 
   rang         Int
-  // The rectorat file's own "Choix du Recteur" marker for this record ("P"), kept verbatim and
-  // separate from the union's own contingent-cutline decision (computed on demand from `rang` vs
-  // Contingent, not stored here) — the two can legitimately disagree while a contingent isn't yet
-  // officially confirmed (real case: Agrégés Hors Classe, where the union proposes its own number
-  // pending the rectorat's official announcement).
+  // The rectorat file's own "Choix du Recteur" marker for this record ("P") — the decision shown
+  // in the "résultat de la CCMA/CCMI" mailing by default (see routes/hcExc.ts's `promu`), unless
+  // overridden below. Kept verbatim, never recomputed from `rang`.
   choixRecteur Boolean @default(false)
+  // Override manuel de la décision de promotion, modifiable depuis l'onglet Mailing (voir
+  // routes/hcExc.ts's PATCH /:id/decision) — null = aucune correction, la décision effective suit
+  // `choixRecteur` ; true/false = décision forcée, quel que soit `choixRecteur`. Remplace le
+  // mécanisme de contingent manuel (comparaison rang <= quota) : la décision se prend maintenant
+  // ligne par ligne, à partir du fichier rectorat, avec cette correction en dernier mot.
+  decisionManuelle Boolean?
 
   totalBareme         Int?
   avisCE              String? // free text, the chef d'établissement's motivated appraisal
@@ -293,27 +296,6 @@ model HcExcSnapshot {
   rowIndex Int @default(0)
 
   @@index([campagneId, teacherId])
-}
-
-// The rectorat's officially announced quota for a (campagne, grade[, vivier]) — how many people
-// can actually be promoted this cycle, regardless of how many rank above the contingent-cutline
-// (rang <= Contingent.contingentPropose ?? contingentAnnonce -> promu). Split into two numbers
-// because the rectorat doesn't always announce a grade's contingent before the union has to start
-// its own selection work (real case: Agrégés Hors Classe) — contingentAnnonce is the rectorat's
-// own figure once published, contingentPropose is the union's working estimate used until then;
-// contingentAnnonce, once set, is what the cutline computation actually uses.
-model Contingent {
-  id                String   @id @default(cuid())
-  campagne          Campagne @relation(fields: [campagneId], references: [id])
-  campagneId        String
-  grade             String // matches GradeMapping.grade, e.g. "CERTIFIE" (Hors Classe) or "CERTIFIE HC" (Classe Exceptionnelle)
-  vivier            String? // null for Hors Classe; "Vivier 1"/"Vivier 2" for Classe Exceptionnelle
-  contingentAnnonce Int?
-  contingentPropose Int?
-  updatedAt         DateTime @updatedAt
-  updatedById       String?
-
-  @@unique([campagneId, grade, vivier])
 }
 
 // The stable entity a human is actually tracking across campaigns and re-imports.

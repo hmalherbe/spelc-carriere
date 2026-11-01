@@ -218,7 +218,7 @@ campagnesRouter.patch("/:id", requireRole("ADMIN", "GESTIONNAIRE"), async (req, 
 
 /**
  * Permanently deletes ONE campagne and every piece of data tied to it: imports, teacher/HC-EXC
- * snapshots, computed promotion states, contingents, reliquats, mailing logs. A Teacher this
+ * snapshots, computed promotion states, reliquats, mailing logs. A Teacher this
  * campagne's own data touched is deleted too, but ONLY if this campagne was its sole remaining data
  * — a teacher who also appears in another, still-existing campagne (and their adherent match,
  * manual ancienneté corrections, civilité override...) must survive untouched. Shared by the
@@ -241,7 +241,6 @@ async function deleteCampagneAndItsData(campagneId: string): Promise<void> {
     // No @relation on ComputedPromotionState.campagneId (see schema.prisma) — still campagne-scoped
     // data, deleted explicitly rather than left as orphaned rows pointing at a gone campagneId.
     await tx.computedPromotionState.deleteMany({ where: { campagneId } });
-    await tx.contingent.deleteMany({ where: { campagneId } });
     await tx.teacherSnapshot.deleteMany({ where: { campagneId } });
     await tx.hcExcSnapshot.deleteMany({ where: { campagneId } });
     await tx.rectoratImport.deleteMany({ where: { campagneId } });
@@ -291,55 +290,3 @@ campagnesRouter.delete("/annee-scolaire/:anneeScolaire", requireRole("ADMIN", "G
   res.status(204).end();
 });
 
-/**
- * The rectorat's promotion quota for each (grade[, vivier]) of a Hors Classe/Classe Exceptionnelle
- * campagne — see Contingent's own doc comment in schema.prisma for contingentAnnonce vs
- * contingentPropose. No per-row CRUD: an admin edits the whole campagne's contingents at once
- * (there's only ever a handful per campagne), so PUT replaces them wholesale — same pattern as
- * settings.ts's social-links.
- */
-campagnesRouter.get("/:id/contingents", async (req, res) => {
-  const contingents = await prisma.contingent.findMany({ where: { campagneId: req.params.id }, orderBy: [{ grade: "asc" }, { vivier: "asc" }] });
-  res.json(contingents);
-});
-
-const contingentsSchema = z.object({
-  contingents: z
-    .array(
-      z.object({
-        grade: z.string().min(1),
-        vivier: z.string().min(1).nullable(),
-        contingentAnnonce: z.number().int().min(0).nullable(),
-        contingentPropose: z.number().int().min(0).nullable(),
-      }),
-    )
-    .max(50),
-});
-
-campagnesRouter.put("/:id/contingents", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
-  const campagneId = req.params.id;
-  const existing = await prisma.campagne.findUnique({ where: { id: campagneId } });
-  if (!existing) return res.status(404).json({ error: "Campagne introuvable" });
-
-  const parsed = contingentsSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
-  }
-
-  await prisma.$transaction([
-    prisma.contingent.deleteMany({ where: { campagneId } }),
-    prisma.contingent.createMany({
-      data: parsed.data.contingents.map((c) => ({
-        campagneId,
-        grade: c.grade,
-        vivier: c.vivier,
-        contingentAnnonce: c.contingentAnnonce,
-        contingentPropose: c.contingentPropose,
-        updatedById: req.auth!.userId,
-      })),
-    }),
-  ]);
-
-  const contingents = await prisma.contingent.findMany({ where: { campagneId }, orderBy: [{ grade: "asc" }, { vivier: "asc" }] });
-  res.json(contingents);
-});

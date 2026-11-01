@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Contingent, type HcExcGroupe, type HcExcImportResult, type HcExcTeacherRow } from "../api.js";
+import { api, type HcExcGroupe, type HcExcImportResult, type HcExcTeacherRow } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 import { useCampagneContext, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom, derivePeriodeFromAnneeScolaire } from "../format.js";
@@ -15,10 +15,6 @@ function dateCommissionLabel(commission: "CCMA" | "CCMI"): string {
 
 function hcExcFilesOnly(files: File[]): File[] {
   return files.filter((f) => /\.(pdf|txt)$/i.test(f.name));
-}
-
-function groupKey(grade: string, vivier: string | null): string {
-  return `${grade}|${vivier ?? ""}`;
 }
 
 export function HorsClasseExceptionnellePage() {
@@ -57,11 +53,6 @@ export function HorsClasseExceptionnellePage() {
   const [groupes, setGroupes] = useState<HcExcGroupe[]>([]);
   const [resultsLoading, setResultsLoading] = useState(false);
 
-  const [contingents, setContingents] = useState<Contingent[]>([]);
-  const [contingentDrafts, setContingentDrafts] = useState<Map<string, { contingentAnnonce: string; contingentPropose: string }>>(new Map());
-  const [contingentBusy, setContingentBusy] = useState(false);
-  const [contingentError, setContingentError] = useState<string | null>(null);
-
   /** Rafraîchit la liste via le contexte global (partagé avec le sélecteur d'en-tête et toutes les
    * autres pages) plutôt que de refetcher indépendamment. `selectId` force la sélection d'une
    * campagne qui vient d'être créée — l'effet d'auto-sélection ci-dessus ne choisit que le PREMIER
@@ -87,38 +78,11 @@ export function HorsClasseExceptionnellePage() {
       .finally(() => setResultsLoading(false));
   }
 
-  function refreshContingents() {
-    if (!campagneId) {
-      setContingents([]);
-      return;
-    }
-    api.hcExcContingents(campagneId).then(setContingents);
-  }
-
   useEffect(() => {
     refreshResults();
-    refreshContingents();
     setImportResults([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campagneId]);
-
-  // The contingent editor shows one row per (grade, vivier) group already known to this campagne —
-  // from an existing Contingent row, or from an already-imported group with none set yet — seeded
-  // into editable draft state whenever the underlying data changes.
-  useEffect(() => {
-    const drafts = new Map<string, { contingentAnnonce: string; contingentPropose: string }>();
-    for (const c of contingents) {
-      drafts.set(groupKey(c.grade, c.vivier), {
-        contingentAnnonce: c.contingentAnnonce != null ? String(c.contingentAnnonce) : "",
-        contingentPropose: c.contingentPropose != null ? String(c.contingentPropose) : "",
-      });
-    }
-    for (const g of groupes) {
-      const key = groupKey(g.grade, g.vivier);
-      if (!drafts.has(key)) drafts.set(key, { contingentAnnonce: "", contingentPropose: "" });
-    }
-    setContingentDrafts(drafts);
-  }, [contingents, groupes]);
 
   async function createCampagne(e: React.FormEvent) {
     e.preventDefault();
@@ -158,33 +122,6 @@ export function HorsClasseExceptionnellePage() {
     setFiles([]);
     setImportBusy(false);
     refreshResults();
-    refreshContingents();
-  }
-
-  async function saveContingents() {
-    if (!campagneId) return;
-    setContingentBusy(true);
-    setContingentError(null);
-    try {
-      const payload = [...contingentDrafts.entries()].map(([key, draft]) => {
-        const sep = key.indexOf("|");
-        const grade = key.slice(0, sep);
-        const vivierRaw = key.slice(sep + 1);
-        return {
-          grade,
-          vivier: vivierRaw || null,
-          contingentAnnonce: draft.contingentAnnonce.trim() === "" ? null : Number(draft.contingentAnnonce),
-          contingentPropose: draft.contingentPropose.trim() === "" ? null : Number(draft.contingentPropose),
-        };
-      });
-      const saved = await api.updateHcExcContingents(campagneId, payload);
-      setContingents(saved);
-      refreshResults();
-    } catch (e) {
-      setContingentError(String(e));
-    } finally {
-      setContingentBusy(false);
-    }
   }
 
   return (
@@ -193,8 +130,8 @@ export function HorsClasseExceptionnellePage() {
         <h2>Hors classe / Classe exceptionnelle</h2>
         <p className="hint">
           Suivi des passages à la hors-classe et à la classe exceptionnelle — import du tableau d'avancement du rectorat
-          (barème et rang), rapprochement adhérents, contingent par grade (pour la classe exceptionnelle, par vivier), et
-          détermination des promus par comparaison rang / contingent.
+          (barème et rang), rapprochement adhérents, et décision de promotion ligne à ligne (le marqueur "Choix du Recteur"
+          du fichier rectorat, modifiable depuis l'onglet Mailing).
         </p>
         <div className="toolbar">
           {hcExcCampagnes.length > 0 ? (
@@ -350,74 +287,33 @@ export function HorsClasseExceptionnellePage() {
 
       {selectedCampagne && groupes.length > 0 && (
         <section className="card">
-          <h2>Contingent</h2>
+          <h2>Promotions par grade</h2>
           <p className="hint">
-            Le contingent officiel une fois annoncé par le rectorat ("annoncé"), ou en attendant une estimation de travail du
-            syndicat ("proposé") — utilisé pour déterminer les promus (rang ≤ contingent). Le rang comparé est toujours celui
-            donné par le rectorat, jamais recalculé.
+            Calculé automatiquement à partir de la décision de chaque fiche (voir la colonne "Promu" ci-dessous, modifiable
+            depuis l'onglet Mailing) — plus de contingent à saisir à la main.
           </p>
           <table className="data-table">
             <thead>
               <tr>
                 <th>Grade</th>
                 <th>Vivier</th>
-                <th>Contingent annoncé</th>
-                <th>Contingent proposé</th>
+                <th>Promus</th>
                 <th>Dernier promu (rang)</th>
                 <th>Dernier promu (barème)</th>
               </tr>
             </thead>
             <tbody>
-              {groupes.map((g) => {
-                const key = groupKey(g.grade, g.vivier);
-                const draft = contingentDrafts.get(key) ?? { contingentAnnonce: "", contingentPropose: "" };
-                return (
-                  <tr key={key}>
-                    <td>{g.grade}</td>
-                    <td>{g.vivier ?? "—"}</td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        disabled={!canEdit}
-                        value={draft.contingentAnnonce}
-                        onChange={(e) => {
-                          const next = new Map(contingentDrafts);
-                          next.set(key, { ...draft, contingentAnnonce: e.target.value });
-                          setContingentDrafts(next);
-                        }}
-                        style={{ width: 90 }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        disabled={!canEdit}
-                        value={draft.contingentPropose}
-                        onChange={(e) => {
-                          const next = new Map(contingentDrafts);
-                          next.set(key, { ...draft, contingentPropose: e.target.value });
-                          setContingentDrafts(next);
-                        }}
-                        style={{ width: 90 }}
-                      />
-                    </td>
-                    <td>{g.rangDernierPromu ?? "—"}</td>
-                    <td>{g.totalBaremeDernierPromu ?? "—"}</td>
-                  </tr>
-                );
-              })}
+              {groupes.map((g) => (
+                <tr key={`${g.grade}|${g.vivier ?? ""}`}>
+                  <td>{g.grade}</td>
+                  <td>{g.vivier ?? "—"}</td>
+                  <td>{g.nombrePromus}</td>
+                  <td>{g.rangDernierPromu ?? "—"}</td>
+                  <td>{g.totalBaremeDernierPromu ?? "—"}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
-          {canEdit && (
-            <div className="toolbar" style={{ marginTop: 12 }}>
-              <button type="button" onClick={saveContingents} disabled={contingentBusy}>
-                {contingentBusy ? "Enregistrement..." : "Enregistrer le contingent"}
-              </button>
-              {contingentError && <p className="error-text">{contingentError}</p>}
-            </div>
-          )}
         </section>
       )}
 

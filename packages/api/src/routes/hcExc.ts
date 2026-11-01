@@ -1,48 +1,30 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../db.js";
-import { requireAuth } from "../auth/middleware.js";
+import { requireAuth, requireRole } from "../auth/middleware.js";
+import { decisionEffective } from "../hcExcComputation.js";
 
 export const hcExcRouter = Router();
 hcExcRouter.use(requireAuth);
 
 /**
  * Lists a Hors Classe/Classe Exceptionnelle campagne's snapshots, joined with adhérent-matching
- * status and each one's own "promu" decision — the rectorat's own rang (never re-derived from
- * totalBareme, see hcExcComputation.ts's own doc comment) compared against that (grade, vivier)
- * group's contingent, computed once per group here rather than N+1 per row.
+ * status and each one's own "promu" decision — `decisionEffective` (le marqueur "Choix du
+ * Recteur" du fichier rectorat, sauf correction manuelle, voir HcExcSnapshot.decisionManuelle's
+ * own doc comment), plus jamais une comparaison rang <= contingent saisi à la main.
  */
 hcExcRouter.get("/", async (req, res) => {
   const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
   if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
 
-  const [snapshots, contingents] = await Promise.all([
-    prisma.hcExcSnapshot.findMany({
-      where: { campagneId },
-      include: { teacher: { include: { matchCandidate: { include: { adherent: true } } } } },
-      orderBy: [{ grade: "asc" }, { vivier: "asc" }, { rang: "asc" }],
-    }),
-    prisma.contingent.findMany({ where: { campagneId } }),
-  ]);
-
-  const contingentByGroup = new Map(contingents.map((c) => [`${c.grade}|${c.vivier ?? ""}`, c.contingentAnnonce ?? c.contingentPropose ?? 0]));
-
-  // Rang du dernier promu / total barème du dernier promu (the same summary the central
-  // spreadsheet's own "Params HC & EXC" sheet shows) — derived per group in the same pass as
-  // `promu`, from the same already-sorted-by-rang snapshots, rather than a second query.
-  const cutlineByGroup = new Map<string, { rangDernierPromu: number | null; totalBaremeDernierPromu: number | null }>();
+  const snapshots = await prisma.hcExcSnapshot.findMany({
+    where: { campagneId },
+    include: { teacher: { include: { matchCandidate: { include: { adherent: true } } } } },
+    orderBy: [{ grade: "asc" }, { vivier: "asc" }, { rang: "asc" }],
+  });
 
   const rows = snapshots.map((snap) => {
-    const groupKey = `${snap.grade}|${snap.vivier ?? ""}`;
-    const contingent = contingentByGroup.get(groupKey) ?? 0;
-    if (!cutlineByGroup.has(groupKey)) {
-      const groupSnapshots = snapshots.filter((s) => `${s.grade}|${s.vivier ?? ""}` === groupKey);
-      const dernierPromu = groupSnapshots[Math.min(contingent, groupSnapshots.length) - 1];
-      cutlineByGroup.set(groupKey, {
-        rangDernierPromu: dernierPromu?.rang ?? null,
-        totalBaremeDernierPromu: dernierPromu?.totalBareme ?? null,
-      });
-    }
-    const promu = snap.rang <= contingent;
+    const promu = decisionEffective(snap);
 
     const matchCandidate = snap.teacher.matchCandidate;
     const adherent =
@@ -58,8 +40,8 @@ hcExcRouter.get("/", async (req, res) => {
       rang: snap.rang,
       totalBareme: snap.totalBareme,
       choixRecteur: snap.choixRecteur,
+      decisionManuelle: snap.decisionManuelle,
       promu,
-      contingent,
       appreciationRecteur: snap.appreciationRecteur,
       pointsRecteur: snap.pointsRecteur,
       pointsAnciennete: snap.pointsAnciennete,
@@ -68,13 +50,43 @@ hcExcRouter.get("/", async (req, res) => {
     };
   });
 
-  const allGroupKeys = new Set([...contingentByGroup.keys(), ...snapshots.map((s) => `${s.grade}|${s.vivier ?? ""}`)]);
-  const groupes = [...allGroupKeys].map((key) => {
+  // Résumé par (grade, vivier) — "rang du dernier promu" (le plus grand rang parmi les promus du
+  // groupe, les décisions n'étant plus forcément contiguës dès qu'une correction manuelle existe)
+  // et le nombre de promus, calculés ici une seule fois par groupe à partir des lignes déjà
+  // chargées ci-dessus plutôt qu'une requête par groupe.
+  const groupKeys = new Set(rows.map((r) => `${r.grade}|${r.vivier ?? ""}`));
+  const groupes = [...groupKeys].map((key) => {
     const [grade, vivierRaw] = key.split("|");
     const vivier = vivierRaw || null;
-    const cutline = cutlineByGroup.get(key) ?? { rangDernierPromu: null, totalBaremeDernierPromu: null };
-    return { grade, vivier, contingent: contingentByGroup.get(key) ?? 0, ...cutline };
+    const groupRows = rows.filter((r) => r.grade === grade && r.vivier === vivier);
+    const promus = groupRows.filter((r) => r.promu);
+    const dernierPromu = promus.reduce<(typeof promus)[number] | null>((max, p) => (!max || p.rang > max.rang ? p : max), null);
+    return {
+      grade,
+      vivier,
+      nombrePromus: promus.length,
+      rangDernierPromu: dernierPromu?.rang ?? null,
+      totalBaremeDernierPromu: dernierPromu?.totalBareme ?? null,
+    };
   });
 
   res.json({ rows, groupes });
+});
+
+const decisionSchema = z.object({ decisionManuelle: z.boolean().nullable() });
+
+/** Override manuel de la décision de promotion, modifiable depuis l'onglet Mailing Hors Classe /
+ * Classe exceptionnelle — null revient au marqueur "Choix du Recteur" du fichier rectorat. */
+hcExcRouter.patch("/:id/decision", requireRole("ADMIN", "GESTIONNAIRE"), async (req, res) => {
+  const parsed = decisionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+
+  const snap = await prisma.hcExcSnapshot.findUnique({ where: { id: req.params.id } });
+  if (!snap) return res.status(404).json({ error: "Fiche introuvable" });
+
+  const updated = await prisma.hcExcSnapshot.update({
+    where: { id: req.params.id },
+    data: { decisionManuelle: parsed.data.decisionManuelle },
+  });
+  res.json({ id: updated.id, choixRecteur: updated.choixRecteur, decisionManuelle: updated.decisionManuelle, promu: decisionEffective(updated) });
 });

@@ -70,45 +70,14 @@ export async function computeEtStockerBaremeExc(campagneId: string): Promise<{ c
   return { calcules, nonCalcules };
 }
 
-export interface ContingentCutline {
-  contingent: number;
-  rangDernierPromu: number | null;
-  totalBaremeDernierPromu: number | null;
-  promusTeacherIds: Set<string>;
-}
-
 /**
- * Who's actually promoted this cycle for a (campagne, grade[, vivier]) group: everyone whose rang
- * (the rectorat's own "LISTE PAR BAREME DECROISSANT" ranking — trusted as-is, never re-derived from
- * `totalBareme`, since the rectorat's own ranking is authoritative even where this app can only
- * approximate the score that produced it — see computeEtStockerBaremeExc) falls at or above the
- * contingent. `contingentAnnonce` (the rectorat's own official figure) wins over `contingentPropose`
- * (the union's own working estimate, used only until the rectorat publishes theirs) once set;
- * absent both, the contingent is 0 (nobody promoted yet — matches the central spreadsheet's own
- * "Rang du dernier promu" reading 0 for an unset contingent, rather than guessing a number).
+ * La décision effective de promotion pour une fiche : l'override manuel (`decisionManuelle`,
+ * modifiable depuis l'onglet Mailing) prime sur le marqueur "Choix du Recteur" du fichier
+ * rectorat (`choixRecteur`) quand il est présent — remplace l'ancienne comparaison rang <=
+ * contingent (voir HcExcSnapshot.decisionManuelle's own doc comment). Prend un objet minimal
+ * plutôt que le type Prisma complet pour rester appelable depuis n'importe quelle requête qui a
+ * déjà chargé ces deux champs (routes/hcExc.ts, routes/hcExcMailing.ts), sans requête dédiée.
  */
-export async function computeContingentCutline(campagneId: string, grade: string, vivier: string | null): Promise<ContingentCutline> {
-  // Prisma's compound-unique lookup syntax (`findUnique({ where: { campagneId_grade_vivier: {...} } })`)
-  // doesn't accept `null` for a nullable key component (a Prisma client typing limitation, not a
-  // real database one — Postgres itself allows it, per this table's own `@@unique` including a
-  // nullable column) — `findFirst` with a plain equality filter has no such restriction and the
-  // unique constraint guarantees at most one row matches anyway.
-  const contingentRow = await prisma.contingent.findFirst({ where: { campagneId, grade, vivier } });
-  const contingent = contingentRow?.contingentAnnonce ?? contingentRow?.contingentPropose ?? 0;
-
-  const snapshots = await prisma.hcExcSnapshot.findMany({
-    where: { campagneId, grade, vivier },
-    orderBy: { rang: "asc" },
-    select: { rang: true, totalBareme: true, teacherId: true },
-  });
-
-  const promus = snapshots.slice(0, contingent);
-  const dernierPromu = promus[promus.length - 1];
-
-  return {
-    contingent,
-    rangDernierPromu: dernierPromu?.rang ?? null,
-    totalBaremeDernierPromu: dernierPromu?.totalBareme ?? null,
-    promusTeacherIds: new Set(promus.map((p) => p.teacherId)),
-  };
+export function decisionEffective(snap: { choixRecteur: boolean; decisionManuelle: boolean | null }): boolean {
+  return snap.decisionManuelle ?? snap.choixRecteur;
 }
