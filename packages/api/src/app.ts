@@ -16,6 +16,7 @@ import { statsRouter } from "./routes/stats.js";
 import { elusRouter } from "./routes/elus.js";
 import { aiAssistantRouter } from "./routes/aiAssistant.js";
 import { hcExcRouter } from "./routes/hcExc.js";
+import { hcExcMailingRouter } from "./routes/hcExcMailing.js";
 import { reliquatsRouter } from "./routes/reliquats.js";
 import { reclassementsRouter } from "./routes/reclassements.js";
 import { saisiesManuellesRouter } from "./routes/saisiesManuelles.js";
@@ -48,6 +49,7 @@ export function createApp() {
   app.use("/elus", elusRouter);
   app.use("/ai-assistant", aiAssistantRouter);
   app.use("/hc-exc", hcExcRouter);
+  app.use("/hc-exc-mailing", hcExcMailingRouter);
   app.use("/reliquats", reliquatsRouter);
   app.use("/reclassements", reclassementsRouter);
   app.use("/saisies-manuelles", saisiesManuellesRouter);

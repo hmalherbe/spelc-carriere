@@ -419,6 +419,34 @@ export interface MailingSendResult {
   skippedOptedOut: number;
 }
 
+export type HcExcMailingKind = "resultat" | "reclassement";
+
+/** Un destinataire du mailing Hors Classe/Classe exceptionnelle — champs communs aux deux types
+ * d'envoi (résultat de la CCMA/CCMI, reclassement) ; les champs propres au reclassement
+ * (nouvelEchelon, gainSalaireNet...) ne sont présents que pour kind="reclassement". */
+export interface HcExcMailingRecipient {
+  teacherId: string;
+  adherentId: string | null;
+  isAdherent: boolean;
+  nom: string;
+  prenom: string;
+  grade: string;
+  rang: number;
+  vivier: string | null;
+  contingent: number;
+  choixRecteur: boolean;
+  totalBareme: number | null;
+  email: string | null;
+  lastStatus: "SENT" | "FAILED" | null;
+  optedOut: boolean;
+  // Présents seulement pour kind="reclassement" :
+  nouveauGrade?: string;
+  nouvelEchelon?: string;
+  ancienneteReporteeJours?: number;
+  gainSalaireNet?: number;
+  dateProchainePromotion?: string | null;
+}
+
 export interface BrevoSettings {
   senderEmail: string | null;
   senderName: string;
@@ -733,6 +761,14 @@ export const api = {
    * l'adresse d'envoi. null clears the override, reverting to the real adhérent↔enseignant link. */
   updateMailingIsAdherent: (teacherId: string, isAdherent: boolean | null) =>
     request<{ isAdherent: boolean | null }>(`/mailing/${teacherId}/is-adherent`, { method: "PUT", body: JSON.stringify({ isAdherent }) }),
+  hcExcMailingEligible: (campagneId: string, kind: HcExcMailingKind) =>
+    request<HcExcMailingRecipient[]>(`/hc-exc-mailing/eligible?campagneId=${campagneId}&kind=${kind}`),
+  hcExcMailingPreview: (campagneId: string, teacherId: string, kind: HcExcMailingKind) =>
+    request<MailingPreview>(`/hc-exc-mailing/preview?campagneId=${campagneId}&teacherId=${teacherId}&kind=${kind}`),
+  hcExcMailingLog: (campagneId: string, kind: HcExcMailingKind) =>
+    request<MailingLogEntry[]>(`/hc-exc-mailing/log?campagneId=${campagneId}&kind=${kind}`),
+  hcExcMailingSend: (campagneId: string, kind: HcExcMailingKind, teacherIds?: string[]) =>
+    request<MailingSendResult>("/hc-exc-mailing/send", { method: "POST", body: JSON.stringify({ campagneId, kind, teacherIds }) }),
   grilles: () => request<GrillesData>("/grilles"),
   updateEchelonIndice: (grilleCode: string, echelon: string, indice: number) =>
     request<EchelonRowApi>(`/grilles/${encodeURIComponent(grilleCode)}/rows/${encodeURIComponent(echelon)}`, {

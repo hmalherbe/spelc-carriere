@@ -1,4 +1,12 @@
-import { computeEchelonPromotion, GRADE_MAPPINGS, isEligibleCampagne, type GrilleCode } from "@spelc/domain";
+import {
+  computeEchelonPromotion,
+  GRADE_MAPPINGS,
+  isEligibleCampagne,
+  isEligibleHorsClasse,
+  isEligibleClasseExceptionnelle,
+  joursComptablesEntre,
+  type GrilleCode,
+} from "@spelc/domain";
 
 // Maîtres délégués (1er et 2nd degré) : présents dans GRADE_MAPPINGS pour leur grille de
 // rémunération (donc toujours affichés ailleurs dans l'appli), mais explicitement confirmés par le
@@ -72,4 +80,51 @@ export function computeAdherentEligibility(
     dateProchainePromotion,
     eligible: degreCorrespondACommission && isEligibleCampagne(dateProchainePromotion, periodeDebut, periodeFin),
   };
+}
+
+export interface AdherentEligibilityHcExc {
+  degre: 1 | 2 | null;
+  eligible: boolean;
+}
+
+/**
+ * Un adhérent est "éligible" à une campagne Hors Classe/Classe exceptionnelle s'il a déjà atteint,
+ * dans son grade ACTUEL (classe normale pour HC, hors classe pour EXC — voir GRADE_MAPPINGS'
+ * `accesHorsClasse`/`accesClasseExceptionnelle`), l'échelon statutaire requis — purement statutaire
+ * pour EXC (réforme 2024, voir isEligibleClasseExceptionnelle), avec en plus une ancienneté minimale
+ * de 2 ans pour HC à l'échelon 9 spécifiquement (voir isEligibleHorsClasse). Cette ancienneté est
+ * mesurée au premier jour de l'année scolaire de la campagne (`campagne.periodeDebut`, la "rentrée"
+ * — même référence que `computeReclassementHcExc`), à partir de `adherent.dateEffet` (date du
+ * dernier changement d'échelon connu côté ADEL) — une estimation, remplacée dès qu'un rapprochement
+ * avec le fichier du rectorat existe (même logique de précédence que `computeAdherentEligibility`,
+ * appliquée par l'appelant).
+ *
+ * Contrairement à l'échelon, aucune fenêtre de période n'intervient : une fois le seuil statutaire
+ * atteint, l'adhérent reste éligible jusqu'à sa promotion effective (pas de calcul de date de
+ * "prochaine échéance").
+ */
+export function computeAdherentEligibiliteHcExc(
+  adherent: { grade: string | null; ancienEchelon: string | null; dateEffet: Date | null },
+  nature: "HC" | "EXC",
+  campagne: { periodeDebut: Date },
+): AdherentEligibilityHcExc {
+  if (!adherent.grade || !adherent.ancienEchelon) return { degre: null, eligible: false };
+
+  const mapping = GRADE_MAPPINGS.find((g) => g.grade.toUpperCase() === adherent.grade!.trim().toUpperCase());
+  if (!mapping) return { degre: null, eligible: false };
+  if (GRADES_EXCLUS_CCMA_CCMI.has(mapping.grade)) return { degre: mapping.degre, eligible: false };
+
+  if (nature === "HC") {
+    if (!mapping.accesHorsClasse) return { degre: mapping.degre, eligible: false };
+    let ancienneteEchelonAnnees = 0;
+    if (adherent.dateEffet) {
+      const periodeDebut = campagne.periodeDebut.toISOString().slice(0, 10);
+      ancienneteEchelonAnnees = joursComptablesEntre(adherent.dateEffet.toISOString().slice(0, 10), periodeDebut) / 360;
+    }
+    return { degre: mapping.degre, eligible: isEligibleHorsClasse(adherent.ancienEchelon, ancienneteEchelonAnnees) };
+  }
+
+  if (!mapping.accesClasseExceptionnelle) return { degre: mapping.degre, eligible: false };
+  const corps = mapping.grille === "HC_AGR" ? "agrege" : "autre";
+  return { degre: mapping.degre, eligible: isEligibleClasseExceptionnelle(adherent.ancienEchelon, corps) };
 }

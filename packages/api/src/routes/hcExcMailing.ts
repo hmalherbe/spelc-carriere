@@ -1,0 +1,491 @@
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "../db.js";
+import { requireAuth, requireRole } from "../auth/middleware.js";
+import { asyncHandler } from "../asyncHandler.js";
+import { GRADE_MAPPINGS, computeReclassementHcExc, type GrilleCode } from "@spelc/domain";
+import { civiliteFromPrenom, normalizeName } from "@spelc/import";
+import { loadLiveGrilles, loadCurrentValeurDuPoint } from "../liveGrilles.js";
+import { loadMailingBranding } from "../mailingBranding.js";
+import { sendBrevoEmail, BrevoConfigError } from "../mailing/brevo.js";
+import { buildHcExcResultatEmail, type HcExcResultatContext } from "../mailing/hcExcResultatTemplate.js";
+import { buildHcExcReclassementEmail, type HcExcReclassementContext } from "../mailing/hcExcReclassementTemplate.js";
+import { loadBrevoConfigFromDb, loadElusByCommission, loadSocialLinks, buildRecipientUnsubscribeUrl } from "./mailing.js";
+import type { MailingElu, MailingSocialLink } from "../mailing/template.js";
+import { computeContingentCutline } from "../hcExcComputation.js";
+
+export const hcExcMailingRouter = Router();
+hcExcMailingRouter.use(requireAuth);
+
+function gradeToGrille(grade: string): GrilleCode | null {
+  const mapping = GRADE_MAPPINGS.find((g) => g.grade === grade);
+  return (mapping?.grille as GrilleCode | undefined) ?? null;
+}
+
+/** Lookup inverse de gradeToGrille — le libellé de grade affiché pour la grille D'ARRIVÉE après
+ * un reclassement (ex. "HC_PROFS" -> "CERTIFIE HC" ne suffit pas à lui seul puisque plusieurs
+ * grades premier/second degré partagent la même grille HC_PROFS — mais GRADE_MAPPINGS n'a qu'une
+ * entrée par grille pour ce cas, donc on prend la première correspondance, suffisant pour
+ * l'affichage d'une lettre). */
+function grilleToGradeLabel(grille: GrilleCode): string {
+  return GRADE_MAPPINGS.find((g) => g.grille === grille)?.grade ?? grille;
+}
+
+function estAgrege(grade: string): boolean {
+  return grade.toUpperCase().startsWith("AGREGE");
+}
+
+interface ResultatRow {
+  teacherId: string;
+  adherentId: string | null;
+  isAdherent: boolean;
+  nom: string;
+  prenom: string;
+  civilite: string | null;
+  civiliteEstimee: boolean;
+  grade: string;
+  rang: number;
+  vivier: string | null;
+  contingent: number;
+  choixRecteur: boolean;
+  appreciationRecteur: string | null;
+  pointsRecteur: number | null;
+  pointsAnciennete: number | null;
+  totalBareme: number | null;
+  echelonActuel: string;
+  ancienneteEchelon: number | null;
+  email: string | null;
+  lastStatus: string | null;
+  optedOut: boolean;
+}
+
+/** Tous les enseignants d'une campagne HC/EXC, rapprochés adhérent↔enseignant exactement comme
+ * eligibleRecipients (routes/mailing.ts) le fait pour l'échelon — même logique de résolution
+ * d'adresse/civilité, lue depuis HcExcSnapshot plutôt que TeacherSnapshot/ComputedPromotionState.
+ * `promu` reprend verbatim le marqueur "Choix du Recteur" du fichier rectorat (snap.choixRecteur),
+ * PAS le contingent recalculé par l'appli (voir HcExcSnapshot.choixRecteur's own doc comment) —
+ * c'est exactement ce champ que le modèle Word réel utilise pour décider la phrase promu/non-promu.
+ */
+async function resultatRecipients(campagneId: string): Promise<{ campagne: NonNullable<Awaited<ReturnType<typeof findCampagne>>>; rows: ResultatRow[] } | null> {
+  const campagne = await findCampagne(campagneId);
+  if (!campagne) return null;
+
+  const snapshots = await prisma.hcExcSnapshot.findMany({
+    where: { campagneId },
+    include: { teacher: { include: { matchCandidate: { include: { adherent: true } } } } },
+    orderBy: [{ grade: "asc" }, { vivier: "asc" }, { rang: "asc" }],
+  });
+
+  const contingentCache = new Map<string, number>();
+  async function contingentFor(grade: string, vivier: string | null): Promise<number> {
+    const key = `${grade}|${vivier ?? ""}`;
+    let cached = contingentCache.get(key);
+    if (cached == null) {
+      cached = (await computeContingentCutline(campagneId, grade, vivier)).contingent;
+      contingentCache.set(key, cached);
+    }
+    return cached;
+  }
+
+  const academicEmails = await prisma.academicEmail.findMany();
+  const academicEmailByName = new Map<string, string>();
+  for (const a of academicEmails) {
+    const key = `${normalizeName(a.nom)}|${normalizeName(a.prenom)}`;
+    if (!academicEmailByName.has(key)) academicEmailByName.set(key, a.email);
+  }
+
+  const logs = await prisma.mailingLog.findMany({ where: { campagneId, kind: "RESULTAT" } });
+  const logByTeacherId = new Map(logs.map((l) => [l.teacherId, l]));
+
+  const optOuts = await prisma.mailingOptOut.findMany();
+  const optedOutEmails = new Set(optOuts.filter((o) => o.email).map((o) => o.email!));
+  const optedOutNameKeys = new Set(optOuts.filter((o) => o.nom && o.prenom).map((o) => `${normalizeName(o.nom!)}|${normalizeName(o.prenom!)}`));
+  function isOptedOut(email: string | null, nom: string, prenom: string): boolean {
+    if (email && optedOutEmails.has(email.trim().toLowerCase())) return true;
+    return optedOutNameKeys.has(`${normalizeName(nom)}|${normalizeName(prenom)}`);
+  }
+
+  const seenTeacherIds = new Set<string>();
+  const rows: ResultatRow[] = [];
+
+  for (const snap of snapshots) {
+    const teacher = snap.teacher;
+    if (seenTeacherIds.has(teacher.id)) continue; // un double import pourrait laisser >1 fiche pour le même enseignant
+    seenTeacherIds.add(teacher.id);
+
+    const candidate = teacher.matchCandidate;
+    const isAdherentReel = candidate != null && (candidate.status === "AUTO_CONFIRMED" || candidate.status === "CONFIRMED");
+    const isAdherent = teacher.isAdherentCorrige ?? isAdherentReel;
+    const adherent = isAdherentReel ? candidate!.adherent : null;
+    const nom = adherent?.nom ?? snap.nomUsage;
+    const prenom = adherent?.prenom ?? snap.prenom;
+    const civilite = teacher.civiliteCorrigee ?? (isAdherentReel ? (adherent?.civilite ?? null) : civiliteFromPrenom(prenom));
+    const civiliteEstimee = !teacher.civiliteCorrigee && !isAdherentReel && civilite != null;
+    const email = adherent ? adherent.mailPersonnel : (academicEmailByName.get(`${normalizeName(snap.nomUsage)}|${normalizeName(snap.prenom)}`) ?? null);
+    const log = logByTeacherId.get(teacher.id) ?? null;
+
+    rows.push({
+      teacherId: teacher.id,
+      adherentId: adherent?.id ?? null,
+      isAdherent,
+      nom,
+      prenom,
+      civilite,
+      civiliteEstimee,
+      grade: snap.grade,
+      rang: snap.rang,
+      vivier: snap.vivier,
+      contingent: await contingentFor(snap.grade, snap.vivier),
+      choixRecteur: snap.choixRecteur,
+      appreciationRecteur: snap.appreciationRecteur,
+      pointsRecteur: snap.pointsRecteur,
+      pointsAnciennete: snap.pointsAnciennete,
+      totalBareme: snap.totalBareme,
+      echelonActuel: snap.echelonActuel,
+      ancienneteEchelon: snap.ancienneteEchelon,
+      email,
+      lastStatus: log?.status ?? null,
+      optedOut: !isAdherentReel && isOptedOut(email, nom, prenom),
+    });
+  }
+
+  return { campagne, rows };
+}
+
+interface ReclassementRow extends ResultatRow {
+  nouveauGrade: string;
+  nouvelEchelon: string;
+  ancienneteReporteeJours: number;
+  gainSalaireNet: number;
+  dateProchainePromotion: string | null;
+}
+
+/** Sous-ensemble de resultatRecipients : seulement les adhérents effectivement promus (voir
+ * ResultatRow.choixRecteur's own doc comment — "promu" pour CETTE lettre, pas le recalcul du
+ * contingent), avec leur reclassement calculé via computeReclassementHcExc (déjà vérifié
+ * exhaustivement contre le classeur réel du syndicat dans cette même session). Silencieusement
+ * exclu (pas une erreur bloquante) quand la grille d'origine ou l'ancienneté dans l'échelon
+ * manquent pour calculer — même esprit que computeEtStockerBaremeExc's `nonCalcules`, à affiner
+ * plus tard si besoin d'un signalement explicite. */
+async function reclassementRecipients(campagneId: string): Promise<{ campagne: NonNullable<Awaited<ReturnType<typeof findCampagne>>>; rows: ReclassementRow[] } | null> {
+  const data = await resultatRecipients(campagneId);
+  if (!data) return null;
+  const { campagne, rows } = data;
+
+  const [liveGrilles, valeurDuPoint, logs] = await Promise.all([
+    loadLiveGrilles(),
+    loadCurrentValeurDuPoint(),
+    prisma.mailingLog.findMany({ where: { campagneId, kind: "RECLASSEMENT" } }),
+  ]);
+  const logByTeacherId = new Map(logs.map((l) => [l.teacherId, l]));
+  const dateReference = campagne.periodeDebut.toISOString().slice(0, 10);
+
+  const result: ReclassementRow[] = [];
+  for (const r of rows) {
+    if (!r.isAdherent || !r.choixRecteur) continue;
+    const grilleActuelle = gradeToGrille(r.grade);
+    if (!grilleActuelle || r.ancienneteEchelon == null) continue;
+
+    try {
+      const reclassement = computeReclassementHcExc({
+        processus: campagne.nature as "HC" | "EXC",
+        grilleActuelle,
+        echelonActuel: r.echelonActuel,
+        ancienneteJoursAuReference: r.ancienneteEchelon * 360,
+        dateReference,
+        grilles: liveGrilles,
+        valeurDuPoint,
+      });
+      const log = logByTeacherId.get(r.teacherId) ?? null;
+      result.push({
+        ...r,
+        nouveauGrade: grilleToGradeLabel(reclassement.nouvelleGrille),
+        nouvelEchelon: String(reclassement.nouvelEchelon),
+        ancienneteReporteeJours: reclassement.ancienneteReporteeJours,
+        gainSalaireNet: reclassement.gainSalaireNet,
+        dateProchainePromotion: reclassement.dateProchainePromotion,
+        lastStatus: log?.status ?? null,
+      });
+    } catch {
+      continue; // table de reclassement introuvable pour cette grille/échelon — cas non couvert, pas bloquant pour les autres
+    }
+  }
+  return { campagne, rows: result };
+}
+
+async function findCampagne(campagneId: string) {
+  const campagne = await prisma.campagne.findUnique({ where: { id: campagneId } });
+  if (!campagne || (campagne.nature !== "HC" && campagne.nature !== "EXC")) return null;
+  return campagne;
+}
+
+hcExcMailingRouter.get(
+  "/eligible",
+  asyncHandler(async (req, res) => {
+    const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
+    const kind = req.query.kind === "reclassement" ? "reclassement" : "resultat";
+    if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
+
+    const data = kind === "reclassement" ? await reclassementRecipients(campagneId) : await resultatRecipients(campagneId);
+    if (!data) return res.status(404).json({ error: "Campagne introuvable ou non HC/EXC" });
+    res.json(data.rows);
+  }),
+);
+
+interface SharedMailingContent {
+  elus: MailingElu[];
+  t1Text: string | null;
+  logoDataUrl: string | null;
+  socialLinks: MailingSocialLink[];
+}
+
+function buildResultatContext(
+  r: ResultatRow,
+  campagne: { nature: "HC" | "EXC"; commission: "CCMA" | "CCMI"; dateCcma: Date; periodeDebut: Date },
+  shared: SharedMailingContent,
+  unsubscribeUrl: string | null,
+): HcExcResultatContext {
+  return {
+    civilite: r.civilite,
+    prenom: r.prenom,
+    nom: r.nom,
+    email: r.email,
+    isAdherent: r.isAdherent,
+    unsubscribeUrl,
+    commission: campagne.commission,
+    elus: shared.elus,
+    t1Text: shared.t1Text,
+    logoDataUrl: shared.logoDataUrl,
+    socialLinks: shared.socialLinks,
+    processus: campagne.nature,
+    dateCcma: campagne.dateCcma.toISOString(),
+    dateEffet: campagne.periodeDebut.toISOString(),
+    grade: r.grade,
+    estAgrege: estAgrege(r.grade),
+    rang: r.rang,
+    contingent: r.contingent,
+    appreciationRecteur: r.appreciationRecteur,
+    pointsRecteur: r.pointsRecteur,
+    choixRecteur: r.choixRecteur,
+    pointsAnciennete: r.pointsAnciennete,
+    totalBareme: r.totalBareme,
+  };
+}
+
+function buildReclassementContext(
+  r: ReclassementRow,
+  campagne: { commission: "CCMA" | "CCMI"; dateCcma: Date; periodeDebut: Date },
+  shared: SharedMailingContent,
+): HcExcReclassementContext {
+  return {
+    civilite: r.civilite,
+    prenom: r.prenom,
+    nom: r.nom,
+    email: r.email,
+    isAdherent: r.isAdherent,
+    unsubscribeUrl: null, // jamais pour le reclassement — réservé aux adhérents
+    commission: campagne.commission,
+    elus: shared.elus,
+    t1Text: shared.t1Text,
+    logoDataUrl: shared.logoDataUrl,
+    socialLinks: shared.socialLinks,
+    dateCcma: campagne.dateCcma.toISOString(),
+    dateEffet: campagne.periodeDebut.toISOString(),
+    nouveauGrade: r.nouveauGrade,
+    nouvelEchelon: r.nouvelEchelon,
+    ancienneteReporteeJours: r.ancienneteReporteeJours,
+    gainSalaireNet: r.gainSalaireNet,
+    dateProchainePromotion: r.dateProchainePromotion,
+  };
+}
+
+function flattenElus<T>(byCommission: Record<"CCMA" | "CCMI", T[]>, commission: "CCMA" | "CCMI"): T[] {
+  return byCommission[commission];
+}
+
+async function loadShared(commission: "CCMA" | "CCMI" | null) {
+  const [branding, elusByCommission, socialLinks] = await Promise.all([loadMailingBranding(), loadElusByCommission(), loadSocialLinks()]);
+  return {
+    elus: commission ? flattenElus(elusByCommission, commission) : [],
+    t1Text: branding.t1Text,
+    logoDataUrl: branding.logoDataUrl,
+    socialLinks,
+  };
+}
+
+hcExcMailingRouter.get(
+  "/preview",
+  asyncHandler(async (req, res) => {
+    const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
+    const teacherId = typeof req.query.teacherId === "string" ? req.query.teacherId : undefined;
+    const kind = req.query.kind === "reclassement" ? "reclassement" : "resultat";
+    if (!campagneId || !teacherId) return res.status(400).json({ error: "campagneId et teacherId requis" });
+
+    if (kind === "reclassement") {
+      const data = await reclassementRecipients(campagneId);
+      if (!data) return res.status(404).json({ error: "Campagne introuvable ou non HC/EXC" });
+      const r = data.rows.find((x) => x.teacherId === teacherId);
+      if (!r) return res.status(404).json({ error: "Destinataire introuvable ou non éligible au reclassement" });
+      if (!data.campagne.commission) return res.status(400).json({ error: "Campagne non scopée par commission (CCMA/CCMI)" });
+      const shared = await loadShared(data.campagne.commission);
+      const { subject, html } = buildHcExcReclassementEmail(buildReclassementContext(r, { ...data.campagne, commission: data.campagne.commission }, shared));
+      return res.json({ to: r.email, subject, html });
+    }
+
+    const data = await resultatRecipients(campagneId);
+    if (!data) return res.status(404).json({ error: "Campagne introuvable ou non HC/EXC" });
+    const r = data.rows.find((x) => x.teacherId === teacherId);
+    if (!r) return res.status(404).json({ error: "Destinataire introuvable ou non éligible" });
+    if (!data.campagne.commission) return res.status(400).json({ error: "Campagne non scopée par commission (CCMA/CCMI)" });
+    const shared = await loadShared(data.campagne.commission);
+    const unsubscribeUrl = buildRecipientUnsubscribeUrl(r);
+    const { subject, html } = buildHcExcResultatEmail(
+      buildResultatContext(r, { ...data.campagne, commission: data.campagne.commission, nature: data.campagne.nature as "HC" | "EXC" }, shared, unsubscribeUrl),
+    );
+    res.json({ to: r.email, subject, html });
+  }),
+);
+
+hcExcMailingRouter.get(
+  "/log",
+  asyncHandler(async (req, res) => {
+    const campagneId = typeof req.query.campagneId === "string" ? req.query.campagneId : undefined;
+    const kind = req.query.kind === "reclassement" ? "RECLASSEMENT" : "RESULTAT";
+    if (!campagneId) return res.status(400).json({ error: "campagneId requis" });
+    const logs = await prisma.mailingLog.findMany({
+      where: { campagneId, kind },
+      orderBy: { sentAt: "desc" },
+      include: {
+        teacher: { include: { hcExcSnapshots: { where: { campagneId }, take: 1 } } },
+        events: { orderBy: { occurredAt: "asc" }, select: { type: true, url: true, occurredAt: true } },
+      },
+    });
+    res.json(
+      logs.map((log) => {
+        const snap = log.teacher.hcExcSnapshots[0];
+        return {
+          id: log.id,
+          email: log.email,
+          status: log.status,
+          error: log.error,
+          sentAt: log.sentAt,
+          nom: snap?.nomUsage ?? null,
+          prenom: snap?.prenom ?? null,
+          events: log.events,
+        };
+      }),
+    );
+  }),
+);
+
+const sendSchema = z.object({
+  campagneId: z.string().min(1),
+  kind: z.enum(["resultat", "reclassement"]),
+  teacherIds: z.array(z.string()).optional(),
+});
+
+hcExcMailingRouter.post(
+  "/send",
+  requireRole("ADMIN", "GESTIONNAIRE"),
+  asyncHandler(async (req, res) => {
+    const parsed = sendSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Corps de requête invalide", details: parsed.error.flatten() });
+    const { campagneId, kind, teacherIds } = parsed.data;
+    const mailingKind = kind === "reclassement" ? "RECLASSEMENT" : "RESULTAT";
+
+    const data = kind === "reclassement" ? await reclassementRecipients(campagneId) : await resultatRecipients(campagneId);
+    if (!data) return res.status(404).json({ error: "Campagne introuvable ou non HC/EXC" });
+    if (!data.campagne.commission) return res.status(400).json({ error: "Campagne non scopée par commission (CCMA/CCMI)" });
+    const commission = data.campagne.commission;
+
+    let brevoConfig;
+    let testMode: boolean;
+    let testEmail: string | null;
+    let testMaxSends: number | null;
+    try {
+      ({ config: brevoConfig, testMode, testEmail, testMaxSends } = await loadBrevoConfigFromDb());
+    } catch (e) {
+      if (e instanceof BrevoConfigError) return res.status(400).json({ error: e.message });
+      throw e;
+    }
+    if (testMode && !testEmail) {
+      return res.status(400).json({ error: "Mode test activé mais aucune adresse de test n'est configurée dans Paramètres." });
+    }
+
+    let targets = teacherIds ? data.rows.filter((r) => teacherIds.includes(r.teacherId)) : data.rows.filter((r) => r.lastStatus !== "SENT");
+    const skippedOptedOut = targets.filter((r) => r.optedOut).length;
+    targets = targets.filter((r) => !r.optedOut);
+    if (testMode && testMaxSends != null) targets = targets.slice(0, testMaxSends);
+
+    if (kind === "resultat" && !process.env.PUBLIC_APP_URL && targets.some((r) => !r.isAdherent && r.email)) {
+      return res.status(400).json({
+        error: "PUBLIC_APP_URL n'est pas configuré : impossible d'envoyer à des non-adhérents sans lien de désabonnement fonctionnel (voir .env.example).",
+      });
+    }
+
+    const shared = await loadShared(commission);
+    const results: { teacherId: string; nom: string; prenom: string; email: string | null; status: "SENT" | "FAILED"; error?: string }[] = [];
+
+    for (const r of targets) {
+      const effectiveEmail = testMode ? testEmail : r.email;
+      if (!effectiveEmail) {
+        results.push({ teacherId: r.teacherId, nom: r.nom, prenom: r.prenom, email: null, status: "FAILED", error: "Aucune adresse e-mail connue pour cet adhérent" });
+        await prisma.mailingLog.upsert({
+          where: { campagneId_teacherId_kind: { campagneId, teacherId: r.teacherId, kind: mailingKind } },
+          create: { campagneId, teacherId: r.teacherId, adherentId: r.adherentId, email: "", status: "FAILED", kind: mailingKind, error: "Aucune adresse e-mail connue", sentById: req.auth!.userId },
+          update: { status: "FAILED", error: "Aucune adresse e-mail connue", sentById: req.auth!.userId, sentAt: new Date() },
+        });
+        continue;
+      }
+
+      const { subject, html } =
+        kind === "reclassement"
+          ? buildHcExcReclassementEmail(buildReclassementContext(r as ReclassementRow, { ...data.campagne, commission }, shared))
+          : buildHcExcResultatEmail(
+              buildResultatContext(
+                r,
+                { ...data.campagne, commission, nature: data.campagne.nature as "HC" | "EXC" },
+                shared,
+                buildRecipientUnsubscribeUrl(r),
+              ),
+            );
+      const effectiveSubject = testMode
+        ? `[TEST — destinataire réel : ${r.nom} ${r.prenom} <${r.email ?? "aucune adresse"}>] ${subject}`
+        : subject;
+
+      try {
+        const { messageId } = await sendBrevoEmail(brevoConfig, {
+          to: { email: effectiveEmail, name: testMode ? `${r.prenom} ${r.nom} (test)` : `${r.prenom} ${r.nom}` },
+          subject: effectiveSubject,
+          html,
+        });
+        if (!testMode) {
+          await prisma.mailingLog.upsert({
+            where: { campagneId_teacherId_kind: { campagneId, teacherId: r.teacherId, kind: mailingKind } },
+            create: { campagneId, teacherId: r.teacherId, adherentId: r.adherentId, email: effectiveEmail, status: "SENT", kind: mailingKind, brevoMessageId: messageId, sentById: req.auth!.userId },
+            update: { status: "SENT", error: null, brevoMessageId: messageId, sentById: req.auth!.userId, sentAt: new Date() },
+          });
+        }
+        results.push({ teacherId: r.teacherId, nom: r.nom, prenom: r.prenom, email: effectiveEmail, status: "SENT" });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (!testMode) {
+          await prisma.mailingLog.upsert({
+            where: { campagneId_teacherId_kind: { campagneId, teacherId: r.teacherId, kind: mailingKind } },
+            create: { campagneId, teacherId: r.teacherId, adherentId: r.adherentId, email: effectiveEmail, status: "FAILED", kind: mailingKind, error: message, sentById: req.auth!.userId },
+            update: { status: "FAILED", error: message, sentById: req.auth!.userId, sentAt: new Date() },
+          });
+        }
+        results.push({ teacherId: r.teacherId, nom: r.nom, prenom: r.prenom, email: effectiveEmail, status: "FAILED", error: message });
+      }
+    }
+
+    res.json({
+      sent: results.filter((r) => r.status === "SENT").length,
+      failed: results.filter((r) => r.status === "FAILED").length,
+      results,
+      testMode,
+      skippedOptedOut,
+    });
+  }),
+);

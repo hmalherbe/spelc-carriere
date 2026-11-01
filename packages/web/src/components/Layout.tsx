@@ -14,13 +14,19 @@ const AVANCEMENT_PATHS = [
   "/adherents-eligibles",
   "/import",
   "/mailing",
-  "/elus",
   "/reliquats",
   "/saisies-manuelles",
   "/regles",
   "/grilles",
   "/statistiques",
 ];
+
+// Sous-menu "Hors classe / Classe exceptionnelle" — "/revue" (File de révision) n'y figure PAS :
+// c'est la MÊME page que celle de l'Avancement échelon (pas filtrée par nature, voir
+// ReviewQueuePage.tsx), donc la visiter affiche volontairement le sous-menu Avancement plutôt que
+// de dupliquer la page ou d'ajouter une distinction artificielle — un lien y pointe tout de même
+// depuis le sous-menu ci-dessous.
+const HC_EXC_PATHS = ["/hors-classe-exceptionnelle", "/hors-classe-exceptionnelle/adherents-eligibles", "/hors-classe-exceptionnelle/mailing"];
 
 type AnneeScolaireDraft = { anneeScolaire: string; periodeDebut: string; periodeFin: string };
 const EMPTY_DRAFT: AnneeScolaireDraft = { anneeScolaire: "", periodeDebut: "", periodeFin: "" };
@@ -227,8 +233,8 @@ export function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const inAvancement = AVANCEMENT_PATHS.includes(location.pathname);
-  const inCarriere =
-    inAvancement || location.pathname === "/hors-classe-exceptionnelle" || location.pathname === "/reclassement";
+  const inHcExc = HC_EXC_PATHS.includes(location.pathname);
+  const inCarriere = inAvancement || inHcExc || location.pathname === "/reclassement";
 
   return (
     <div className="app-shell">
@@ -269,12 +275,21 @@ export function Layout() {
           <NavLink to="/adherents-eligibles">Adhérents éligibles</NavLink>
           <NavLink to="/import">Import</NavLink>
           <NavLink to="/mailing">Mailing</NavLink>
-          <NavLink to="/elus">Élus CCMA/CCMI</NavLink>
           <NavLink to="/reliquats">Reliquats</NavLink>
           <NavLink to="/saisies-manuelles">Saisies manuelles</NavLink>
           <NavLink to="/regles">Règles de gestion</NavLink>
           <NavLink to="/grilles">Grilles indiciaires</NavLink>
           <NavLink to="/statistiques">Statistiques</NavLink>
+        </nav>
+      )}
+      {inHcExc && (
+        <nav className="app-subnav">
+          <NavLink to="/hors-classe-exceptionnelle" end>
+            Enseignants promouvables
+          </NavLink>
+          <NavLink to="/revue">File de révision</NavLink>
+          <NavLink to="/hors-classe-exceptionnelle/adherents-eligibles">Adhérents éligibles</NavLink>
+          <NavLink to="/hors-classe-exceptionnelle/mailing">Mailing</NavLink>
         </nav>
       )}
       <main>

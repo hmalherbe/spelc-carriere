@@ -524,6 +524,16 @@ enum MailingStatus {
   FAILED
 }
 
+// RESULTAT (le seul type pour une campagne d'échelon) / RECLASSEMENT — pour une campagne Hors
+// Classe/Classe Exceptionnelle, un adhérent promu reçoit DEUX mails distincts dans la même
+// campagne (le résultat de la CCMA/CCMI, puis — une fois promu — le calcul de son reclassement et
+// l'impact financier), donc un seul MailingLog par (campagne, enseignant) ne suffit plus à lui
+// seul à les distinguer (voir le changement de @@unique ci-dessous).
+enum MailingKind {
+  RESULTAT
+  RECLASSEMENT
+}
+
 model MailingLog {
   id             String        @id @default(cuid())
   campagne       Campagne      @relation(fields: [campagneId], references: [id])
@@ -533,6 +543,7 @@ model MailingLog {
   adherentId     String? // null for a non-adhérent notified at their academic address
   email          String
   status         MailingStatus
+  kind           MailingKind   @default(RESULTAT)
   error          String? // Brevo error message, when status = FAILED
   brevoMessageId String?
   sentById       String // free-text: User.id at send time, kept even if the user is later deleted
@@ -540,7 +551,7 @@ model MailingLog {
 
   events MailingEvent[]
 
-  @@unique([campagneId, teacherId])
+  @@unique([campagneId, teacherId, kind])
   @@index([campagneId])
   @@index([brevoMessageId])
 }

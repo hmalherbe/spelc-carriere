@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, downloadBlob, type AdherentEligible } from "../api.js";
-import { useCampagneSelection } from "../CampagneContext.js";
+import { useCampagneSelection, type Nature } from "../CampagneContext.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null): string {
@@ -16,8 +16,9 @@ function commissionLabel(degre: 1 | 2 | null): string {
 
 type PresenceFilter = "all" | "oui" | "non";
 
-export function AdherentsEligiblesPage() {
-  const { candidates: campagnes, campagneId } = useCampagneSelection(["ECHELON"]);
+export function AdherentsEligiblesPage({ natures = ["ECHELON"] }: { natures?: Nature[] }) {
+  const isHcExc = natures.includes("HC") || natures.includes("EXC");
+  const { candidates: campagnes, campagneId } = useCampagneSelection(natures);
   const [adherents, setAdherents] = useState<AdherentEligible[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,13 +74,15 @@ export function AdherentsEligiblesPage() {
       </div>
       {campagnes.length === 0 && (
         <p className="hint">
-          Aucune campagne d'avancement d'échelon (CCMA/CCMI) pour l'année scolaire sélectionnée — créez-la depuis la
-          page Import, ou changez d'année scolaire dans l'en-tête.
+          {isHcExc
+            ? "Aucune campagne Hors classe / Classe exceptionnelle pour l'année scolaire sélectionnée — créez-la depuis la page Import, ou changez d'année scolaire dans l'en-tête."
+            : "Aucune campagne d'avancement d'échelon (CCMA/CCMI) pour l'année scolaire sélectionnée — créez-la depuis la page Import, ou changez d'année scolaire dans l'en-tête."}
         </p>
       )}
       <p className="hint">
-        Adhérents dont la prochaine promotion d'échelon (date de dernier changement + durée de l'échelon) tombe dans
-        la période de cette campagne — qu'ils soient déjà rapprochés d'un enseignant ou non.
+        {isHcExc
+          ? "Adhérents ayant déjà atteint l'échelon statutaire requis pour la Hors Classe ou la Classe exceptionnelle (selon la campagne) — qu'ils soient déjà rapprochés d'un enseignant ou non."
+          : "Adhérents dont la prochaine promotion d'échelon (date de dernier changement + durée de l'échelon) tombe dans la période de cette campagne — qu'ils soient déjà rapprochés d'un enseignant ou non."}
       </p>
       {!loading && (
         <p className="hint">
@@ -108,7 +111,7 @@ export function AdherentsEligiblesPage() {
               <th>Prénom</th>
               <th>Grade</th>
               <th>Commission</th>
-              <th>Prochaine promotion</th>
+              {!isHcExc && <th>Prochaine promotion</th>}
               <th>
                 Non présent dans les fichiers du rectorat
                 <br />
@@ -131,7 +134,7 @@ export function AdherentsEligiblesPage() {
                 <td>{formatPrenom(a.prenom)}</td>
                 <td>{a.grade ?? "—"}</td>
                 <td>{commissionLabel(a.degre)}</td>
-                <td>{formatDate(a.dateProchainePromotion)}</td>
+                {!isHcExc && <td>{formatDate(a.dateProchainePromotion)}</td>}
                 <td>
                   {a.nonPresentDansRectorat ? (
                     <span className="badge badge-non_promu_estime">Oui</span>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
   type AdelSettings,
@@ -126,7 +127,26 @@ export function SettingsPage() {
       <SocialLinksCard canEdit={canEdit} />
       <MistralSettingsCard canEdit={canEdit} />
       <MatchingSettingsCard canEdit={canEdit} />
+      <ElusCard />
     </div>
+  );
+}
+
+/** Commun à Avancement échelon, Hors classe/Classe exceptionnelle et Mouvement des enseignants
+ * (les élus sont scopés par commission — CCMA/CCMI — pas par sous-appli, voir Elu dans
+ * schema.prisma) — déplacé ici depuis le sous-menu "Avancement échelon" pour être atteignable
+ * depuis les trois. La page Élus elle-même (ElusPage.tsx) et sa route ("/elus") n'ont pas changé. */
+function ElusCard() {
+  return (
+    <section className="card">
+      <h2>Élus CCMA/CCMI</h2>
+      <p className="hint">
+        Les élus et suppléants affichés automatiquement en bas de chaque mailing (avancement d'échelon, Hors classe/
+        Classe exceptionnelle), selon la commission de la campagne — communs aux trois sous-applis de "Suivi de la
+        carrière" et à "Mouvement des enseignants".
+      </p>
+      <Link to="/elus">Gérer les élus</Link>
+    </section>
   );
 }
 

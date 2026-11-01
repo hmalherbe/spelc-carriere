@@ -27,7 +27,7 @@ const SINGLETON_ID = "singleton";
  * tiebreaker for the ex-aequo default (ordre=0) of an élu never manually reordered, same as the
  * page Élus's own GET / ordering (routes/elus.ts). Fetched once per request (send/preview cover
  * many recipients but this content is campaign-wide, not per-person). */
-async function loadElusByCommission(): Promise<Record<"CCMA" | "CCMI", MailingElu[]>> {
+export async function loadElusByCommission(): Promise<Record<"CCMA" | "CCMI", MailingElu[]>> {
   const all = await prisma.elu.findMany({ orderBy: [{ commission: "asc" }, { role: "asc" }, { ordre: "asc" }, { nom: "asc" }] });
   const byCommission: Record<"CCMA" | "CCMI", MailingElu[]> = { CCMA: [], CCMI: [] };
   for (const e of all) {
@@ -36,7 +36,7 @@ async function loadElusByCommission(): Promise<Record<"CCMA" | "CCMI", MailingEl
   return byCommission;
 }
 
-async function loadSocialLinks(): Promise<MailingSocialLink[]> {
+export async function loadSocialLinks(): Promise<MailingSocialLink[]> {
   const links = await prisma.socialLink.findMany({ orderBy: { ordre: "asc" } });
   return links.map((l) => ({ label: l.label, url: l.url }));
 }
@@ -47,7 +47,7 @@ async function loadSocialLinks(): Promise<MailingSocialLink[]> {
  * BREVO_SENDER_EMAIL / BREVO_SENDER_NAME so an existing deployment configured only via .env keeps
  * working unchanged (same pattern as routes/adel.ts's loadAdelConfig).
  */
-async function loadBrevoConfigFromDb(): Promise<{
+export async function loadBrevoConfigFromDb(): Promise<{
   config: BrevoConfig;
   testMode: boolean;
   testEmail: string | null;
@@ -78,7 +78,7 @@ async function loadBrevoConfigFromDb(): Promise<{
  * même lien à chaque campagne, voir unsubscribeToken.ts), donc appelable sans effet de bord depuis
  * /preview et /pdf/text aussi bien que /send.
  */
-function buildRecipientUnsubscribeUrl(recipient: { isAdherent: boolean; email: string | null; nom: string; prenom: string }): string | null {
+export function buildRecipientUnsubscribeUrl(recipient: { isAdherent: boolean; email: string | null; nom: string; prenom: string }): string | null {
   if (recipient.isAdherent || !recipient.email) return null;
   const base = process.env.PUBLIC_APP_URL?.replace(/\/+$/, "");
   if (!base) return null;
@@ -701,7 +701,7 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
     if (!effectiveEmail) {
       results.push({ teacherId: recipient.teacherId, nom: recipient.nom, prenom: recipient.prenom, email: null, status: "FAILED", error: "Aucune adresse e-mail connue pour cet adhérent" });
       await prisma.mailingLog.upsert({
-        where: { campagneId_teacherId: { campagneId, teacherId: recipient.teacherId } },
+        where: { campagneId_teacherId_kind: { campagneId, teacherId: recipient.teacherId, kind: "RESULTAT" } },
         create: { campagneId, teacherId: recipient.teacherId, adherentId: recipient.adherentId, email: "", status: "FAILED", error: "Aucune adresse e-mail connue", sentById: req.auth!.userId },
         update: { status: "FAILED", error: "Aucune adresse e-mail connue", sentById: req.auth!.userId, sentAt: new Date() },
       });
@@ -724,7 +724,7 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
       // skips anyone with lastStatus === "SENT").
       if (!testMode) {
         await prisma.mailingLog.upsert({
-          where: { campagneId_teacherId: { campagneId, teacherId: recipient.teacherId } },
+          where: { campagneId_teacherId_kind: { campagneId, teacherId: recipient.teacherId, kind: "RESULTAT" } },
           create: { campagneId, teacherId: recipient.teacherId, adherentId: recipient.adherentId, email: effectiveEmail, status: "SENT", brevoMessageId: messageId, sentById: req.auth!.userId },
           update: { status: "SENT", error: null, brevoMessageId: messageId, sentById: req.auth!.userId, sentAt: new Date() },
         });
@@ -734,7 +734,7 @@ mailingRouter.post("/send", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(a
       const message = e instanceof Error ? e.message : String(e);
       if (!testMode) {
         await prisma.mailingLog.upsert({
-          where: { campagneId_teacherId: { campagneId, teacherId: recipient.teacherId } },
+          where: { campagneId_teacherId_kind: { campagneId, teacherId: recipient.teacherId, kind: "RESULTAT" } },
           create: { campagneId, teacherId: recipient.teacherId, adherentId: recipient.adherentId, email: effectiveEmail, status: "FAILED", error: message, sentById: req.auth!.userId },
           update: { status: "FAILED", error: message, sentById: req.auth!.userId, sentAt: new Date() },
         });

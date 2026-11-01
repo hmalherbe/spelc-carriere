@@ -1,6 +1,6 @@
 /** Joins non-zero year/month/day components into French prose ("2 ans 8 mois"), dropping any
  * component that's zero. An all-zero duration renders as "0 jour" rather than an empty string. */
-function formatYmdText(years: number, months: number, days: number): string {
+export function formatYmdText(years: number, months: number, days: number): string {
   const parts: string[] = [];
   if (years > 0) parts.push(`${years} an${years > 1 ? "s" : ""}`);
   if (months > 0) parts.push(`${months} mois`);

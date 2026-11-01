@@ -1,0 +1,267 @@
+import { useEffect, useMemo, useState } from "react";
+import { api, type HcExcMailingKind, type HcExcMailingRecipient, type MailingLogEntry, type MailingPreview, type MailingSendResult } from "../api.js";
+import { useCampagneSelection } from "../CampagneContext.js";
+import { formatPrenom } from "../format.js";
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("fr-FR");
+}
+
+/**
+ * Mailing Hors Classe/Classe exceptionnelle — deux envois distincts dans la même campagne (voir
+ * MailingLog.kind, schema.prisma) : "résultat" (tout le monde, promu ou non — adhérent ou pas) et
+ * "reclassement" (uniquement les adhérents promus, calculé via computeReclassementHcExc). Toute
+ * l'infra d'envoi (Brevo, mode test, historique, désabonnement) est partagée avec le mailing
+ * échelon — seul le contenu diffère (voir hcExcResultatTemplate.ts/hcExcReclassementTemplate.ts).
+ */
+export function HcExcMailingPage() {
+  const { candidates: campagnes, campagneId } = useCampagneSelection(["HC", "EXC"]);
+  const [kind, setKind] = useState<HcExcMailingKind>("resultat");
+  const [recipients, setRecipients] = useState<HcExcMailingRecipient[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ teacherId: string; data: MailingPreview } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<MailingSendResult | null>(null);
+  const [mailingLog, setMailingLog] = useState<MailingLogEntry[]>([]);
+
+  function refresh() {
+    if (!campagneId) {
+      setRecipients([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    Promise.all([api.hcExcMailingEligible(campagneId, kind), api.hcExcMailingLog(campagneId, kind)])
+      .then(([r, log]) => {
+        setRecipients(r);
+        setMailingLog(log);
+        setSelected(new Set());
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(refresh, [campagneId, kind]);
+
+  const selectableIds = useMemo(() => recipients.filter((r) => r.email && !r.optedOut).map((r) => r.teacherId), [recipients]);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+
+  function toggle(teacherId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(teacherId)) next.delete(teacherId);
+      else next.add(teacherId);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(selectableIds));
+  }
+
+  async function openPreview(teacherId: string) {
+    if (!campagneId) return;
+    setPreviewLoading(teacherId);
+    try {
+      const data = await api.hcExcMailingPreview(campagneId, teacherId, kind);
+      setPreview({ teacherId, data });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPreviewLoading(null);
+    }
+  }
+
+  async function send() {
+    if (!campagneId || selected.size === 0) return;
+    setSending(true);
+    setSendResult(null);
+    setError(null);
+    try {
+      const result = await api.hcExcMailingSend(campagneId, kind, Array.from(selected));
+      setSendResult(result);
+      refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (error) return <p className="error-text">{error}</p>;
+
+  return (
+    <div>
+      <div className="toolbar">
+        <h2>Mailing Hors Classe / Classe exceptionnelle</h2>
+        <select value={kind} onChange={(e) => setKind(e.target.value as HcExcMailingKind)}>
+          <option value="resultat">Résultat de la CCMA/CCMI</option>
+          <option value="reclassement">Reclassement (adhérents promus)</option>
+        </select>
+      </div>
+      {campagnes.length === 0 && (
+        <p className="hint">
+          Aucune campagne Hors classe / Classe exceptionnelle pour l'année scolaire sélectionnée — créez-la depuis la
+          page "Enseignants promouvables", ou changez d'année scolaire dans l'en-tête.
+        </p>
+      )}
+      <p className="hint">
+        {kind === "resultat"
+          ? "Informe chaque enseignant (adhérent ou non) du résultat de son examen à la CCMA/CCMI — rang, contingent, appréciation du recteur, et la décision de promotion (\"Choix du Recteur\" du fichier rectorat)."
+          : "Calcule et annonce le reclassement (échelon, report d'ancienneté, gain de salaire, prochaine promotion) — réservé aux adhérents effectivement promus."}
+      </p>
+
+      {loading ? (
+        <p>Chargement...</p>
+      ) : recipients.length === 0 ? (
+        <p className="hint">Aucun destinataire pour cette campagne et ce type d'envoi.</p>
+      ) : (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+              </th>
+              <th>Nom</th>
+              <th>Prénom</th>
+              <th>Grade</th>
+              {kind === "resultat" ? (
+                <>
+                  <th>Rang</th>
+                  <th>Vivier</th>
+                  <th>Contingent</th>
+                  <th>Décision</th>
+                </>
+              ) : (
+                <>
+                  <th>Nouveau grade</th>
+                  <th>Nouvel échelon</th>
+                  <th>Gain net/mois</th>
+                  <th>Prochaine promotion</th>
+                </>
+              )}
+              <th>E-mail</th>
+              <th>Dernier envoi</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {recipients.map((r) => (
+              <tr key={r.teacherId}>
+                <td>
+                  <input type="checkbox" checked={selected.has(r.teacherId)} disabled={!r.email || r.optedOut} onChange={() => toggle(r.teacherId)} />
+                </td>
+                <td>{r.nom}</td>
+                <td>{formatPrenom(r.prenom)}</td>
+                <td>{r.grade}</td>
+                {kind === "resultat" ? (
+                  <>
+                    <td>{r.rang}</td>
+                    <td>{r.vivier ?? "—"}</td>
+                    <td>{r.contingent}</td>
+                    <td>{r.choixRecteur ? <span className="badge badge-promu_estime">Promu</span> : <span className="badge badge-non_promu_estime">Non promu</span>}</td>
+                  </>
+                ) : (
+                  <>
+                    <td>{r.nouveauGrade ?? "—"}</td>
+                    <td>{r.nouvelEchelon ?? "—"}</td>
+                    <td>{r.gainSalaireNet != null ? `${r.gainSalaireNet} €` : "—"}</td>
+                    <td>{formatDate(r.dateProchainePromotion)}</td>
+                  </>
+                )}
+                <td>
+                  {r.email ?? <span className="error-text">Aucune adresse</span>}
+                  {r.optedOut && (
+                    <>
+                      {" "}
+                      <span className="hint">(désabonné)</span>
+                    </>
+                  )}
+                </td>
+                <td>
+                  {r.lastStatus === "SENT" ? (
+                    <span className="badge badge-promu_estime">Envoyé</span>
+                  ) : r.lastStatus === "FAILED" ? (
+                    <span className="badge badge-non_promu_estime">Échec</span>
+                  ) : (
+                    <span className="hint">—</span>
+                  )}
+                </td>
+                <td>
+                  <button type="button" className="secondary" onClick={() => openPreview(r.teacherId)} disabled={previewLoading === r.teacherId}>
+                    {previewLoading === r.teacherId ? "..." : "Aperçu"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="toolbar" style={{ marginTop: 16 }}>
+        <button type="button" onClick={send} disabled={selected.size === 0 || sending}>
+          {sending ? "Envoi en cours..." : `Envoyer (${selected.size})`}
+        </button>
+      </div>
+
+      {sendResult && (
+        <p className="hint">
+          {sendResult.testMode && <strong>[Mode test] </strong>}
+          {sendResult.sent} envoyé(s), {sendResult.failed} échec(s)
+          {sendResult.skippedOptedOut > 0 && `, ${sendResult.skippedOptedOut} désabonné(s) ignoré(s)`}.
+        </p>
+      )}
+
+      {mailingLog.length > 0 && (
+        <details style={{ marginTop: 24 }}>
+          <summary>Historique des envois ({mailingLog.length})</summary>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Prénom</th>
+                <th>E-mail</th>
+                <th>Statut</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mailingLog.map((log) => (
+                <tr key={log.id}>
+                  <td>{log.nom ?? "—"}</td>
+                  <td>{log.prenom ? formatPrenom(log.prenom) : "—"}</td>
+                  <td>{log.email}</td>
+                  <td>{log.status === "SENT" ? "Envoyé" : `Échec${log.error ? ` (${log.error})` : ""}`}</td>
+                  <td>{new Date(log.sentAt).toLocaleString("fr-FR")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+
+      {preview && (
+        <div className="modal-overlay" onClick={() => setPreview(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="toolbar">
+              <h3>Aperçu de l'e-mail</h3>
+              <button type="button" className="secondary" onClick={() => setPreview(null)}>
+                Fermer
+              </button>
+            </div>
+            <p className="hint">
+              À : {preview.data.to ?? "—"} <br />
+              Sujet : {preview.data.subject}
+            </p>
+            <div className="email-preview" dangerouslySetInnerHTML={{ __html: preview.data.html }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

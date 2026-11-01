@@ -2,7 +2,7 @@ import { Router } from "express";
 import ExcelJS from "exceljs";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth/middleware.js";
-import { computeAdherentEligibility } from "../adherentEligibility.js";
+import { computeAdherentEligibility, computeAdherentEligibiliteHcExc } from "../adherentEligibility.js";
 import { loadLiveGrilles } from "../liveGrilles.js";
 import { GRADE_MAPPINGS, findEchelonRow, type GrilleCode } from "@spelc/domain";
 
@@ -65,6 +65,7 @@ async function computeEligibleAdherents(campagneId: string): Promise<EligibleAdh
           teacher: {
             include: {
               snapshots: { where: { campagneId }, take: 1 },
+              hcExcSnapshots: { where: { campagneId }, take: 1 },
               computedStates: { where: { campagneId }, take: 1 },
             },
           },
@@ -73,6 +74,41 @@ async function computeEligibleAdherents(campagneId: string): Promise<EligibleAdh
     },
     orderBy: [{ nom: "asc" }, { prenom: "asc" }],
   });
+
+  // HC/EXC a une règle d'éligibilité entièrement différente (statutaire, pas de fenêtre de
+  // période) et vérifie la présence côté rectorat dans HcExcSnapshot plutôt que TeacherSnapshot —
+  // voir computeAdherentEligibiliteHcExc's own doc comment. Le reste de la fonction (échelon)
+  // garde exactement son comportement actuel.
+  if (campagne.nature === "HC" || campagne.nature === "EXC") {
+    return adherents
+      .map((a) => {
+        const eligibility = computeAdherentEligibiliteHcExc(a, campagne.nature as "HC" | "EXC", campagne);
+        if (!eligibility.eligible) return null;
+
+        const hcExcSnapshot = a.matchCandidate?.teacher?.hcExcSnapshots[0];
+        const presentDansRectorat = a.matchCandidate?.status !== "REJECTED" && a.matchCandidate?.teacherId != null && hcExcSnapshot != null;
+
+        return {
+          adherentId: a.id,
+          civilite: a.civilite,
+          nom: a.nom,
+          prenom: a.prenom,
+          nomNaissance: a.nomNaissance,
+          grade: a.grade,
+          ancienEchelon: a.ancienEchelon,
+          statut: a.statut,
+          typeContrat: a.typeContrat,
+          dateEffet: a.dateEffet,
+          degre: eligibility.degre,
+          // Pas de "prochaine échéance" pour HC/EXC (statutaire, pas périodique) — voir la page qui
+          // masque cette colonne pour cette nature.
+          dateProchainePromotion: null as string | null,
+          nonPresentDansRectorat: !presentDansRectorat,
+          reliquatAnciennete: a.reliquatAnciennete,
+        };
+      })
+      .filter((r): r is EligibleAdherentRow => r !== null);
+  }
 
   return adherents
     .map((a) => {
