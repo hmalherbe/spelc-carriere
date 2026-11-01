@@ -3,6 +3,7 @@ import { api, type Contingent, type HcExcGroupe, type HcExcImportResult, type Hc
 import { useAuth } from "../AuthContext.js";
 import { useCampagneContext, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom, derivePeriodeFromAnneeScolaire } from "../format.js";
+import { AdherentImportSection } from "../components/AdherentImportSection.js";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -276,6 +277,8 @@ export function HorsClasseExceptionnellePage() {
           </form>
         )}
       </section>
+
+      {canEdit && <AdherentImportSection campagneId={campagneId} commission={selectedCampagne?.commission ?? null} />}
 
       {selectedCampagne && canEdit && (
         <section className="card">

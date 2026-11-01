@@ -1,17 +1,9 @@
 import { useEffect, useState } from "react";
-import {
-  api,
-  type AcademicEmailImportResult,
-  type AdelSyncLogEntry,
-  type AdelSyncResult,
-  type AdelSyncType,
-  type AdherentImportResult,
-  type Campagne,
-  type RectoratImportResult,
-} from "../api.js";
+import { api, type AcademicEmailImportResult, type Campagne, type RectoratImportResult } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 import { useCampagneContext, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom, derivePeriodeFromAnneeScolaire } from "../format.js";
+import { AdherentImportSection } from "../components/AdherentImportSection.js";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -19,10 +11,6 @@ function todayIso(): string {
 
 function dateCommissionLabel(type: Campagne["type"]): string {
   return type === "CCMI" ? "Date CCMI" : "Date CCMA";
-}
-
-function formatSyncDate(iso: string): string {
-  return new Date(iso).toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" });
 }
 
 function rectoratFilesOnly(files: File[]): File[] {
@@ -86,32 +74,10 @@ export function ImportPage() {
   const [rectoratBusy, setRectoratBusy] = useState(false);
   const [rectoratResults, setRectoratResults] = useState<{ fileName: string; result?: RectoratImportResult; error?: string }[]>([]);
 
-  const [adelLast, setAdelLast] = useState<AdelSyncLogEntry | null>(null);
-  const [adelBusy, setAdelBusy] = useState(false);
-  const [adelResult, setAdelResult] = useState<AdelSyncResult | null>(null);
-  const [adelError, setAdelError] = useState<string | null>(null);
-
-  const [adherentFile, setAdherentFile] = useState<File | null>(null);
-  const [adherentBusy, setAdherentBusy] = useState(false);
-  const [adherentResult, setAdherentResult] = useState<AdherentImportResult | null>(null);
-  const [adherentError, setAdherentError] = useState<string | null>(null);
-
   const [academicEmailFile, setAcademicEmailFile] = useState<File | null>(null);
   const [academicEmailBusy, setAcademicEmailBusy] = useState(false);
   const [academicEmailResult, setAcademicEmailResult] = useState<AcademicEmailImportResult | null>(null);
   const [academicEmailError, setAcademicEmailError] = useState<string | null>(null);
-
-  function refreshAdelLast(type: AdelSyncType) {
-    api.adelLastSync(type).then(setAdelLast).catch(() => setAdelLast(null));
-  }
-
-  // Quelle synchronisation ADEL regarder (1er ou 2nd degré) suit désormais la commission de la
-  // campagne sélectionnée — plus de sélecteur séparé qu'on pourrait laisser en désaccord avec elle.
-  useEffect(() => {
-    if (selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI") refreshAdelLast(selectedCampagne.type);
-    else setAdelLast(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCampagne?.type]);
 
   /** Rafraîchit la liste via le contexte global (partagé avec le sélecteur d'en-tête et toutes les
    * autres pages) plutôt que de refetcher indépendamment. `selectId` force la sélection d'une
@@ -218,39 +184,6 @@ export function ImportPage() {
     }
     refreshCampagnes(campagneId);
     setRectoratBusy(false);
-  }
-
-  async function syncAdel() {
-    if (selectedCampagne?.type !== "CCMA" && selectedCampagne?.type !== "CCMI") return;
-    setAdelBusy(true);
-    setAdelError(null);
-    setAdelResult(null);
-    try {
-      const result = await api.adelSync(selectedCampagne.type, selectedCampagne.id);
-      setAdelResult(result);
-      refreshAdelLast(selectedCampagne.type);
-    } catch (e) {
-      setAdelError(String(e));
-    } finally {
-      setAdelBusy(false);
-    }
-  }
-
-  async function submitAdherentFile(e: React.FormEvent) {
-    e.preventDefault();
-    if (!adherentFile || !campagneId) return;
-    setAdherentBusy(true);
-    setAdherentError(null);
-    setAdherentResult(null);
-    try {
-      const result = await api.importAdherents(adherentFile, campagneId);
-      setAdherentResult(result);
-      setAdherentFile(null);
-    } catch (e) {
-      setAdherentError(String(e));
-    } finally {
-      setAdherentBusy(false);
-    }
   }
 
   async function submitAcademicEmailFile(e: React.FormEvent) {
@@ -504,95 +437,10 @@ export function ImportPage() {
         )}
       </section>
 
-      <section className="card">
-        <h2>Import adhérents — mise à jour ADEL</h2>
-        <p className="hint">
-          Récupère automatiquement l'export des adhérents Spelc directement depuis ADEL (connexion, filtre "azur", export
-          Excel) — plus besoin d'exporter puis d'uploader un fichier à la main. Chaque adhérent est automatiquement
-          rapproché des enseignants déjà importés (correspondance exacte ou approximative de nom/prénom) — les cas ambigus
-          vont dans la file de révision. Le fichier récupéré (1er ou 2nd degré) suit la commission de la campagne
-          sélectionnée ci-dessus.
-        </p>
-        <div className="inline-form">
-          <button type="button" onClick={syncAdel} disabled={adelBusy || !selectedCampagne?.type}>
-            {adelBusy ? "Synchronisation en cours (peut prendre plusieurs minutes)..." : "Mettre à jour depuis ADEL"}
-          </button>
-        </div>
-        {!selectedCampagne?.type && (
-          <p className="hint">Sélectionnez une campagne dont la commission (CCMA/CCMI) est définie pour synchroniser.</p>
-        )}
-        <p className="hint">
-          {adelLast ? (
-            adelLast.status === "SUCCESS" ? (
-              <>Dernière mise à jour : {formatSyncDate(adelLast.syncedAt)}</>
-            ) : (
-              <span className="error-text">Dernière tentative en échec le {formatSyncDate(adelLast.syncedAt)}</span>
-            )
-          ) : (
-            selectedCampagne?.type && "Jamais synchronisé pour cette commission."
-          )}
-        </p>
-        {adelError && <p className="error-text">{adelError}</p>}
-        {adelResult && (
-          <div className="import-result">
-            <p>
-              <strong>{adelResult.created}</strong> créés, <strong>{adelResult.updated}</strong> mis à jour
-              {adelResult.deleted > 0 && (
-                <>
-                  , <strong>{adelResult.deleted}</strong> supprimé(s) (ne font plus partie de l'export — parti(e)s du
-                  syndicat)
-                </>
-              )}
-              .
-            </p>
-            <p>
-              Rapprochement : <strong>{adelResult.matching.autoConfirmed}</strong> automatique(s),{" "}
-              <strong>{adelResult.matching.pendingReview}</strong> à vérifier dans la file de révision.
-            </p>
-            {adelResult.unmappedFields.length > 0 && (
-              <p className="hint">Colonnes non reconnues dans l'export : {adelResult.unmappedFields.join(", ")}</p>
-            )}
-          </div>
-        )}
-
-        <p className="hint" style={{ marginTop: 16 }}>
-          En secours si la synchronisation automatique ne fonctionne pas : exporte l'annuaire des adhérents à la main
-          depuis ADEL (Excel ou CSV), puis dépose le fichier ici — même moteur de rapprochement que la synchronisation
-          automatique.
-        </p>
-        <form className="inline-form" onSubmit={submitAdherentFile}>
-          <input
-            type="file"
-            accept=".csv,.xlsx"
-            onChange={(e) => setAdherentFile(e.target.files?.[0] ?? null)}
-          />
-          <button type="submit" disabled={!adherentFile || adherentBusy}>
-            {adherentBusy ? "Import en cours..." : "Importer le fichier"}
-          </button>
-        </form>
-        {adherentError && <p className="error-text">{adherentError}</p>}
-        {adherentResult && (
-          <div className="import-result">
-            <p>
-              <strong>{adherentResult.created}</strong> créés, <strong>{adherentResult.updated}</strong> mis à jour
-              {adherentResult.deleted > 0 && (
-                <>
-                  , <strong>{adherentResult.deleted}</strong> supprimé(s) (ne font plus partie du fichier — parti(e)s
-                  du syndicat)
-                </>
-              )}
-              .
-            </p>
-            <p>
-              Rapprochement : <strong>{adherentResult.matching.autoConfirmed}</strong> automatique(s),{" "}
-              <strong>{adherentResult.matching.pendingReview}</strong> à vérifier dans la file de révision.
-            </p>
-            {adherentResult.unmappedFields.length > 0 && (
-              <p className="hint">Colonnes non reconnues dans le fichier : {adherentResult.unmappedFields.join(", ")}</p>
-            )}
-          </div>
-        )}
-      </section>
+      <AdherentImportSection
+        campagneId={campagneId}
+        commission={selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI" ? selectedCampagne.type : null}
+      />
 
       <section className="card">
         <h2>Emails académiques (non-adhérents)</h2>
