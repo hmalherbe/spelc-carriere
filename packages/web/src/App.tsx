@@ -21,6 +21,7 @@ import { ElusPage } from "./pages/ElusPage.js";
 import { ReliquatsPage } from "./pages/ReliquatsPage.js";
 import { SaisiesManuellesPage } from "./pages/SaisiesManuellesPage.js";
 import { AiAssistantPage } from "./pages/AiAssistantPage.js";
+import { DonneesGeneralesPage } from "./pages/DonneesGeneralesPage.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -60,6 +61,7 @@ export function App() {
         <Route path="hors-classe-exceptionnelle/mailing" element={<HcExcMailingPage />} />
         <Route path="reclassement" element={<ReclassementPage />} />
         <Route path="mouvement" element={<MouvementPage />} />
+        <Route path="donnees-generales" element={<DonneesGeneralesPage />} />
         <Route path="parametres" element={<SettingsPage />} />
         <Route path="assistant-ia" element={<AiAssistantPage />} />
       </Route>

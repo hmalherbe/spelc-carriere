@@ -261,6 +261,7 @@ export function Layout() {
             </div>
           </div>
           <NavLink to="/mouvement">Mouvement des enseignants</NavLink>
+          <NavLink to="/donnees-generales">Données générales</NavLink>
           <NavLink to="/assistant-ia">Assistant IA</NavLink>
           <NavLink to="/parametres">Paramètres</NavLink>
         </nav>

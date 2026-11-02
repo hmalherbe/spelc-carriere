@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type AcademicEmailImportResult, type Campagne, type RectoratImportResult } from "../api.js";
+import { api, type Campagne, type RectoratImportResult } from "../api.js";
 import { useAuth } from "../AuthContext.js";
 import { useCampagneContext, labelForCampagneCandidate } from "../CampagneContext.js";
 import { formatPrenom, derivePeriodeFromAnneeScolaire } from "../format.js";
@@ -73,11 +73,6 @@ export function ImportPage() {
   const [rectoratFiles, setRectoratFiles] = useState<File[]>([]);
   const [rectoratBusy, setRectoratBusy] = useState(false);
   const [rectoratResults, setRectoratResults] = useState<{ fileName: string; result?: RectoratImportResult; error?: string }[]>([]);
-
-  const [academicEmailFile, setAcademicEmailFile] = useState<File | null>(null);
-  const [academicEmailBusy, setAcademicEmailBusy] = useState(false);
-  const [academicEmailResult, setAcademicEmailResult] = useState<AcademicEmailImportResult | null>(null);
-  const [academicEmailError, setAcademicEmailError] = useState<string | null>(null);
 
   /** Rafraîchit la liste via le contexte global (partagé avec le sélecteur d'en-tête et toutes les
    * autres pages) plutôt que de refetcher indépendamment. `selectId` force la sélection d'une
@@ -184,23 +179,6 @@ export function ImportPage() {
     }
     refreshCampagnes(campagneId);
     setRectoratBusy(false);
-  }
-
-  async function submitAcademicEmailFile(e: React.FormEvent) {
-    e.preventDefault();
-    if (!academicEmailFile) return;
-    setAcademicEmailBusy(true);
-    setAcademicEmailError(null);
-    setAcademicEmailResult(null);
-    try {
-      const result = await api.importAcademicEmails(academicEmailFile);
-      setAcademicEmailResult(result);
-      setAcademicEmailFile(null);
-    } catch (e) {
-      setAcademicEmailError(String(e));
-    } finally {
-      setAcademicEmailBusy(false);
-    }
   }
 
   if (!canImport) {
@@ -441,34 +419,6 @@ export function ImportPage() {
         campagneId={campagneId}
         commission={selectedCampagne?.type === "CCMA" || selectedCampagne?.type === "CCMI" ? selectedCampagne.type : null}
       />
-
-      <section className="card">
-        <h2>Emails académiques (non-adhérents)</h2>
-        <p className="hint">
-          Un adhérent est notifié à son adresse personnelle. Un non-adhérent n'en a pas — c'est ce fichier (l'annuaire du
-          personnel de l'académie : Nom, Prénom, Adresse mail) qui permet de le joindre à la place, par recherche sur son
-          nom et prénom. Sans correspondance dans ce fichier, aucun envoi n'est possible pour cette personne, faute
-          d'adresse connue. Chaque import remplace entièrement le précédent.
-        </p>
-        <form className="inline-form" onSubmit={submitAcademicEmailFile}>
-          <input
-            type="file"
-            accept=".xlsx,.xlsm"
-            onChange={(e) => setAcademicEmailFile(e.target.files?.[0] ?? null)}
-          />
-          <button type="submit" disabled={!academicEmailFile || academicEmailBusy}>
-            {academicEmailBusy ? "Import en cours..." : "Importer le fichier"}
-          </button>
-        </form>
-        {academicEmailError && <p className="error-text">{academicEmailError}</p>}
-        {academicEmailResult && (
-          <div className="import-result">
-            <p>
-              <strong>{academicEmailResult.imported}</strong> adresses importées.
-            </p>
-          </div>
-        )}
-      </section>
     </div>
   );
 }
