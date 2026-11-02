@@ -8,13 +8,11 @@ import {
   computeReclassementConcours,
   computeReclassementConcoursDepuisHcExc,
   computeReclassementHcExc,
-  GRADE_MAPPINGS,
   GRILLES,
   joursComptablesEntre,
   joursRetenusPourService,
   parseAncienneteText,
   POINTS_ANCIENNETE_HC,
-  POINTS_BONIFICATION_EXC_AVIS_RECTEUR,
   POINTS_BONIFICATION_HC_AVIS_RECTEUR,
   rangEchelon,
   RECLASSEMENT_AGR_VERS_HORS_CLASSE,
@@ -1261,44 +1259,62 @@ const GRILLE_LABELS: Record<GrilleCode, string> = {
   CHAIRE_SUP: "Professeur de chaire supérieure",
 };
 
-function GrilleTable({ code }: { code: GrilleCode }) {
-  const rows = GRILLES[code];
-  const avecDureeAlternative = rows.some((r) => r.dureeAvantVivier2 !== undefined);
-  return (
-    <div className="card">
-      <h3>
-        {GRILLE_LABELS[code]} ({code})
-      </h3>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Échelon</th>
-            <th>Échelon suivant</th>
-            <th>Indice</th>
-            <th>Durée (années)</th>
-            {avecDureeAlternative && <th>Durée alternative</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={String(r.echelon)}>
-              <td>{r.echelon}</td>
-              <td>{r.echelonSuivant}</td>
-              <td>{r.indice}</td>
-              <td>{r.duree === "MAX" ? "—" : r.duree}</td>
-              {avecDureeAlternative && <td>{r.dureeAvantVivier2 === undefined || r.dureeAvantVivier2 === "MAX" ? "—" : r.dureeAvantVivier2}</td>}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+interface ReclassementTableEntry {
+  passage: "HC" | "EXC";
+  grade: string;
+  rows: ReclassementRow[];
 }
 
-function ReclassementRowsTable({ title, rows }: { title: string; rows: ReclassementRow[] }) {
+const RECLASSEMENT_TABLES: ReclassementTableEntry[] = [
+  { passage: "HC", grade: "Certifié / PEPS / PLP / Prof. des écoles", rows: RECLASSEMENT_PROFS_VERS_HORS_CLASSE },
+  { passage: "HC", grade: "Agrégé", rows: RECLASSEMENT_AGR_VERS_HORS_CLASSE },
+  { passage: "HC", grade: "Certifié / PEPS / PLP — Bi-admissible", rows: RECLASSEMENT_BI_ADMISSIBLE_PROFS_VERS_HORS_CLASSE },
+  { passage: "HC", grade: "PEGC", rows: RECLASSEMENT_PEGC_VERS_HORS_CLASSE },
+  { passage: "EXC", grade: "Certifié / PEPS / PLP / Prof. des écoles — Hors Classe", rows: RECLASSEMENT_HC_PROFS_VERS_CLASSE_EXCEPTIONNELLE },
+  { passage: "EXC", grade: "Agrégé — Hors Classe", rows: RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE },
+  { passage: "EXC", grade: "PEGC — Hors Classe", rows: RECLASSEMENT_HC_PEGC_VERS_CLASSE_EXCEPTIONNELLE },
+  {
+    passage: "EXC",
+    grade: "Certifié / PEPS / PLP / Prof. des écoles — Classe exceptionnelle → chevron",
+    rows: RECLASSEMENT_EXC_PROFS_VERS_CHEVRON,
+  },
+  { passage: "EXC", grade: "Chaire supérieure → chevron", rows: RECLASSEMENT_CHAIRE_SUP_VERS_CHEVRON },
+];
+
+function ReclassementTablesSection() {
+  const [passage, setPassage] = useState<"HC" | "EXC">("HC");
+  const grades = RECLASSEMENT_TABLES.filter((t) => t.passage === passage);
+  const [grade, setGrade] = useState(grades[0].grade);
+
+  useEffect(() => {
+    if (!grades.some((g) => g.grade === grade)) setGrade(grades[0]?.grade ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passage]);
+
+  const selected = grades.find((g) => g.grade === grade) ?? grades[0];
+
   return (
     <div className="card">
-      <h3>{title}</h3>
+      <h3>Tables de reclassement</h3>
+      <div className="inline-form">
+        <label>
+          Passage
+          <select value={passage} onChange={(e) => setPassage(e.target.value as "HC" | "EXC")}>
+            <option value="HC">Passage à la Hors Classe</option>
+            <option value="EXC">Passage à la Classe exceptionnelle</option>
+          </select>
+        </label>
+        <label>
+          Grade
+          <select value={grade} onChange={(e) => setGrade(e.target.value)}>
+            {grades.map((g) => (
+              <option key={g.grade} value={g.grade}>
+                {g.grade}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <table className="data-table">
         <thead>
           <tr>
@@ -1308,11 +1324,56 @@ function ReclassementRowsTable({ title, rows }: { title: string; rows: Reclassem
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {selected.rows.map((r) => (
             <tr key={r.cle}>
               <td>{r.cle}</td>
               <td>{r.echelonReclassement}</td>
               <td>{r.conservationAnciennete ? "Oui" : "Non"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GrillesIndiciairesSection() {
+  const codes = Object.keys(GRILLES) as GrilleCode[];
+  const [code, setCode] = useState<GrilleCode>(codes[0]);
+  const rows = GRILLES[code];
+  const avecDureeAlternative = rows.some((r) => r.dureeAvantVivier2 !== undefined);
+
+  return (
+    <div className="card">
+      <h3>Grilles indiciaires</h3>
+      <div className="inline-form">
+        <label>
+          Grade
+          <select value={code} onChange={(e) => setCode(e.target.value as GrilleCode)}>
+            {codes.map((c) => (
+              <option key={c} value={c}>
+                {GRILLE_LABELS[c]} ({c})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Échelon</th>
+            <th>Indice</th>
+            <th>Durée (années)</th>
+            {avecDureeAlternative && <th>Durée alternative</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={String(r.echelon)}>
+              <td>{r.echelon}</td>
+              <td>{r.indice}</td>
+              <td>{r.duree === "MAX" ? "—" : r.duree}</td>
+              {avecDureeAlternative && <td>{r.dureeAvantVivier2 === undefined || r.dureeAvantVivier2 === "MAX" ? "—" : r.dureeAvantVivier2}</td>}
             </tr>
           ))}
         </tbody>
@@ -1327,39 +1388,12 @@ function DonneesReference() {
       <p className="hint">
         Toutes les tables de référence de l'onglet "Données" du classeur Excel du Spelc, telles qu'extraites et
         utilisées par les calculs de ce simulateur (packages/domain/src/data/refs.ts et grilles.ts) — valeur du
-        point, correspondance grades/grilles, coefficients de reclassement, tables de correspondance HC/EXC et
-        grilles indiciaires.
+        point, coefficients de reclassement, tables de correspondance HC/EXC et grilles indiciaires.
       </p>
 
       <div className="card">
         <h3>Valeur du point d'indice</h3>
         <p>{VALEUR_DU_POINT} € par an et par point d'indice.</p>
-      </div>
-
-      <div className="card">
-        <h3>Grades (Grades_echelles)</h3>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Grade</th>
-              <th>Grille</th>
-              <th>Degré</th>
-              <th>Accès Hors Classe</th>
-              <th>Accès Classe exceptionnelle</th>
-            </tr>
-          </thead>
-          <tbody>
-            {GRADE_MAPPINGS.map((g) => (
-              <tr key={g.grade}>
-                <td>{g.grade}</td>
-                <td>{g.grille}</td>
-                <td>{g.degre === 1 ? "1er degré" : "2nd degré"}</td>
-                <td>{g.accesHorsClasse ? "Oui" : "Non"}</td>
-                <td>{g.accesClasseExceptionnelle ? "Oui" : "Non"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
 
       <div className="card">
@@ -1451,26 +1485,6 @@ function DonneesReference() {
       </div>
 
       <div className="card">
-        <h3>Points de bonification — avis du recteur (accès à la Classe exceptionnelle)</h3>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Avis</th>
-              <th>Points</th>
-            </tr>
-          </thead>
-          <tbody>
-            {POINTS_BONIFICATION_EXC_AVIS_RECTEUR.map((p) => (
-              <tr key={p.avis}>
-                <td>{p.avis}</td>
-                <td>{p.points}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
         <h3>Points d'ancienneté — accès à la Hors Classe</h3>
         <p className="hint">Clé = échelon × 10 + ancienneté dans l'échelon (en années).</p>
         <table className="data-table">
@@ -1493,32 +1507,8 @@ function DonneesReference() {
         </table>
       </div>
 
-      <h3 style={{ marginTop: 24, marginBottom: 12 }}>Tables de reclassement — passage à la Hors Classe</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <ReclassementRowsTable title="Certifié / PEPS / PLP / Prof. des écoles" rows={RECLASSEMENT_PROFS_VERS_HORS_CLASSE} />
-        <ReclassementRowsTable title="Agrégé" rows={RECLASSEMENT_AGR_VERS_HORS_CLASSE} />
-        <ReclassementRowsTable title="Certifié / PEPS / PLP — Bi-admissible" rows={RECLASSEMENT_BI_ADMISSIBLE_PROFS_VERS_HORS_CLASSE} />
-        <ReclassementRowsTable title="PEGC" rows={RECLASSEMENT_PEGC_VERS_HORS_CLASSE} />
-      </div>
-
-      <h3 style={{ marginTop: 24, marginBottom: 12 }}>Tables de reclassement — passage à la Classe exceptionnelle</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <ReclassementRowsTable title="Certifié / PEPS / PLP / Prof. des écoles — Hors Classe" rows={RECLASSEMENT_HC_PROFS_VERS_CLASSE_EXCEPTIONNELLE} />
-        <ReclassementRowsTable title="Agrégé — Hors Classe" rows={RECLASSEMENT_HC_AGR_VERS_CLASSE_EXCEPTIONNELLE} />
-        <ReclassementRowsTable title="PEGC — Hors Classe" rows={RECLASSEMENT_HC_PEGC_VERS_CLASSE_EXCEPTIONNELLE} />
-        <ReclassementRowsTable
-          title="Certifié / PEPS / PLP / Prof. des écoles — Classe exceptionnelle → chevron"
-          rows={RECLASSEMENT_EXC_PROFS_VERS_CHEVRON}
-        />
-        <ReclassementRowsTable title="Chaire supérieure → chevron" rows={RECLASSEMENT_CHAIRE_SUP_VERS_CHEVRON} />
-      </div>
-
-      <h3 style={{ marginTop: 24, marginBottom: 12 }}>Grilles indiciaires</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-        {(Object.keys(GRILLES) as GrilleCode[]).map((code) => (
-          <GrilleTable key={code} code={code} />
-        ))}
-      </div>
+      <ReclassementTablesSection />
+      <GrillesIndiciairesSection />
     </div>
   );
 }
