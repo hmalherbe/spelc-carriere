@@ -91,10 +91,11 @@ function buildRangContingentBlock(ctx: HcExcResultatContext): string {
 
 function buildBaremeBlock(ctx: HcExcResultatContext): string {
   const lines: string[] = [];
+  const appreciationAffichee = ctx.appreciationRecteur != null && ctx.pointsRecteur != null;
   if (ctx.appreciationRecteur != null && ctx.pointsRecteur != null) {
     lines.push(`L'appréciation du Recteur est « ${escapeHtml(ctx.appreciationRecteur)} », ce qui correspond à ${ctx.pointsRecteur} points*.`);
   }
-  if (!ctx.promu) {
+  if (appreciationAffichee && !ctx.promu) {
     lines.push("Cette appréciation sera prise en compte pour la prochaine campagne de promotion.");
   }
   if (ctx.pointsAnciennete != null) {
@@ -110,14 +111,14 @@ function buildBaremeBlock(ctx: HcExcResultatContext): string {
 
 function buildDecisionBlock(ctx: HcExcResultatContext): string {
   if (!ctx.promu) {
-    return p(`Vous n'avez pas été promu(e) à ${processusLabelCourt(ctx.processus)}.`);
+    return p(`Vous n'avez pas été promu(e) à la ${processusLabelCourt(ctx.processus)}.`);
   }
   if (ctx.estAgrege) {
     return p("Votre candidature sera proposée au ministère.");
   }
   const dateEffetFr = formatDateFr(ctx.dateEffet);
   return p(
-    `Vous êtes promu(e) à ${processusLabelCourt(ctx.processus)}${dateEffetFr ? ` au ${dateEffetFr}` : ""}.` +
+    `Vous êtes promu(e) à la ${processusLabelCourt(ctx.processus)}${dateEffetFr ? ` au ${dateEffetFr}` : ""}.` +
       " Le Spelc Côte d'Azur enverra à ses adhérents promus le calcul du reclassement et l'impact financier consécutif.",
   );
 }

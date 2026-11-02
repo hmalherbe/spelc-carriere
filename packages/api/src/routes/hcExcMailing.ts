@@ -36,6 +36,16 @@ function estAgrege(grade: string): boolean {
   return grade.toUpperCase().startsWith("AGREGE");
 }
 
+/** Date d'effet de la promotion annoncée dans la lettre : le 1er septembre de l'année scolaire qui
+ * SUIT celle évaluée par la campagne (periodeFin + 1 jour), jamais periodeDebut — periodeDebut est
+ * le début de l'année scolaire ÉVALUÉE par la CCMA (ex. 01/09/2024 pour la campagne 2024-2025),
+ * antérieure à la CCMA elle-même et donc fausse comme date d'effet. Bug réel trouvé le 2026-11-02 en
+ * comparant un mailing réel au classeur Excel de l'ancienne application : toutes les lettres
+ * "promu(e)" annonçaient le 01/09/2024 (avant la CCMA du 12 juin 2025) au lieu du 01/09/2025 attendu. */
+function dateEffetPromotion(periodeFin: Date): string {
+  return new Date(periodeFin.getTime() + 24 * 60 * 60 * 1000).toISOString();
+}
+
 interface ResultatRow {
   hcExcSnapshotId: string;
   teacherId: string;
@@ -252,7 +262,7 @@ interface SharedMailingContent {
 
 function buildResultatContext(
   r: ResultatRow,
-  campagne: { nature: "HC" | "EXC"; commission: "CCMA" | "CCMI"; dateCcma: Date; periodeDebut: Date },
+  campagne: { nature: "HC" | "EXC"; commission: "CCMA" | "CCMI"; dateCcma: Date; periodeFin: Date },
   shared: SharedMailingContent,
   unsubscribeUrl: string | null,
 ): HcExcResultatContext {
@@ -270,7 +280,7 @@ function buildResultatContext(
     socialLinks: shared.socialLinks,
     processus: campagne.nature,
     dateCcma: campagne.dateCcma.toISOString(),
-    dateEffet: campagne.periodeDebut.toISOString(),
+    dateEffet: dateEffetPromotion(campagne.periodeFin),
     grade: r.grade,
     estAgrege: estAgrege(r.grade),
     rang: r.rang,
@@ -285,7 +295,7 @@ function buildResultatContext(
 
 function buildReclassementContext(
   r: ReclassementRow,
-  campagne: { commission: "CCMA" | "CCMI"; dateCcma: Date; periodeDebut: Date },
+  campagne: { commission: "CCMA" | "CCMI"; dateCcma: Date; periodeFin: Date },
   shared: SharedMailingContent,
 ): HcExcReclassementContext {
   return {
@@ -301,7 +311,7 @@ function buildReclassementContext(
     logoDataUrl: shared.logoDataUrl,
     socialLinks: shared.socialLinks,
     dateCcma: campagne.dateCcma.toISOString(),
-    dateEffet: campagne.periodeDebut.toISOString(),
+    dateEffet: dateEffetPromotion(campagne.periodeFin),
     nouveauGrade: r.nouveauGrade,
     nouvelEchelon: r.nouvelEchelon,
     ancienneteReporteeJours: r.ancienneteReporteeJours,
