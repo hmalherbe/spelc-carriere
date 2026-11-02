@@ -194,4 +194,80 @@ describe("parseHcExcBaremeFile — échelon 9 candidate with no Millésime/Origi
     expect(r.millesime).toBeNull();
     expect(r.origine).toBeNull();
   });
+
+  // Cas réel trouvé en inspectant le vrai PDF du rectorat (pas une conversion déjà "propre") : un
+  // "Avis CE" (chef d'établissement) est parfois imprimé juste avant le véritable "App Recteur",
+  // sans aucun libellé entre les deux — "Satisfaisant Excellent 145 20 165.000" = Avis CE
+  // "Satisfaisant" immédiatement suivi d'App Recteur "Excellent". La regex de repli doit retenir le
+  // SECOND mot (adjacent aux nombres), pas le premier.
+  it("skips a leading Avis CE value with no label of its own, keeping the real App Recteur value right before the numbers", () => {
+    const parsed = parseHcExcBaremeFile(rawTextFor("Satisfaisant Excellent 145 20 165.000"));
+    const r = parsed.records[0];
+    expect(r.appreciationRecteur).toBe("Excellent");
+    expect(r.pointsRecteur).toBe(145);
+    expect(r.totalBareme).toBe(165);
+  });
+
+  // Cas réel : quand "Mode d'accès au corps" n'a pas d'ancienneté imprimée après sa date (donc
+  // `ancienneteCorpsTexte` reste introuvable), tout le début de la fiche (discipline, affectation,
+  // RNE...) se retrouve collé devant la ligne de barème — toujours corrigé par le même mécanisme
+  // (pas d'ancrage en début de chaîne).
+  it("still resolves when ancienneteCorpsTexte wasn't found at all, pulling unrelated leading text into the tail", () => {
+    const raw =
+      "ACADEMIE : NICE TABLEAU AVANCEMENT--> HORS CLASSE CERTIFIE DATE : 01/01/2025\n" +
+      "ANNEE : 2025\n" +
+      "15\n" +
+      "TEST\n" +
+      "CANDIDATE\n" +
+      "TEST\n" +
+      "18/07/1972\n" +
+      "mathématiques\n" +
+      "Collège privé Exemple\n" +
+      "RNE: 0000000A\n" +
+      "Date d'entrée Fct.\n" +
+      "Pub:\n" +
+      "Ech. actuel: 09\n" +
+      "Date d'entrée :\n" +
+      "2023-09-01\n" +
+      "A : 03a05m29j\n" +
+      "MA : reclassement\n" +
+      "Ech. barème : 09\n" +
+      "Anc : 03a05m29j\n" +
+      "Au : 2025-08-31\n" +
+      "Mode d'accès au corps\n" +
+      "CAFEP 01/09/2023 Excellent Très\n" +
+      "satisfaisant 125 10 135.000\n";
+    const parsed = parseHcExcBaremeFile(raw);
+    const r = parsed.records[0];
+    expect(r.ancienneteCorpsTexte).toBeNull();
+    expect(r.appreciationRecteur).toBe("Très satisfaisant");
+    expect(r.pointsRecteur).toBe(125);
+    expect(r.totalBareme).toBe(135);
+  });
+
+  // Cas réel : la dernière fiche d'une page voit, dans son propre "rest" (borné par le numéro
+  // d'ordre de la fiche SUIVANTE, sur la page d'après — jamais par "ACADEMIE :" elle-même, qui ne
+  // sert de borne que pour la toute dernière fiche du fichier entier), le pied de page puis
+  // l'en-tête répété de la page suivante collés après sa propre ligne de barème, pourtant déjà
+  // propre. Nécessite donc une 2e fiche après ce pied de page pour reproduire fidèlement la borne de
+  // chunk réelle (sans elle, "rest" s'arrêterait déjà à "ACADEMIE :" et ne reproduirait pas le bug).
+  it("still resolves when the tail is followed by a page footer + the next page's repeated header", () => {
+    const raw =
+      rawTextFor(
+        "Très satisfaisant 125 0 125.000\n" +
+          "ACADEMIE : NICE TABLEAU AVANCEMENT-HORS CLASSE CERTIFIES DATE : 01/06/2025\n" +
+          "ANNEE : 2025\n" +
+          "LISTE PAR BAREME DECROISSANT DES ENSEIGNANTS PROMOUVABLES\n" +
+          "Ordre\nNom d'usage\nPrénom\nNom naiss.\n",
+      ) +
+      "15\n" +
+      "AUTRE\n" +
+      "PERSONNE\n" +
+      "AUTRE\n" +
+      "01/01/1980\n";
+    const parsed = parseHcExcBaremeFile(raw);
+    const r = parsed.records[0];
+    expect(r.appreciationRecteur).toBe("Très satisfaisant");
+    expect(r.totalBareme).toBe(125);
+  });
 });

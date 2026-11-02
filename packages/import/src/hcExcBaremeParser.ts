@@ -158,17 +158,23 @@ const APPRECIATION_RE = /(Excellent|Tr[eè]s\s+satisfaisant|Satisfaisant|A\s+con
 // decimal), an optional "P" (choix du recteur), a 4-digit millésime, then origine (a short code
 // like "SIAE"/"TA HC").
 const HC_TAIL_RE = new RegExp(`${APPRECIATION_RE.source}\\s+(\\d+)\\s+(\\d+)\\s+([\\d.]+)\\s*(P)?\\s*(\\d{4})\\s+(\\S+)`);
-// Fallback for a record with no Millésime/Origine at all — real case found 2026-11-02 (6 real
-// candidates, 4 different grades, all at échelon 9, the FIRST échelon eligible for Hors Classe):
-// the rectorat simply omits these two fields for a first-time candidate rather than printing a
-// placeholder, so HC_TAIL_RE (which requires them) never matches, silently losing the appréciation/
-// points/barème that DO precede them. Anchored at both ends (`^`/`$`) — unlike HC_TAIL_RE, which
-// searches anywhere in the tail — so it only matches when the ENTIRE remaining tail text is exactly
-// "appréciation + 3 nombres [+ P]" and nothing else: a tail garbled for an unrelated reason (real
-// case already covered by an existing test: two appréciations concatenated, "Excellent Satisfaisant
-// 0 0 0.000", from a record whose `ancienneteCorpsTexte` anchor also failed to be found, pulling in
-// much more leading text) still correctly fails to match this fallback too, and gets flagged.
-const HC_TAIL_BLANK_MILLESIME_RE = new RegExp(`^${APPRECIATION_RE.source}\\s+(\\d+)\\s+(\\d+)\\s+([\\d.]+)\\s*(P)?$`);
+// Fallback for a record with no Millésime/Origine at all — real case confirmed 2026-11-02 against
+// the actual rectorat PDF (not a converted spreadsheet, which hid this): the rectorat sometimes
+// omits these two fields rather than printing a placeholder, so HC_TAIL_RE (which requires them)
+// never matches, silently losing the appréciation/points/barème that DO precede them. Anchored only
+// at the end (`$`), not at the start — a record can ALSO carry an "Avis CE"/"Avis IPR" value with no
+// label of its own printed right before the real "App Recteur" value (real case: "Satisfaisant
+// Excellent 145 20 165.000", Avis CE "Satisfaisant" immediately followed by App Recteur
+// "Excellent") — the engine's natural leftmost-successful-match behavior finds the LAST
+// appréciation-shaped word directly adjacent to the 3 numbers, skipping over any such leading noise
+// (or, when `ancienneteCorpsTexte` itself wasn't found so the whole untruncated chunk is searched,
+// over the record's own discipline/établissement/carrière text too) without needing to explicitly
+// enumerate what to skip. `pointsRecteur` must be positive (checked below, not baked into the regex)
+// — every real appréciation carries strictly positive points (see POINTS_BONIFICATION_HC_AVIS_
+// RECTEUR, @spelc/domain) — so a genuinely corrupted tail that happens to end in "word word 0 0
+// 0.000" (real case already covered by an existing test, rang 38 of ta-plp-hc-real.pdf) still
+// correctly fails to resolve and gets flagged, rather than resolving to a barème of 0.
+const HC_TAIL_BLANK_MILLESIME_RE = new RegExp(`${APPRECIATION_RE.source}\\s+(\\d+)\\s+(\\d+)\\s+([\\d.]+)\\s*(P)?$`);
 
 function parseRecordChunk(rang: number, nameBlock: string, dobRaw: string, rest: string): ParsedHcExcRecord {
   const warnings: string[] = [];
@@ -261,7 +267,16 @@ function parseRecordChunk(rang: number, nameBlock: string, dobRaw: string, rest:
     // numeric barème line, normalizing newlines to spaces first so a wrapped "Très\nsatisfaisant"
     // still matches as one appréciation.
     const tailStart = ancienneteCorpsTexte ? rest.indexOf(ancienneteCorpsTexte) + ancienneteCorpsTexte.length : 0;
-    const tailNormalized = rest.slice(tailStart).replace(/\s+/g, " ").trim();
+    let tailRaw = rest.slice(tailStart);
+    // The last record of a page is immediately followed, inside its own chunk, by that page's
+    // footer legend and the NEXT page's repeated column header (the chunk's own end boundary is the
+    // following record's "Ordre" line, which only comes after all of that) — real case: this pulled
+    // in ~400 extra characters after a perfectly clean tail, which a `$`-anchored fallback (see
+    // HC_TAIL_BLANK_MILLESIME_RE) then never reached. Both start with "ACADEMIE :" (the next page's
+    // own title line), so cut there first.
+    const pageBreakIdx = tailRaw.indexOf("ACADEMIE :");
+    if (pageBreakIdx !== -1) tailRaw = tailRaw.slice(0, pageBreakIdx);
+    const tailNormalized = tailRaw.replace(/\s+/g, " ").trim();
     const tailMatch = HC_TAIL_RE.exec(tailNormalized);
     if (tailMatch) {
       appreciationRecteur = tailMatch[1].replace(/\s+/g, " ");
@@ -273,7 +288,11 @@ function parseRecordChunk(rang: number, nameBlock: string, dobRaw: string, rest:
       origine = tailMatch[7];
     } else {
       const blankMatch = HC_TAIL_BLANK_MILLESIME_RE.exec(tailNormalized);
-      if (blankMatch) {
+      // Every real appréciation carries strictly positive points (see
+      // POINTS_BONIFICATION_HC_AVIS_RECTEUR, @spelc/domain) — rejecting a 0 here is what keeps this
+      // fallback from accepting a genuinely corrupted tail (real case: "Excellent Satisfaisant 0 0
+      // 0.000", rang 38 of ta-plp-hc-real.pdf, covered by its own test below).
+      if (blankMatch && Number(blankMatch[2]) > 0) {
         appreciationRecteur = blankMatch[1].replace(/\s+/g, " ");
         pointsRecteur = Number(blankMatch[2]);
         pointsAnciennete = Number(blankMatch[3]);
