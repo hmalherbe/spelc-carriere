@@ -55,6 +55,10 @@ export function HcExcMailingPage() {
   const [mailingLog, setMailingLog] = useState<MailingLogEntry[]>([]);
   const [decisionBusyId, setDecisionBusyId] = useState<string | null>(null);
   const [savingIsAdherentId, setSavingIsAdherentId] = useState<string | null>(null);
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [generatingText, setGeneratingText] = useState(false);
@@ -122,6 +126,29 @@ export function HcExcMailingPage() {
       setError(String(e));
     } finally {
       setSavingIsAdherentId(null);
+    }
+  }
+
+  function startEditEmail(r: HcExcMailingRecipient) {
+    setEditingEmailId(r.teacherId);
+    setEmailDraft(r.email ?? "");
+    setEmailError(null);
+  }
+
+  /** Même endpoint partagé que le mailing échelon (PUT /mailing/:teacherId/email) — écrit
+   * directement Adherent.mailPersonnel (adhérent) ou AcademicEmail (non-adhérent, par nom/prénom),
+   * la même source que celle lue pour résoudre l'adresse affichée ici. */
+  async function saveEmail(teacherId: string) {
+    setSavingEmail(true);
+    setEmailError(null);
+    try {
+      await api.updateMailingEmail(teacherId, emailDraft);
+      setEditingEmailId(null);
+      refresh();
+    } catch (e) {
+      setEmailError(String(e));
+    } finally {
+      setSavingEmail(false);
     }
   }
 
@@ -307,7 +334,31 @@ export function HcExcMailingPage() {
                   </>
                 )}
                 <td>
-                  {r.email ?? <span className="error-text">Aucune adresse</span>}
+                  {editingEmailId === r.teacherId ? (
+                    <div className="row-actions">
+                      <input
+                        type="email"
+                        value={emailDraft}
+                        onChange={(e) => setEmailDraft(e.target.value)}
+                        placeholder="adresse@exemple.fr"
+                        autoFocus
+                      />
+                      <button type="button" onClick={() => saveEmail(r.teacherId)} disabled={savingEmail}>
+                        {savingEmail ? "..." : "Enregistrer"}
+                      </button>
+                      <button type="button" className="secondary" onClick={() => setEditingEmailId(null)} disabled={savingEmail}>
+                        Annuler
+                      </button>
+                      {emailError && <span className="error-text">{emailError}</span>}
+                    </div>
+                  ) : (
+                    <div className="row-actions">
+                      {r.email ?? <span className="error-text">Aucune adresse</span>}
+                      <button type="button" className="secondary" onClick={() => startEditEmail(r)}>
+                        {r.email ? "Modifier" : "Ajouter"}
+                      </button>
+                    </div>
+                  )}
                   {r.optedOut && (
                     <>
                       {" "}

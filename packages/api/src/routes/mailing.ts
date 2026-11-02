@@ -510,9 +510,13 @@ const updateEmailSchema = z.object({ email: z.string().trim().email() });
 
 /**
  * Manually sets the address used for a teacher who has none on file yet (or corrects a wrong one).
- * Writes to whichever source eligibleRecipients() itself reads for that person, so the change is
- * visible immediately: Adherent.mailPersonnel for an adhérent, AcademicEmail (matched by nom+prénom,
- * same normalizeName key as the lookup) for a non-adhérent — creating that row if none existed yet.
+ * Writes to whichever source eligibleRecipients()/resultatRecipients() (routes/hcExcMailing.ts)
+ * themselves read for that person, so the change is visible immediately: Adherent.mailPersonnel for
+ * an adhérent, AcademicEmail (matched by nom+prénom, same normalizeName key as the lookup) for a
+ * non-adhérent — creating that row if none existed yet. Shared by both the échelon and the HC/EXC
+ * Mailing pages (teacherId is the same identity either way) — a non-adhérent's nom/prénom for the
+ * AcademicEmail lookup key comes from whichever kind of fiche this teacher actually has: a pure
+ * HC/EXC teacher has no TeacherSnapshot at all, only HcExcSnapshot.
  */
 mailingRouter.put("/:teacherId/email", requireRole("ADMIN", "GESTIONNAIRE"), asyncHandler(async (req, res) => {
   const parsed = updateEmailSchema.safeParse(req.body);
@@ -526,6 +530,7 @@ mailingRouter.put("/:teacherId/email", requireRole("ADMIN", "GESTIONNAIRE"), asy
     include: {
       matchCandidate: { include: { adherent: true } },
       snapshots: { take: 1, orderBy: { dateAccesEchelon: "desc" } },
+      hcExcSnapshots: { take: 1 },
     },
   });
   if (!teacher) return res.status(404).json({ error: "Enseignant introuvable" });
@@ -536,7 +541,7 @@ mailingRouter.put("/:teacherId/email", requireRole("ADMIN", "GESTIONNAIRE"), asy
   if (isAdherent) {
     await prisma.adherent.update({ where: { id: candidate!.adherentId }, data: { mailPersonnel: email } });
   } else {
-    const snap = teacher.snapshots[0];
+    const snap = teacher.snapshots[0] ?? teacher.hcExcSnapshots[0];
     if (!snap) return res.status(404).json({ error: "Aucune fiche connue pour cet enseignant" });
     // Same normalizeName-based lookup key as eligibleRecipients() above — a plain SQL equality or
     // ILIKE wouldn't match through the accent/case differences that key is built to tolerate.
