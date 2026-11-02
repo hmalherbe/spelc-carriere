@@ -158,6 +158,17 @@ const APPRECIATION_RE = /(Excellent|Tr[eè]s\s+satisfaisant|Satisfaisant|A\s+con
 // decimal), an optional "P" (choix du recteur), a 4-digit millésime, then origine (a short code
 // like "SIAE"/"TA HC").
 const HC_TAIL_RE = new RegExp(`${APPRECIATION_RE.source}\\s+(\\d+)\\s+(\\d+)\\s+([\\d.]+)\\s*(P)?\\s*(\\d{4})\\s+(\\S+)`);
+// Fallback for a record with no Millésime/Origine at all — real case found 2026-11-02 (6 real
+// candidates, 4 different grades, all at échelon 9, the FIRST échelon eligible for Hors Classe):
+// the rectorat simply omits these two fields for a first-time candidate rather than printing a
+// placeholder, so HC_TAIL_RE (which requires them) never matches, silently losing the appréciation/
+// points/barème that DO precede them. Anchored at both ends (`^`/`$`) — unlike HC_TAIL_RE, which
+// searches anywhere in the tail — so it only matches when the ENTIRE remaining tail text is exactly
+// "appréciation + 3 nombres [+ P]" and nothing else: a tail garbled for an unrelated reason (real
+// case already covered by an existing test: two appréciations concatenated, "Excellent Satisfaisant
+// 0 0 0.000", from a record whose `ancienneteCorpsTexte` anchor also failed to be found, pulling in
+// much more leading text) still correctly fails to match this fallback too, and gets flagged.
+const HC_TAIL_BLANK_MILLESIME_RE = new RegExp(`^${APPRECIATION_RE.source}\\s+(\\d+)\\s+(\\d+)\\s+([\\d.]+)\\s*(P)?$`);
 
 function parseRecordChunk(rang: number, nameBlock: string, dobRaw: string, rest: string): ParsedHcExcRecord {
   const warnings: string[] = [];
@@ -261,7 +272,16 @@ function parseRecordChunk(rang: number, nameBlock: string, dobRaw: string, rest:
       millesime = Number(tailMatch[6]);
       origine = tailMatch[7];
     } else {
-      warnings.push("Ligne de barème (appréciation/points/millésime) illisible");
+      const blankMatch = HC_TAIL_BLANK_MILLESIME_RE.exec(tailNormalized);
+      if (blankMatch) {
+        appreciationRecteur = blankMatch[1].replace(/\s+/g, " ");
+        pointsRecteur = Number(blankMatch[2]);
+        pointsAnciennete = Number(blankMatch[3]);
+        totalBareme = Math.round(Number(blankMatch[4]));
+        choixRecteur = blankMatch[5] === "P";
+      } else {
+        warnings.push("Ligne de barème (appréciation/points/millésime) illisible");
+      }
     }
   }
 

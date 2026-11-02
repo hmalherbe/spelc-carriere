@@ -132,3 +132,66 @@ describe("parseHcExcBaremeFile — real rectorat 'Tableau Avancement' PDF (Hors 
     expect(malformed.warnings.some((w) => w.includes("barème"))).toBe(true);
   });
 });
+
+describe("parseHcExcBaremeFile — échelon 9 candidate with no Millésime/Origine printed at all", () => {
+  // Bug réel trouvé le 2026-11-02 en comparant un mailing réel à l'ancienne application : 6
+  // candidats (4 grades différents), tous à l'échelon 9 — le premier échelon éligible à la Hors
+  // Classe — se sont retrouvés sans appréciation/points/ancienneté/barème dans le mailing généré,
+  // alors que ces valeurs étaient bien présentes dans le fichier source. Confirmé via les fichiers
+  // "TA_PR*_HC_2025" fournis par l'utilisateur (dérivés du même PDF rectorat) : pour ces 6 candidats
+  // précisément, les colonnes "Millésime" et "Origine" sont vides (jamais considérés pour la Hors
+  // Classe auparavant) — alors que HC_TAIL_RE exige les deux, donc ne matchait pas du tout,
+  // perdant même l'appréciation/les points/le barème qui, eux, étaient bien présents.
+  function rawTextFor(tailLine: string): string {
+    return (
+      "ACADEMIE : NICE TABLEAU AVANCEMENT--> HORS CLASSE CERTIFIE DATE : 01/01/2025\n" +
+      "ANNEE : 2025\n" +
+      "14\n" +
+      "TEST\n" +
+      "CANDIDATE\n" +
+      "TEST\n" +
+      "18/07/1972\n" +
+      "sciences de la vie et de la terre\n" +
+      "Collège privé Exemple\n" +
+      "RNE: 0000000A\n" +
+      "Date d'entrée Fct.\n" +
+      "Pub:\n" +
+      "Ech. actuel: 09\n" +
+      "Date d'entrée :\n" +
+      "2023-09-01\n" +
+      "A : 02a06m05j\n" +
+      "MA : reclassement\n" +
+      "Ech. barème : 09\n" +
+      "Anc : 02a06m05j\n" +
+      "Au : 2025-08-31\n" +
+      "Mode d'accès au corps\n" +
+      "concours d'accès a l'echelon de remuneration 01/09/2023\n" +
+      "01a00m00j\n" +
+      tailLine +
+      "\n"
+    );
+  }
+
+  it("still extracts appréciation/points/barème when Millésime and Origine are both entirely absent", () => {
+    const parsed = parseHcExcBaremeFile(rawTextFor("Très satisfaisant 125 0 125.000"));
+    expect(parsed.records).toHaveLength(1);
+    const r = parsed.records[0];
+    expect(r.appreciationRecteur).toBe("Très satisfaisant");
+    expect(r.pointsRecteur).toBe(125);
+    expect(r.pointsAnciennete).toBe(0);
+    expect(r.totalBareme).toBe(125);
+    expect(r.choixRecteur).toBe(false);
+    expect(r.millesime).toBeNull();
+    expect(r.origine).toBeNull();
+    expect(r.warnings.some((w) => w.includes("barème"))).toBe(false);
+  });
+
+  it("also reads the 'P' (choix du recteur) marker when present despite no Millésime/Origine", () => {
+    const parsed = parseHcExcBaremeFile(rawTextFor("Excellent 145 20 165.000 P"));
+    const r = parsed.records[0];
+    expect(r.choixRecteur).toBe(true);
+    expect(r.totalBareme).toBe(165);
+    expect(r.millesime).toBeNull();
+    expect(r.origine).toBeNull();
+  });
+});
