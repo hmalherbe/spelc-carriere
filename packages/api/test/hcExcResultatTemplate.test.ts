@@ -48,24 +48,35 @@ describe("buildHcExcResultatEmail", () => {
     expect(nonPromuHtml).toContain("Vous n'avez pas été promu(e) à la hors classe.");
   });
 
-  it("drops the dangling \"cette appréciation sera prise en compte\" sentence when no appréciation is shown at all", () => {
+  it('shows "cette appréciation sera prise en compte" whenever not promu, even with no appréciation at all (matches the source document\'s own IF field, conditioned only on Choix_du_Recteur, confirmed 2026-11-02)', () => {
     // Cas réel trouvé le 2026-11-02 (grade PLP, échelon 9) : appreciationRecteur/pointsRecteur
-    // manquants, mais la phrase de suivi s'affichait tout de même, sans rien à quoi se rattacher.
+    // manquants côté import — la phrase s'affiche malgré tout, fidèlement au document source.
     const { html } = buildHcExcResultatEmail(BASE);
-    expect(html).not.toContain("Cette appréciation sera prise en compte");
+    expect(html).toContain("Cette appréciation sera prise en compte pour la prochaine campagne de promotion.");
     expect(html).not.toContain("L'appréciation du Recteur est «");
   });
 
-  it("keeps the dangling-sentence guard sentence when an appréciation IS shown and the candidate isn't promoted", () => {
+  it("shows both the appréciation sentence and the follow-up sentence when an appréciation IS available and the candidate isn't promoted", () => {
     const { html } = buildHcExcResultatEmail({ ...BASE, appreciationRecteur: "Excellent", pointsRecteur: 145 });
     expect(html).toContain("L'appréciation du Recteur est « Excellent », ce qui correspond à 145 points*.");
     expect(html).toContain("Cette appréciation sera prise en compte pour la prochaine campagne de promotion.");
+  });
+
+  it("drops the follow-up sentence once promu", () => {
+    const { html } = buildHcExcResultatEmail({ ...BASE, promu: true, dateEffet: "2025-09-01" });
+    expect(html).not.toContain("Cette appréciation sera prise en compte");
   });
 
   it("still shows rang/contingent for a non-Agrégé", () => {
     const { html } = buildHcExcResultatEmail(BASE);
     expect(html).toContain("Votre rang est : <strong>23</strong>.");
     expect(html).toContain("Le nombre de promus pour l'échelle de rémunération PLP est : <strong>9</strong>.");
+  });
+
+  it("does not include the election reminder/notice (not part of the real letter, and the next HC/EXC campaign will be held after the Dec 2026 election anyway)", () => {
+    const { html } = buildHcExcResultatEmail(BASE);
+    expect(html).not.toContain("élections du 3 au 10 décembre 2026");
+    expect(html).not.toContain("Site dédié aux élections");
   });
 
   it("hides rang/contingent for an Agrégé", () => {

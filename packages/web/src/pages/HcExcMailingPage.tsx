@@ -54,6 +54,7 @@ export function HcExcMailingPage() {
   const [sendResult, setSendResult] = useState<MailingSendResult | null>(null);
   const [mailingLog, setMailingLog] = useState<MailingLogEntry[]>([]);
   const [decisionBusyId, setDecisionBusyId] = useState<string | null>(null);
+  const [savingIsAdherentId, setSavingIsAdherentId] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [generatingText, setGeneratingText] = useState(false);
@@ -105,6 +106,22 @@ export function HcExcMailingPage() {
       setError(String(e));
     } finally {
       setPreviewLoading(null);
+    }
+  }
+
+  /** Override d'affichage (Teacher.isAdherentCorrige, partagé avec le mailing échelon) — formule de
+   * politesse + lien de désabonnement seulement, ne change jamais l'adresse d'envoi. */
+  async function saveIsAdherent(teacherId: string, value: string) {
+    const isAdherent = value === "adherent" ? true : value === "non_adherent" ? false : null;
+    setSavingIsAdherentId(teacherId);
+    setError(null);
+    try {
+      await api.updateMailingIsAdherent(teacherId, isAdherent);
+      refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingIsAdherentId(null);
     }
   }
 
@@ -223,6 +240,7 @@ export function HcExcMailingPage() {
               </th>
               <th>Nom</th>
               <th>Prénom</th>
+              <th>Adhérent</th>
               <th>Grade</th>
               {kind === "resultat" ? (
                 <>
@@ -251,6 +269,18 @@ export function HcExcMailingPage() {
                 </td>
                 <td>{r.nom}</td>
                 <td>{formatPrenom(r.prenom)}</td>
+                <td>
+                  <select
+                    value={r.isAdherent ? "adherent" : "non_adherent"}
+                    disabled={savingIsAdherentId === r.teacherId}
+                    onChange={(e) => saveIsAdherent(r.teacherId, e.target.value)}
+                    title="Affichage seulement (formule de politesse + lien de désabonnement) — ne change jamais l'adresse d'envoi, toujours celle du vrai rapprochement adhérent."
+                  >
+                    <option value="">(auto)</option>
+                    <option value="adherent">Adhérent</option>
+                    <option value="non_adherent">Non adhérent</option>
+                  </select>
+                </td>
                 <td>{r.grade}</td>
                 {kind === "resultat" ? (
                   <>

@@ -1,5 +1,4 @@
 import {
-  buildElusElectionNotice,
   buildElusFooter,
   buildGreeting,
   buildHeader,
@@ -91,11 +90,13 @@ function buildRangContingentBlock(ctx: HcExcResultatContext): string {
 
 function buildBaremeBlock(ctx: HcExcResultatContext): string {
   const lines: string[] = [];
-  const appreciationAffichee = ctx.appreciationRecteur != null && ctx.pointsRecteur != null;
   if (ctx.appreciationRecteur != null && ctx.pointsRecteur != null) {
     lines.push(`L'appréciation du Recteur est « ${escapeHtml(ctx.appreciationRecteur)} », ce qui correspond à ${ctx.pointsRecteur} points*.`);
   }
-  if (appreciationAffichee && !ctx.promu) {
+  // Conditionné uniquement sur !promu dans le document source (champ IF Choix_du_Recteur <> "P"),
+  // PAS sur la présence de l'appréciation elle-même — reconstruction précise des champs imbriqués
+  // du modèle Word confirmée le 2026-11-02 (voir Modele_lettre_HC_CCMA_du_12_juin_2025.docx).
+  if (!ctx.promu) {
     lines.push("Cette appréciation sera prise en compte pour la prochaine campagne de promotion.");
   }
   if (ctx.pointsAnciennete != null) {
@@ -130,7 +131,6 @@ export function buildHcExcResultatEmail(ctx: HcExcResultatContext): { subject: s
   const subject = `Spelc Côte d'Azur - ${ctx.commission} du ${dateCcmaFr} : ${processusLabelCourt(ctx.processus)}`;
 
   const header = buildHeader(ctx.logoDataUrl, ctx.t1Text);
-  const electionNotice = buildElusElectionNotice(ctx.commission);
   const elusFooter = buildElusFooter(ctx.commission, ctx.elus);
   const unsubscribeLink = buildUnsubscribeLink(ctx.unsubscribeUrl);
   const socialLinks = buildSocialLinks(ctx.socialLinks);
@@ -152,7 +152,6 @@ export function buildHcExcResultatEmail(ctx: HcExcResultatContext): { subject: s
   const html = `
     ${header}
     ${body}
-    ${electionNotice}
     ${elusFooter}
     ${unsubscribeLink}
     ${socialLinks}
