@@ -33,6 +33,36 @@ const HC_EXC_PATHS = [
   "/hors-classe-exceptionnelle/mailing",
 ];
 
+/**
+ * Bandeau en tête de page indiquant dans laquelle des 4 "applications" de Suivi de la carrière on
+ * se trouve (Avancement échelon / Hors Classe / Classe Exceptionnelle / Reclassement) — demandé
+ * par l'utilisateur (2026-11-03) : les pages partagées entre plusieurs de ces processus (Hors
+ * Classe et Classe Exceptionnelle réutilisent les mêmes pages, seule la campagne sélectionnée
+ * change) rendaient ambigu de savoir laquelle on regardait. Pour Avancement/Reclassement/File de
+ * révision, Layout.tsx le déduit seul du chemin ci-dessous ; pour Hors Classe/Classe Exceptionnelle
+ * (dont la nature n'est connue qu'à l'intérieur de la page, via la campagne sélectionnée), chaque
+ * page HC/EXC l'affiche elle-même avec ce même composant.
+ */
+export function SectionBanner({ label }: { label: string }) {
+  return <div className="section-banner">{label}</div>;
+}
+
+/** Libellé du bandeau pour une page Hors Classe/Classe Exceptionnelle, selon la nature de la
+ * campagne actuellement sélectionnée dans CETTE page (chaque page HC/EXC garde sa propre sélection
+ * locale, voir hcExcCampagneSelection.ts) — générique tant qu'aucune campagne n'est encore choisie. */
+export function hcExcSectionLabel(nature: "ECHELON" | "HC" | "EXC" | null | undefined): string {
+  if (nature === "HC") return "Hors Classe";
+  if (nature === "EXC") return "Classe Exceptionnelle";
+  return "Hors Classe / Classe Exceptionnelle";
+}
+
+function staticSectionLabel(pathname: string): string | null {
+  if (pathname === "/revue") return "File de révision (tous processus)";
+  if (AVANCEMENT_PATHS.includes(pathname)) return "Avancement (échelon)";
+  if (pathname === "/reclassement") return "Reclassement";
+  return null;
+}
+
 type AnneeScolaireDraft = { anneeScolaire: string; periodeDebut: string; periodeFin: string };
 const EMPTY_DRAFT: AnneeScolaireDraft = { anneeScolaire: "", periodeDebut: "", periodeFin: "" };
 
@@ -300,6 +330,7 @@ export function Layout() {
         </nav>
       )}
       <main>
+        {staticSectionLabel(location.pathname) && <SectionBanner label={staticSectionLabel(location.pathname)!} />}
         <Outlet />
       </main>
     </div>

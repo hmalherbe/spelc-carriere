@@ -310,6 +310,15 @@ main {
   margin: 0 auto;
 }
 
+.section-banner {
+  color: var(--accent-dark);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
 .toolbar {
   display: flex;
   align-items: center;

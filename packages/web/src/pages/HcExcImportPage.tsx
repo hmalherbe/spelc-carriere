@@ -4,6 +4,7 @@ import { useAuth } from "../AuthContext.js";
 import { formatPrenom } from "../format.js";
 import { AdherentImportSection } from "../components/AdherentImportSection.js";
 import { HcExcCampagneCard } from "../components/HcExcCampagneCard.js";
+import { SectionBanner, hcExcSectionLabel } from "../components/Layout.js";
 
 function hcExcFilesOnly(files: File[]): File[] {
   return files.filter((f) => /\.(pdf|txt)$/i.test(f.name));
@@ -44,6 +45,7 @@ export function HcExcImportPage() {
 
   return (
     <div className="import-page">
+      <SectionBanner label={hcExcSectionLabel(selectedCampagne?.nature)} />
       <HcExcCampagneCard canEdit={canEdit} onSelect={setSelectedCampagne} />
 
       {canEdit && <AdherentImportSection campagneId={campagneId} commission={selectedCampagne?.commission ?? null} />}

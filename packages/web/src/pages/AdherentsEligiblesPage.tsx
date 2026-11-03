@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, downloadBlob, type AdherentEligible } from "../api.js";
 import { useCampagneSelection, labelForCampagneCandidate, type Nature } from "../CampagneContext.js";
 import { useHcExcCampagneSelection } from "../hcExcCampagneSelection.js";
+import { SectionBanner, hcExcSectionLabel } from "../components/Layout.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null): string {
@@ -78,6 +79,7 @@ export function AdherentsEligiblesPage({ natures = ["ECHELON"] }: { natures?: Na
 
   return (
     <div>
+      {isHcExc && <SectionBanner label={hcExcSectionLabel(selectedCampagne?.nature)} />}
       <div className="toolbar">
         <h2>Adhérents éligibles à la {titreCommission}</h2>
         {isHcExc && campagnes.length > 0 && (

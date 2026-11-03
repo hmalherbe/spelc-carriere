@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type Campagne, type HcExcGroupe, type HcExcTeacherRow } from "../api.js";
 import { formatPrenom } from "../format.js";
 import { HcExcCampagneCard } from "../components/HcExcCampagneCard.js";
+import { SectionBanner, hcExcSectionLabel } from "../components/Layout.js";
 
 /** "Enseignants promouvables" — liste des résultats d'une campagne HC/EXC déjà importée (voir
  * HcExcImportPage.tsx pour l'import lui-même, désormais un onglet séparé). */
@@ -31,6 +32,7 @@ export function HorsClasseExceptionnellePage() {
 
   return (
     <div className="import-page">
+      <SectionBanner label={hcExcSectionLabel(selectedCampagne?.nature)} />
       <HcExcCampagneCard canEdit={false} onSelect={setSelectedCampagne} />
 
       {selectedCampagne && groupes.length > 0 && (

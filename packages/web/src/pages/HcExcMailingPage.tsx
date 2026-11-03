@@ -10,6 +10,7 @@ import {
 } from "../api.js";
 import { labelForCampagneCandidate } from "../CampagneContext.js";
 import { useHcExcCampagneSelection } from "../hcExcCampagneSelection.js";
+import { SectionBanner, hcExcSectionLabel } from "../components/Layout.js";
 import { formatPrenom } from "../format.js";
 
 function formatDate(iso: string | null | undefined): string {
@@ -215,6 +216,7 @@ export function HcExcMailingPage() {
 
   return (
     <div>
+      <SectionBanner label={hcExcSectionLabel(selectedCampagne?.nature)} />
       <div className="toolbar">
         <h2>Mailing Hors Classe / Classe exceptionnelle</h2>
         {campagnes.length > 0 && (
