@@ -108,6 +108,26 @@ describe("buildCcmaModelEmail", () => {
     );
   });
 
+  it("reports a novembre 2026 régularisation to décembre 2026 (exception demandée par l'union, 2026-11-04)", () => {
+    const { html } = buildCcmaModelEmail({ ...BASE, dateCcma: "2026-11-10", dateEffetCcm: "2026-11-01" });
+    expect(html).toContain("régularisation financière devrait intervenir au plus tôt en décembre 2026");
+    expect(html).not.toContain("régularisation financière devrait intervenir au plus tôt en novembre 2026");
+  });
+
+  it("keeps Valérie Doulmet's régularisation in novembre 2026, unlike everyone else", () => {
+    const { html } = buildCcmaModelEmail({ ...BASE, nom: "Doulmet", prenom: "Valérie", dateCcma: "2026-11-10", dateEffetCcm: "2026-11-01" });
+    expect(html).toContain("régularisation financière devrait intervenir au plus tôt en novembre 2026");
+  });
+
+  it("does not touch a régularisation month other than novembre 2026", () => {
+    expect(buildCcmaModelEmail({ ...BASE, dateCcma: "2026-12-10", dateEffetCcm: "2026-12-01" }).html).toContain(
+      "régularisation financière devrait intervenir au plus tôt en décembre 2026",
+    );
+    expect(buildCcmaModelEmail({ ...BASE, dateCcma: "2025-11-10", dateEffetCcm: "2025-11-01" }).html).toContain(
+      "régularisation financière devrait intervenir au plus tôt en novembre 2025",
+    );
+  });
+
   it("shows the report d'ancienneté paragraph when typePromotion is RE", () => {
     const withReport = buildCcmaModelEmail({
       ...BASE,

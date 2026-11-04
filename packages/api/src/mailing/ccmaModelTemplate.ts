@@ -1,4 +1,5 @@
 import { AVIS_LABELS, formatAnneesDecimalesText, formatDureeEncodedText, formatEchelonLabel } from "@spelc/domain";
+import { normalizeName } from "@spelc/import";
 import {
   buildElusElectionNotice,
   buildElusFooter,
@@ -184,10 +185,11 @@ function buildProchainePromotionFutureBlock(ctx: CcmaModelContext): string {
  * avoir besoin de sortir buildProchainePromotionFutureBlock de ce garde-fou. */
 function buildGainEtSuiteBlock(ctx: CcmaModelContext): string {
   if (ctx.bonification === "NON_PROMU") return "";
+  const moisRegul = applyReportNovembre2026(moisRegularisation(ctx.dateEffetCcm, ctx.dateCcma), ctx.nom, ctx.prenom);
   const parts: string[] = [
     p(
       `L'écart sur votre traitement de base consécutif à cette promotion pour un temps plein est équivalent à environ <strong>${ctx.gainSalaireNet} € nets</strong> par mois (avant prélèvement à la source).` +
-        ` La régularisation financière devrait intervenir au plus tôt en ${monthYearFr(moisRegularisation(ctx.dateEffetCcm, ctx.dateCcma))}.`,
+        ` La régularisation financière devrait intervenir au plus tôt en ${monthYearFr(moisRegul)}.`,
     ),
   ];
   parts.push(buildProchainePromotionFutureBlock(ctx));
@@ -212,6 +214,18 @@ function moisRegularisation(dateEffetCcm: string | null, dateCcma: string | null
   const moisEffet = effet.getFullYear() * 12 + effet.getMonth();
   const moisCcma = ccma.getFullYear() * 12 + ccma.getMonth();
   return moisEffet < moisCcma ? dateCcma : dateEffetCcm;
+}
+
+/** Report exceptionnel demandé par l'union (confirmé 2026-11-04) : tout mois de régularisation qui
+ * tomberait en novembre 2026 est annoncé en décembre 2026 à la place (délai de traitement propre à
+ * cette campagne), sauf pour Valérie DOULMET qui reste annoncée en novembre 2026. N'affecte aucun
+ * autre mois. */
+function applyReportNovembre2026(mois: string | null, nom: string, prenom: string): string | null {
+  if (!mois) return mois;
+  const d = new Date(mois);
+  if (d.getFullYear() !== 2026 || d.getMonth() !== 10) return mois;
+  if (normalizeName(nom) === normalizeName("Doulmet") && normalizeName(prenom) === normalizeName("Valérie")) return mois;
+  return "2026-12-01";
 }
 
 /** Message pour un candidat BA non retenu cette fois-ci — explique s'il n'y a eu aucun promu du
